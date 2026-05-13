@@ -1,0 +1,22 @@
+{
+  "name": "TokenForge.Client.Tests",
+  "rootNamespace": "TokenForge.Client.Tests",
+  "references": [
+    "TokenForge.Client"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
