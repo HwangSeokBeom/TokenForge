@@ -1,6 +1,9 @@
-using System.Text.Json;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using TokenForge.Client.Domain;
+using TokenForge.Client.Persistence;
 using TokenForge.Client.Privacy;
 using TokenForge.Client.Sync;
 
@@ -58,12 +61,18 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
-        public void SaveData_CanSerializeWithoutRawFields()
+        public async Task JsonSaveDataStore_CanSerializeAndDeserializeWithoutRawFields()
         {
+            var directory = Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName());
             var saveData = SaveData.CreateDefault();
+            saveData.CharacterProfile.TotalExp = 42;
+            var store = new JsonSaveDataStore(directory);
 
-            var json = JsonSerializer.Serialize(saveData);
+            await store.SaveAsync(saveData, CancellationToken.None);
+            var loaded = await store.LoadAsync(CancellationToken.None);
+            var json = File.ReadAllText(Path.Combine(directory, "tokenforge-save.json"));
 
+            Assert.AreEqual(42, loaded.CharacterProfile.TotalExp);
             Assert.IsTrue(json.Contains("SaveVersion"));
             Assert.IsFalse(json.Contains("RawPrompt"));
             Assert.IsFalse(json.Contains("GitRemoteUrl"));

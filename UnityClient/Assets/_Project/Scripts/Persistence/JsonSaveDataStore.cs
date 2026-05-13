@@ -1,8 +1,9 @@
 using System;
 using System.IO;
-using System.Text.Json;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 using TokenForge.Client.Domain;
 using TokenForge.Client.Privacy;
 
@@ -13,7 +14,7 @@ namespace TokenForge.Client.Persistence
         private const string SaveFileName = "tokenforge-save.json";
         private readonly string saveFilePath;
         private readonly PrivacySanitizer privacySanitizer;
-        private readonly JsonSerializerOptions options;
+        private readonly JsonSerializerSettings settings;
 
         public JsonSaveDataStore(string saveDirectory = null, PrivacySanitizer privacySanitizer = null)
         {
@@ -21,10 +22,9 @@ namespace TokenForge.Client.Persistence
             Directory.CreateDirectory(directory);
             saveFilePath = Path.Combine(directory, SaveFileName);
             this.privacySanitizer = privacySanitizer ?? new PrivacySanitizer();
-            options = new JsonSerializerOptions
+            settings = new JsonSerializerSettings
             {
-                WriteIndented = true,
-                PropertyNameCaseInsensitive = true
+                NullValueHandling = NullValueHandling.Include
             };
         }
 
@@ -35,9 +35,13 @@ namespace TokenForge.Client.Persistence
                 return SaveData.CreateDefault();
             }
 
-            using (var stream = File.OpenRead(saveFilePath))
+            cancellationToken.ThrowIfCancellationRequested();
+
+            using (var reader = new StreamReader(saveFilePath, Encoding.UTF8))
             {
-                var saveData = await JsonSerializer.DeserializeAsync<SaveData>(stream, options, cancellationToken);
+                var json = await reader.ReadToEndAsync();
+                cancellationToken.ThrowIfCancellationRequested();
+                var saveData = JsonConvert.DeserializeObject<SaveData>(json, settings);
                 return saveData ?? SaveData.CreateDefault();
             }
         }
@@ -56,10 +60,15 @@ namespace TokenForge.Client.Persistence
             Directory.CreateDirectory(directory);
             var tempPath = saveFilePath + ".tmp";
 
-            using (var stream = File.Create(tempPath))
+            var json = JsonConvert.SerializeObject(saveData, Formatting.Indented, settings);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            using (var writer = new StreamWriter(tempPath, false, new UTF8Encoding(false)))
             {
-                await JsonSerializer.SerializeAsync(stream, saveData, options, cancellationToken);
+                await writer.WriteAsync(json);
             }
+
+            cancellationToken.ThrowIfCancellationRequested();
 
             if (File.Exists(saveFilePath))
             {

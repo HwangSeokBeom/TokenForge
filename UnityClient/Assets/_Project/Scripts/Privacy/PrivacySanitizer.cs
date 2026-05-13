@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Text.Json;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace TokenForge.Client.Privacy
 {
@@ -13,15 +14,15 @@ namespace TokenForge.Client.Privacy
     public sealed class PrivacySanitizer
     {
         private readonly ForbiddenFieldDetector detector;
-        private readonly JsonSerializerOptions serializerOptions;
+        private readonly JsonSerializer serializer;
 
         public PrivacySanitizer(ForbiddenFieldDetector detector = null)
         {
             this.detector = detector ?? new ForbiddenFieldDetector();
-            serializerOptions = new JsonSerializerOptions
+            serializer = JsonSerializer.Create(new JsonSerializerSettings
             {
-                WriteIndented = false
-            };
+                NullValueHandling = NullValueHandling.Include
+            });
         }
 
         public PrivacyValidationResult ValidateObject(object payload)
@@ -32,11 +33,8 @@ namespace TokenForge.Client.Privacy
                 return result;
             }
 
-            var json = JsonSerializer.Serialize(payload, payload.GetType(), serializerOptions);
-            using (var document = JsonDocument.Parse(json))
-            {
-                InspectElement(document.RootElement, "$", result);
-            }
+            var token = JToken.FromObject(payload, serializer);
+            InspectToken(token, "$", result);
 
             return result;
         }
@@ -50,12 +48,12 @@ namespace TokenForge.Client.Privacy
             }
         }
 
-        private void InspectElement(JsonElement element, string path, PrivacyValidationResult result)
+        private void InspectToken(JToken token, string path, PrivacyValidationResult result)
         {
-            switch (element.ValueKind)
+            switch (token.Type)
             {
-                case JsonValueKind.Object:
-                    foreach (var property in element.EnumerateObject())
+                case JTokenType.Object:
+                    foreach (var property in ((JObject)token).Properties())
                     {
                         var propertyPath = $"{path}.{property.Name}";
                         if (detector.IsForbiddenFieldName(property.Name))
@@ -63,19 +61,19 @@ namespace TokenForge.Client.Privacy
                             result.Violations.Add($"Forbidden field '{property.Name}' at {propertyPath}");
                         }
 
-                        InspectElement(property.Value, propertyPath, result);
+                        InspectToken(property.Value, propertyPath, result);
                     }
                     break;
-                case JsonValueKind.Array:
+                case JTokenType.Array:
                     var index = 0;
-                    foreach (var item in element.EnumerateArray())
+                    foreach (var item in ((JArray)token).Children())
                     {
-                        InspectElement(item, $"{path}[{index}]", result);
+                        InspectToken(item, $"{path}[{index}]", result);
                         index++;
                     }
                     break;
-                case JsonValueKind.String:
-                    var value = element.GetString();
+                case JTokenType.String:
+                    var value = token.Value<string>();
                     if (detector.ContainsSensitiveString(value))
                     {
                         result.Violations.Add($"Sensitive string pattern at {path}");
