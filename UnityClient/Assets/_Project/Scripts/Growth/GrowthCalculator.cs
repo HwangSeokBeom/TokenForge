@@ -28,8 +28,10 @@ namespace TokenForge.Client.Growth
 
             var tokenMultiplier = GetTokenMultiplier(session.TokenUsageBucket);
             var fileMultiplier = GetFileChangeMultiplier(session.GitChangeSummary?.ChangedFileCount ?? session.ActionSummary?.FileEditCount ?? 0);
+            var lineMultiplier = GetLineChangeMultiplier(session.GitChangeSummary);
+            var antiGrindingMultiplier = GetAntiGrindingMultiplier(session);
             var resultMultiplier = GetResultMultiplier(session.ResultStatus, rule);
-            var baseExp = rule.BaseExp * tokenMultiplier * fileMultiplier * resultMultiplier;
+            var baseExp = rule.BaseExp * tokenMultiplier * fileMultiplier * lineMultiplier * antiGrindingMultiplier * resultMultiplier;
 
             // Mini-game rewards are optional side rewards and should stay within 5-15% of the final work-session reward.
             var clampedMiniGameRatio = Math.Max(0f, Math.Min(config.MiniGameBonusMaxRatio, miniGameBonusRatio));
@@ -48,7 +50,7 @@ namespace TokenForge.Client.Growth
 
             var levelBefore = profile.Level;
             var levelAfter = CalculateLevel(profile.TotalExp + exp);
-            var statDeltas = CalculateStatDeltas(rule.StatWeights, tokenMultiplier, fileMultiplier, session);
+            var statDeltas = CalculateStatDeltas(rule.StatWeights, tokenMultiplier, fileMultiplier * lineMultiplier, session);
             var stressDelta = CalculateStressDelta(session, rule);
             statDeltas.Stress += stressDelta;
 
@@ -61,9 +63,16 @@ namespace TokenForge.Client.Growth
                 StatDeltas = statDeltas,
                 StressDelta = stressDelta,
                 EvolutionProgressDelta = InferEvolutionDelta(session.WorkType, statDeltas),
+                EvolutionProgressDeltaAmount = Math.Max(1, exp / 100),
                 RewardTags = BuildRewardTags(session, capApplied),
+                Warnings = BuildWarnings(session, antiGrindingMultiplier, capApplied),
                 DailyCapApplied = capApplied
             };
+        }
+
+        public CharacterGrowthResult Calculate(CharacterProfile profile, AgentWorkSession session, float miniGameBonusRatio = 0f)
+        {
+            return Calculate(session, profile, 0, miniGameBonusRatio);
         }
 
         private int CalculateLevel(int totalExp)
@@ -91,6 +100,52 @@ namespace TokenForge.Client.Growth
             if (fileCount <= 8) return 1.15f;
             if (fileCount <= 20) return 1.35f;
             return 1.5f;
+        }
+
+        private static float GetLineChangeMultiplier(GitChangeSummary summary)
+        {
+            if (summary == null) return 1f;
+
+            var added = BucketWeight(summary.AddedLineBucket);
+            var deleted = BucketWeight(summary.DeletedLineBucket);
+            return Math.Min(1.35f, 1f + ((added + deleted) * 0.075f));
+        }
+
+        private static int BucketWeight(LineChangeBucket bucket)
+        {
+            switch (bucket)
+            {
+                case LineChangeBucket.Small: return 1;
+                case LineChangeBucket.Medium: return 2;
+                case LineChangeBucket.Large: return 3;
+                case LineChangeBucket.Huge: return 4;
+                default: return 0;
+            }
+        }
+
+        private static float GetAntiGrindingMultiplier(AgentWorkSession session)
+        {
+            var changedFiles = Math.Max(session.GitChangeSummary?.ChangedFileCount ?? 0, session.ActionSummary?.FileEditCount ?? 0);
+            var actionCount = (session.ActionSummary?.ToolCallCount ?? 0)
+                + (session.ActionSummary?.CommandRunCount ?? 0)
+                + (session.ActionSummary?.TestRunCount ?? 0)
+                + (session.ActionSummary?.BuildRunCount ?? 0);
+            var addedBucket = session.GitChangeSummary?.AddedLineBucket ?? LineChangeBucket.Unknown;
+            var deletedBucket = session.GitChangeSummary?.DeletedLineBucket ?? LineChangeBucket.Unknown;
+            var noLineSignal = (addedBucket == LineChangeBucket.Unknown || addedBucket == LineChangeBucket.None)
+                && (deletedBucket == LineChangeBucket.Unknown || deletedBucket == LineChangeBucket.None);
+
+            if (changedFiles <= 0 && actionCount <= 0)
+            {
+                return 0.25f;
+            }
+
+            if (changedFiles <= 1 && noLineSignal && session.TokenUsageBucket <= TokenUsageBucket.Small)
+            {
+                return 0.45f;
+            }
+
+            return 1f;
         }
 
         private static float GetResultMultiplier(ResultStatus status, GrowthRule rule)
@@ -165,6 +220,42 @@ namespace TokenForge.Client.Growth
             if (session.ActionSummary?.TestRunCount > 0) tags.Add("Tests");
             if (capApplied) tags.Add("DailyCap");
             return tags;
+        }
+
+        private static List<PrivacyWarning> BuildWarnings(AgentWorkSession session, float antiGrindingMultiplier, bool capApplied)
+        {
+            var warnings = new List<PrivacyWarning>();
+            if (antiGrindingMultiplier < 1f)
+            {
+                warnings.Add(new PrivacyWarning
+                {
+                    Code = "growth_tiny_session",
+                    Message = "Tiny session reward was reduced.",
+                    Location = nameof(AgentWorkSession)
+                });
+            }
+
+            if (capApplied)
+            {
+                warnings.Add(new PrivacyWarning
+                {
+                    Code = "growth_daily_cap",
+                    Message = "Daily experience cap was applied.",
+                    Location = nameof(GrowthCalculator)
+                });
+            }
+
+            if (session.TokenUsageBucket == TokenUsageBucket.Huge)
+            {
+                warnings.Add(new PrivacyWarning
+                {
+                    Code = "growth_high_token_stress",
+                    Message = "High token usage increased stress.",
+                    Location = nameof(AgentWorkSession.TokenUsageBucket)
+                });
+            }
+
+            return warnings;
         }
     }
 }

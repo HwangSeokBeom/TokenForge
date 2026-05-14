@@ -50,7 +50,22 @@ namespace TokenForge.Client.Domain
     }
 
     [Serializable]
-    public sealed class CharacterGrowthResult
+    public sealed class StatDelta
+    {
+        public string StatName { get; set; } = string.Empty;
+        public int Delta { get; set; }
+    }
+
+    [Serializable]
+    public sealed class PrivacyWarning
+    {
+        public string Code { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public string Location { get; set; } = string.Empty;
+    }
+
+    [Serializable]
+    public class GrowthResult
     {
         public string SessionId { get; set; } = string.Empty;
         public int ExpGained { get; set; }
@@ -59,7 +74,14 @@ namespace TokenForge.Client.Domain
         public CharacterStats StatDeltas { get; set; } = CharacterStats.Zero();
         public int StressDelta { get; set; }
         public EvolutionType EvolutionProgressDelta { get; set; } = EvolutionType.Unknown;
+        public int EvolutionProgressDeltaAmount { get; set; }
+        public List<PrivacyWarning> Warnings { get; set; } = new List<PrivacyWarning>();
         public List<string> RewardTags { get; set; } = new List<string>();
         public bool DailyCapApplied { get; set; }
+    }
+
+    [Serializable]
+    public sealed class CharacterGrowthResult : GrowthResult
+    {
     }
 }

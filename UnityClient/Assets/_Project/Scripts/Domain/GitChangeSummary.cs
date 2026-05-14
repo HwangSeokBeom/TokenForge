@@ -16,8 +16,6 @@ namespace TokenForge.Client.Domain
         public int ChangedFileCount { get; set; }
         public LineChangeBucket AddedLineBucket { get; set; } = LineChangeBucket.Unknown;
         public LineChangeBucket DeletedLineBucket { get; set; } = LineChangeBucket.Unknown;
-        public int AddedLineApproximation { get; set; }
-        public int DeletedLineApproximation { get; set; }
         public bool TestFileChanged { get; set; }
         public bool DocsFileChanged { get; set; }
         public bool UiFileChanged { get; set; }

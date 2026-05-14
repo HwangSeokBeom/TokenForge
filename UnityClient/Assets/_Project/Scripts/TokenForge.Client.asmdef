@@ -1,7 +1,9 @@
 {
   "name": "TokenForge.Client",
   "rootNamespace": "TokenForge.Client",
-  "references": [],
+  "references": [
+    "UnityEngine.UI"
+  ],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,

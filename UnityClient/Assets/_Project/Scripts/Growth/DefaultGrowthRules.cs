@@ -17,7 +17,8 @@ namespace TokenForge.Client.Growth
                 Rule("docs", WorkType.Docs, 80, new CharacterStats { Architecture = 2, Efficiency = 2, Logic = 1 }),
                 Rule("build", WorkType.Build, 90, new CharacterStats { Stability = 2, Debug = 2, Efficiency = 1 }),
                 Rule("chore", WorkType.Chore, 70, new CharacterStats { Efficiency = 2, Stability = 1 }),
-                Rule("mixed", WorkType.Mixed, 100, new CharacterStats { Logic = 1, Debug = 1, Architecture = 1, Velocity = 1 }),
+                Rule("research", WorkType.Research, 85, new CharacterStats { Logic = 2, Creativity = 2 }),
+                Rule("mixed", WorkType.Mixed, 100, new CharacterStats { Logic = 1, Debug = 1, Architecture = 1, Design = 1, Stability = 1, Velocity = 1, Creativity = 1, Efficiency = 1 }),
                 Rule("unknown", WorkType.Unknown, 50, new CharacterStats { Logic = 1 })
             };
         }

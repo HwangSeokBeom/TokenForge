@@ -36,7 +36,6 @@ namespace TokenForge.Client.Domain
     {
         public string ProviderId { get; set; } = string.Empty;
         public bool Enabled { get; set; } = true;
-        public string LogLocationBookmark { get; set; } = string.Empty;
         public DateTimeOffset? LastScanAt { get; set; }
         public string ParserVersion { get; set; } = string.Empty;
         public int PollingIntervalSeconds { get; set; } = 300;
@@ -65,6 +64,15 @@ namespace TokenForge.Client.Domain
     }
 
     [Serializable]
+    public sealed class UserSettings
+    {
+        public PrivacyPreferences PrivacyPreferences { get; set; } = new PrivacyPreferences();
+        public bool AutoAnalyzeEnabled { get; set; } = true;
+        public bool MiniGameBonusEnabled { get; set; } = true;
+        public string PreferredLocale { get; set; } = string.Empty;
+    }
+
+    [Serializable]
     public sealed class DailyProgress
     {
         public string DayKey { get; set; } = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd");
@@ -85,6 +93,7 @@ namespace TokenForge.Client.Domain
         public List<ProviderSettings> ProviderSettings { get; set; } = new List<ProviderSettings>();
         public SyncState SyncState { get; set; } = new SyncState();
         public PrivacyPreferences PrivacyPreferences { get; set; } = new PrivacyPreferences();
+        public UserSettings UserSettings { get; set; } = new UserSettings();
         public DailyProgress DailyProgress { get; set; } = new DailyProgress();
         public List<MiniGameSession> MiniGameHistory { get; set; } = new List<MiniGameSession>();
 

@@ -66,6 +66,24 @@ namespace TokenForge.Client.Domain
         High
     }
 
+    public enum ConfidenceLevel
+    {
+        Unknown,
+        Low,
+        Medium,
+        High
+    }
+
+    public enum SourceProvider
+    {
+        Unknown,
+        ManualSession,
+        ManualFallback,
+        GitDiff,
+        Mock,
+        Deduplicated
+    }
+
     public enum TokenUsageBucket
     {
         Unknown,

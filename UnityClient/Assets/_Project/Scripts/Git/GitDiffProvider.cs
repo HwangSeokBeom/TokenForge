@@ -69,8 +69,6 @@ namespace TokenForge.Client.Git
             var gitSummary = new GitChangeSummary
             {
                 ChangedFileCount = changedFileCount,
-                AddedLineApproximation = addedLines,
-                DeletedLineApproximation = deletedLines,
                 AddedLineBucket = GitNumstatParser.ToBucket(addedLines),
                 DeletedLineBucket = GitNumstatParser.ToBucket(deletedLines),
                 TestFileChanged = categoryCounts.ContainsKey(FileCategory.Test),

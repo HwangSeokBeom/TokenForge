@@ -14,7 +14,6 @@ namespace TokenForge.Client.Privacy
             "TokenRangeLabel",
             "TokenBucketMultiplier",
             "RefreshTokenExpiresAt",
-            "LogLocationBookmark",
             "ParserVersion",
             "BuildRunCount",
             "Debug"
@@ -35,11 +34,17 @@ namespace TokenForge.Client.Privacy
             "patch",
             "absolutePath",
             "filePath",
+            "remoteUrl",
+            "gitRemote",
+            "branchName",
+            "commitMessage",
             "gitRemoteUrl",
             "branchNameRaw",
             "commitMessageRaw",
             "apiKey",
             "secret",
+            "tokenRaw",
+            "commandText",
             "password",
             "bearer",
             "authorization"
@@ -52,13 +57,21 @@ namespace TokenForge.Client.Privacy
             "rawlog",
             "terminaloutput",
             "absolutepath",
+            "filepath",
+            "remoteurl",
+            "gitremote",
+            "branchname",
+            "commitmessage",
             "gitremoteurl",
             "branchnameraw",
-            "commitmessageraw"
+            "commitmessageraw",
+            "tokenraw",
+            "commandtext"
         };
 
         private static readonly Regex[] SensitiveStringPatterns =
         {
+            new Regex(@"[""']?(prompt|rawPrompt|code|rawCode|log|rawLog|terminalOutput|stdout|stderr|absolutePath|filePath|remoteUrl|gitRemote|branchName|commitMessage|diff|patch|apiKey|secret|tokenRaw|commandText)[""']?\s*[:=]", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex(@"bearer\s+[a-z0-9\._\-]+", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex(@"api[_-]?key\s*[:=]", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex(@"password\s*[:=]", RegexOptions.IgnoreCase | RegexOptions.Compiled),

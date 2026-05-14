@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using TokenForge.Client.Common;
+using TokenForge.Client.Domain;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -9,6 +11,7 @@ namespace TokenForge.Client.Privacy
     {
         public bool IsSafe => Violations.Count == 0;
         public List<string> Violations { get; } = new List<string>();
+        public List<PrivacyWarning> Warnings { get; } = new List<PrivacyWarning>();
     }
 
     public sealed class PrivacySanitizer
@@ -39,6 +42,82 @@ namespace TokenForge.Client.Privacy
             return result;
         }
 
+        public string HashString(string input)
+        {
+            return SafeHashUtility.ComputeProjectPathHash(input, "TokenForge.HashString.v1");
+        }
+
+        public string SanitizeProjectPath(string path)
+        {
+            return SafeHashUtility.ComputeProjectPathHash(path);
+        }
+
+        public LineChangeBucket BucketLineCount(int lineCount)
+        {
+            if (lineCount <= 0) return LineChangeBucket.None;
+            if (lineCount <= 25) return LineChangeBucket.Small;
+            if (lineCount <= 150) return LineChangeBucket.Medium;
+            if (lineCount <= 600) return LineChangeBucket.Large;
+            return LineChangeBucket.Huge;
+        }
+
+        public TokenUsageBucket BucketTokenUsage(int tokenCount)
+        {
+            if (tokenCount <= 0) return TokenUsageBucket.None;
+            if (tokenCount <= 4000) return TokenUsageBucket.Small;
+            if (tokenCount <= 16000) return TokenUsageBucket.Medium;
+            if (tokenCount <= 64000) return TokenUsageBucket.Large;
+            return TokenUsageBucket.Huge;
+        }
+
+        public Result ValidateNoForbiddenFields(object payload)
+        {
+            return ToResult(ValidateObject(payload));
+        }
+
+        public Result ValidateNoForbiddenFields(string json)
+        {
+            var result = new PrivacyValidationResult();
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return Result.Success();
+            }
+
+            try
+            {
+                InspectToken(JToken.Parse(json), "$", result);
+            }
+            catch (JsonReaderException)
+            {
+                if (detector.ContainsSensitiveString(json))
+                {
+                    AddViolation(result, "Sensitive string pattern in JSON/text payload", "$");
+                }
+            }
+
+            return ToResult(result);
+        }
+
+        public Result ValidateSafeSession(AgentWorkSession session)
+        {
+            if (session == null)
+            {
+                return Result.Failure("privacy_null_session", "Session is required.");
+            }
+
+            return ValidateNoForbiddenFields(session);
+        }
+
+        public Result ValidateSafeSaveData(SaveData saveData)
+        {
+            if (saveData == null)
+            {
+                return Result.Failure("privacy_null_save_data", "Save data is required.");
+            }
+
+            return ValidateNoForbiddenFields(saveData);
+        }
+
         public void ThrowIfUnsafe(object payload)
         {
             var result = ValidateObject(payload);
@@ -58,7 +137,7 @@ namespace TokenForge.Client.Privacy
                         var propertyPath = $"{path}.{property.Name}";
                         if (detector.IsForbiddenFieldName(property.Name))
                         {
-                            result.Violations.Add($"Forbidden field '{property.Name}' at {propertyPath}");
+                            AddViolation(result, $"Forbidden field '{property.Name}'", propertyPath);
                         }
 
                         InspectToken(property.Value, propertyPath, result);
@@ -76,10 +155,37 @@ namespace TokenForge.Client.Privacy
                     var value = token.Value<string>();
                     if (detector.ContainsSensitiveString(value))
                     {
-                        result.Violations.Add($"Sensitive string pattern at {path}");
+                        AddViolation(result, "Sensitive string pattern", path);
                     }
                     break;
             }
+        }
+
+        private static void AddViolation(PrivacyValidationResult result, string message, string location)
+        {
+            result.Violations.Add($"{message} at {location}");
+            result.Warnings.Add(new PrivacyWarning
+            {
+                Code = "privacy_forbidden_data",
+                Message = message,
+                Location = location
+            });
+        }
+
+        private static Result ToResult(PrivacyValidationResult validation)
+        {
+            if (validation.IsSafe)
+            {
+                return Result.Success();
+            }
+
+            var result = Result.Failure("privacy_forbidden_data", string.Join(", ", validation.Violations));
+            foreach (var warning in validation.Warnings)
+            {
+                result.Warnings.Add($"{warning.Code}: {warning.Message} ({warning.Location})");
+            }
+
+            return result;
         }
     }
 }
