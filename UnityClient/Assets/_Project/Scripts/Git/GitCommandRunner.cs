@@ -7,20 +7,55 @@ using TokenForge.Client.Common;
 
 namespace TokenForge.Client.Git
 {
-    public sealed class GitCommandRunner
+    public interface IGitCommandRunner
+    {
+        Task<GitCommandResult> RunAsync(string workingDirectory, string arguments, CancellationToken cancellationToken);
+    }
+
+    public sealed class GitCommandResult
+    {
+        public bool IsSuccess { get; set; }
+        public int ExitCode { get; set; }
+        public string Output { get; set; } = string.Empty;
+        public string ErrorCode { get; set; } = string.Empty;
+        public string ErrorMessage { get; set; } = string.Empty;
+
+        public static GitCommandResult Success(string output, int exitCode = 0)
+        {
+            return new GitCommandResult
+            {
+                IsSuccess = true,
+                ExitCode = exitCode,
+                Output = output ?? string.Empty
+            };
+        }
+
+        public static GitCommandResult Failure(string errorCode, string errorMessage, int exitCode = -1)
+        {
+            return new GitCommandResult
+            {
+                IsSuccess = false,
+                ExitCode = exitCode,
+                ErrorCode = errorCode,
+                ErrorMessage = errorMessage
+            };
+        }
+    }
+
+    public sealed class SystemGitCommandRunner : IGitCommandRunner
     {
         private readonly TimeSpan timeout;
 
-        public GitCommandRunner(TimeSpan? timeout = null)
+        public SystemGitCommandRunner(TimeSpan? timeout = null)
         {
             this.timeout = timeout ?? TimeSpan.FromSeconds(5);
         }
 
-        public async Task<Result<string>> RunAsync(string workingDirectory, string arguments, CancellationToken cancellationToken)
+        public async Task<GitCommandResult> RunAsync(string workingDirectory, string arguments, CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(workingDirectory))
             {
-                return Result<string>.Failure("missing_working_directory", "A project folder is required.");
+                return GitCommandResult.Failure("missing_working_directory", "A project folder is required.");
             }
 
             var startInfo = new ProcessStartInfo
@@ -45,7 +80,7 @@ namespace TokenForge.Client.Git
                 {
                     if (!process.Start())
                     {
-                        return Result<string>.Failure("git_start_failed", "Git process could not be started.");
+                        return GitCommandResult.Failure("git_start_failed", "Git process could not be started.");
                     }
 
                     var outputTask = process.StandardOutput.ReadToEndAsync();
@@ -60,28 +95,28 @@ namespace TokenForge.Client.Git
                     if (completed != exitTask)
                     {
                         TryKill(process);
-                        return Result<string>.Failure("git_timeout", "Git command timed out.");
+                        return GitCommandResult.Failure("git_timeout", "Git command timed out.");
                     }
 
                     var exitCode = await exitTask;
                     var output = await outputTask;
-                    var error = await errorTask;
+                    await errorTask;
 
                     if (exitCode != 0)
                     {
-                        return Result<string>.Failure("git_command_failed", string.IsNullOrWhiteSpace(error) ? "Git command failed." : "Git command failed with stderr.");
+                        return GitCommandResult.Failure("git_command_failed", "Git command failed with stderr.", exitCode);
                     }
 
-                    return Result<string>.Success(output ?? string.Empty);
+                    return GitCommandResult.Success(output, exitCode);
                 }
                 catch (OperationCanceledException)
                 {
                     TryKill(process);
-                    return Result<string>.Failure("git_cancelled", "Git command was cancelled.");
+                    return GitCommandResult.Failure("git_cancelled", "Git command was cancelled.");
                 }
                 catch (Exception ex) when (ex is System.ComponentModel.Win32Exception || ex is InvalidOperationException)
                 {
-                    return Result<string>.Failure("git_unavailable", "Git executable is unavailable or cannot be launched.");
+                    return GitCommandResult.Failure("git_unavailable", "Git executable is unavailable or cannot be launched.");
                 }
             }
         }
@@ -99,6 +134,27 @@ namespace TokenForge.Client.Git
             {
                 // Nothing useful can be logged here without risking raw command output leakage.
             }
+        }
+    }
+
+    public sealed class GitCommandRunner
+    {
+        private readonly IGitCommandRunner inner;
+
+        public GitCommandRunner(TimeSpan? timeout = null)
+        {
+            inner = new SystemGitCommandRunner(timeout);
+        }
+
+        public async Task<Result<string>> RunAsync(string workingDirectory, string arguments, CancellationToken cancellationToken)
+        {
+            var result = await inner.RunAsync(workingDirectory, arguments, cancellationToken);
+            if (!result.IsSuccess)
+            {
+                return Result<string>.Failure(result.ErrorCode, result.ErrorMessage);
+            }
+
+            return Result<string>.Success(result.Output ?? string.Empty);
         }
     }
 }

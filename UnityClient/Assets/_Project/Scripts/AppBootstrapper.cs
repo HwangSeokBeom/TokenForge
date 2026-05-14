@@ -1,7 +1,12 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using TokenForge.Client.Agents;
+using TokenForge.Client.Git;
 using TokenForge.Client.Platform;
+using TokenForge.Client.Privacy;
+using TokenForge.Client.Persistence;
+using TokenForge.Client.Sync;
 using TokenForge.Client.UI;
 
 namespace TokenForge.Client
@@ -10,14 +15,28 @@ namespace TokenForge.Client
     {
         [SerializeField] private BootstrapScreenView bootstrapScreen;
         [SerializeField] private bool runSafeSmokeFlowWhenEmpty = true;
+        [SerializeField] private BootstrapSyncMode bootstrapSyncMode = BootstrapSyncMode.None;
+        [SerializeField] private string apiBaseUrl = ApiConfiguration.DefaultBaseUrl;
 
         private LocalClientStatus localStatus;
+        private PrivacySanitizer privacySanitizer;
+        private SaveDataRepository repository;
+        private ApprovedLocationSettingsRepository approvedLocationRepository;
+        private ISyncService syncService;
+        private BackendSyncSmokeFlow backendSyncSmokeFlow;
+        private GitAnalysisFlowController gitAnalysisFlow;
+        private AgentAnalysisFlowController agentAnalysisFlow;
+        private ApprovedActivityAnalysisViewModel approvedActivityAnalysis;
 
         public LocalClientStatus LocalStatus => localStatus;
+        public GitAnalysisFlowController GitAnalysisFlow => gitAnalysisFlow;
+        public AgentAnalysisFlowController AgentAnalysisFlow => agentAnalysisFlow;
+        public ApprovedActivityAnalysisViewModel ApprovedActivityAnalysis => approvedActivityAnalysis;
 
         private void Awake()
         {
             EnsureSceneInfrastructure();
+            ConfigureServices();
 
             if (bootstrapScreen == null)
             {
@@ -25,10 +44,19 @@ namespace TokenForge.Client
             }
 
             localStatus = LocalClientStatus.CreateInitialized();
+            gitAnalysisFlow = CreateGitAnalysisFlow();
+            agentAnalysisFlow = CreateAgentAnalysisFlow();
+            approvedActivityAnalysis = new ApprovedActivityAnalysisViewModel(
+                gitAnalysisFlow,
+                agentAnalysisFlow,
+                new MacOSAgentLogLocationPicker(),
+                repository,
+                privacySanitizer,
+                approvedLocationRepository);
 
             if (bootstrapScreen != null)
             {
-                bootstrapScreen.Bind(localStatus);
+                bootstrapScreen.Bind(localStatus, approvedActivityAnalysis);
             }
             else
             {
@@ -38,20 +66,90 @@ namespace TokenForge.Client
 
         private async void Start()
         {
-            if (!runSafeSmokeFlowWhenEmpty)
+            if (!runSafeSmokeFlowWhenEmpty && bootstrapSyncMode == BootstrapSyncMode.None)
             {
+                await RefreshDashboardAsync();
                 return;
             }
 
-            var result = await new BootstrapSmokeFlow().RunIfEmptyAsync();
+            var result = await new BootstrapSmokeFlow(repository, privacySanitizer, null, syncService, backendSyncSmokeFlow)
+                .RunIfEmptyThenOptionalSyncAsync(runSafeSmokeFlowWhenEmpty, bootstrapSyncMode);
             if (result.IsSuccess)
             {
                 Debug.Log("TokenForge safe bootstrap completed.");
+                if (approvedActivityAnalysis != null)
+                {
+                    await RefreshDashboardAsync();
+                }
             }
             else
             {
                 Debug.LogWarning("TokenForge safe bootstrap could not complete.");
             }
+        }
+
+        private async System.Threading.Tasks.Task RefreshDashboardAsync()
+        {
+            if (approvedActivityAnalysis == null)
+            {
+                return;
+            }
+
+            await approvedActivityAnalysis.RefreshDashboardAsync();
+            if (bootstrapScreen != null)
+            {
+                bootstrapScreen.Bind(localStatus, approvedActivityAnalysis);
+            }
+        }
+
+        private void ConfigureServices()
+        {
+            privacySanitizer = new PrivacySanitizer();
+            repository = new SaveDataRepository(null, privacySanitizer);
+            approvedLocationRepository = new ApprovedLocationSettingsRepository();
+            syncService = null;
+            backendSyncSmokeFlow = null;
+
+            if (bootstrapSyncMode == BootstrapSyncMode.RealBackendSmoke)
+            {
+                var configuration = new ApiConfiguration(apiBaseUrl);
+                var logger = new UnitySafeSyncLogger();
+                var transport = new SystemNetHttpTransport();
+                var authProvider = new DevGuestAuthTokenProvider(configuration, transport, logger);
+                var httpClient = new TokenForgeHttpClient(configuration, authProvider, transport, logger);
+                syncService = new SyncService(repository, httpClient, null, privacySanitizer);
+                backendSyncSmokeFlow = new BackendSyncSmokeFlow(repository, authProvider, httpClient, null, privacySanitizer, logger);
+            }
+            else if (bootstrapSyncMode != BootstrapSyncMode.None)
+            {
+                var httpClient = new TokenForgeHttpClient(
+                    new ApiConfiguration(apiBaseUrl),
+                    new EmptyAuthTokenProvider());
+                syncService = new SyncService(repository, httpClient, null, privacySanitizer);
+            }
+        }
+
+        private GitAnalysisFlowController CreateGitAnalysisFlow()
+        {
+            var logger = new UnityGitAnalysisLogger();
+            return new GitAnalysisFlowController(
+                new MacOSRepositoryPicker(),
+                new GitAggregateAnalyzer(null, privacySanitizer, logger),
+                repository,
+                null,
+                privacySanitizer,
+                syncService,
+                logger);
+        }
+
+        private AgentAnalysisFlowController CreateAgentAnalysisFlow()
+        {
+            return new AgentAnalysisFlowController(
+                new AgentLogActivityProvider(new AgentActivityAnalyzer(null, null, privacySanitizer)),
+                repository,
+                null,
+                privacySanitizer,
+                syncService);
         }
 
         private void EnsureSceneInfrastructure()

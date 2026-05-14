@@ -29,9 +29,10 @@ namespace TokenForge.Client.Growth
             var tokenMultiplier = GetTokenMultiplier(session.TokenUsageBucket);
             var fileMultiplier = GetFileChangeMultiplier(session.GitChangeSummary?.ChangedFileCount ?? session.ActionSummary?.FileEditCount ?? 0);
             var lineMultiplier = GetLineChangeMultiplier(session.GitChangeSummary);
+            var gitAggregateMultiplier = GetGitAggregateConfidenceMultiplier(session);
             var antiGrindingMultiplier = GetAntiGrindingMultiplier(session);
             var resultMultiplier = GetResultMultiplier(session.ResultStatus, rule);
-            var baseExp = rule.BaseExp * tokenMultiplier * fileMultiplier * lineMultiplier * antiGrindingMultiplier * resultMultiplier;
+            var baseExp = rule.BaseExp * tokenMultiplier * fileMultiplier * lineMultiplier * gitAggregateMultiplier * antiGrindingMultiplier * resultMultiplier;
 
             // Mini-game rewards are optional side rewards and should stay within 5-15% of the final work-session reward.
             var clampedMiniGameRatio = Math.Max(0f, Math.Min(config.MiniGameBonusMaxRatio, miniGameBonusRatio));
@@ -50,7 +51,7 @@ namespace TokenForge.Client.Growth
 
             var levelBefore = profile.Level;
             var levelAfter = CalculateLevel(profile.TotalExp + exp);
-            var statDeltas = CalculateStatDeltas(rule.StatWeights, tokenMultiplier, fileMultiplier * lineMultiplier, session);
+            var statDeltas = CalculateStatDeltas(rule.StatWeights, tokenMultiplier, fileMultiplier * lineMultiplier * gitAggregateMultiplier, session);
             var stressDelta = CalculateStressDelta(session, rule);
             statDeltas.Stress += stressDelta;
 
@@ -111,6 +112,38 @@ namespace TokenForge.Client.Growth
             return Math.Min(1.35f, 1f + ((added + deleted) * 0.075f));
         }
 
+        private static float GetGitAggregateConfidenceMultiplier(AgentWorkSession session)
+        {
+            if (!IsGitAggregateSession(session))
+            {
+                return 1f;
+            }
+
+            var multiplier = 1f;
+            switch (session.GitChangeSummary?.ConfidenceLevel ?? ConfidenceLevel.Unknown)
+            {
+                case ConfidenceLevel.High:
+                    multiplier = 1f;
+                    break;
+                case ConfidenceLevel.Medium:
+                    multiplier = 0.9f;
+                    break;
+                case ConfidenceLevel.Low:
+                    multiplier = 0.7f;
+                    break;
+                default:
+                    multiplier = 0.8f;
+                    break;
+            }
+
+            if ((session.GitChangeSummary?.PrivacyWarnings?.Count ?? 0) > 0)
+            {
+                multiplier *= 0.85f;
+            }
+
+            return Math.Max(0.55f, multiplier);
+        }
+
         private static int BucketWeight(LineChangeBucket bucket)
         {
             switch (bucket)
@@ -166,7 +199,7 @@ namespace TokenForge.Client.Growth
         private static CharacterStats CalculateStatDeltas(CharacterStats weights, float tokenMultiplier, float fileMultiplier, AgentWorkSession session)
         {
             var scale = Math.Max(1f, (tokenMultiplier + fileMultiplier) * 0.5f);
-            return new CharacterStats
+            var deltas = new CharacterStats
             {
                 Logic = Scale(weights.Logic, scale),
                 Debug = Scale(weights.Debug, scale) + (session.ActionSummary?.FailedCommandCount > 0 ? 1 : 0),
@@ -177,6 +210,48 @@ namespace TokenForge.Client.Growth
                 Creativity = Scale(weights.Creativity, scale),
                 Efficiency = Scale(weights.Efficiency, scale) + (session.ResultStatus == ResultStatus.Succeeded && session.TokenUsageBucket == TokenUsageBucket.Small ? 1 : 0)
             };
+
+            ApplyGitAggregateStatSignals(deltas, session);
+            return deltas;
+        }
+
+        private static void ApplyGitAggregateStatSignals(CharacterStats deltas, AgentWorkSession session)
+        {
+            if (!IsGitAggregateSession(session) || session.GitChangeSummary?.ExtensionCategoryBuckets == null)
+            {
+                return;
+            }
+
+            if (HasExtensionCategory(session.GitChangeSummary, "test"))
+            {
+                deltas.Stability += 1;
+                deltas.Debug += 1;
+            }
+
+            if (HasExtensionCategory(session.GitChangeSummary, "markdown"))
+            {
+                deltas.Architecture += 1;
+                deltas.Efficiency += 1;
+            }
+
+            if (HasExtensionCategory(session.GitChangeSummary, "config") || HasExtensionCategory(session.GitChangeSummary, "json"))
+            {
+                deltas.Stability += 1;
+                deltas.Efficiency += 1;
+            }
+
+            if (session.GitChangeSummary.ChangedFileCountBucket == CountBucket.Huge ||
+                session.GitChangeSummary.AddedLineBucket == LineChangeBucket.Huge ||
+                session.GitChangeSummary.DeletedLineBucket == LineChangeBucket.Huge)
+            {
+                CapStats(deltas, 8);
+            }
+
+            if ((session.GitChangeSummary.PrivacyWarnings?.Count ?? 0) > 0 ||
+                session.GitChangeSummary.ConfidenceLevel == ConfidenceLevel.Low)
+            {
+                CapStats(deltas, 5);
+            }
         }
 
         private static int CalculateStressDelta(AgentWorkSession session, GrowthRule rule)
@@ -192,6 +267,30 @@ namespace TokenForge.Client.Growth
         private static int Scale(int value, float scale)
         {
             return value <= 0 ? 0 : Math.Max(1, (int)Math.Round(value * scale));
+        }
+
+        private static bool IsGitAggregateSession(AgentWorkSession session)
+        {
+            return string.Equals(session?.GitChangeSummary?.AnalyzerVersion, "git-aggregate-v1", StringComparison.Ordinal) ||
+                   string.Equals(session?.SourceProvider, "GIT", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool HasExtensionCategory(GitChangeSummary summary, string category)
+        {
+            return (summary.ExtensionCategoryBuckets ?? new List<ExtensionCategoryCount>())
+                .Any(item => string.Equals(item.Category, category, StringComparison.OrdinalIgnoreCase) && item.Count > 0);
+        }
+
+        private static void CapStats(CharacterStats stats, int max)
+        {
+            stats.Logic = Math.Min(stats.Logic, max);
+            stats.Debug = Math.Min(stats.Debug, max);
+            stats.Architecture = Math.Min(stats.Architecture, max);
+            stats.Design = Math.Min(stats.Design, max);
+            stats.Stability = Math.Min(stats.Stability, max);
+            stats.Velocity = Math.Min(stats.Velocity, max);
+            stats.Creativity = Math.Min(stats.Creativity, max);
+            stats.Efficiency = Math.Min(stats.Efficiency, max);
         }
 
         private static EvolutionType InferEvolutionDelta(WorkType workType, CharacterStats delta)

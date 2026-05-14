@@ -23,8 +23,13 @@ namespace TokenForge.Client.Privacy
         {
             "prompt",
             "rawPrompt",
+            "response",
+            "rawResponse",
+            "chatContent",
+            "conversation",
             "code",
             "rawCode",
+            "sourceText",
             "log",
             "rawLog",
             "terminalOutput",
@@ -34,6 +39,9 @@ namespace TokenForge.Client.Privacy
             "patch",
             "absolutePath",
             "filePath",
+            "fileName",
+            "repoName",
+            "repositoryName",
             "remoteUrl",
             "gitRemote",
             "branchName",
@@ -45,6 +53,9 @@ namespace TokenForge.Client.Privacy
             "secret",
             "tokenRaw",
             "commandText",
+            "commandString",
+            "username",
+            "userName",
             "password",
             "bearer",
             "authorization"
@@ -53,11 +64,17 @@ namespace TokenForge.Client.Privacy
         private static readonly string[] ForbiddenNameFragments =
         {
             "rawprompt",
+            "rawresponse",
+            "chatcontent",
             "rawcode",
+            "sourcetext",
             "rawlog",
             "terminaloutput",
             "absolutepath",
             "filepath",
+            "filename",
+            "reponame",
+            "repositoryname",
             "remoteurl",
             "gitremote",
             "branchname",
@@ -66,17 +83,23 @@ namespace TokenForge.Client.Privacy
             "branchnameraw",
             "commitmessageraw",
             "tokenraw",
-            "commandtext"
+            "commandtext",
+            "commandstring",
+            "username"
         };
 
         private static readonly Regex[] SensitiveStringPatterns =
         {
-            new Regex(@"[""']?(prompt|rawPrompt|code|rawCode|log|rawLog|terminalOutput|stdout|stderr|absolutePath|filePath|remoteUrl|gitRemote|branchName|commitMessage|diff|patch|apiKey|secret|tokenRaw|commandText)[""']?\s*[:=]", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+            new Regex(@"[""']?(prompt|rawPrompt|response|rawResponse|chatContent|conversation|code|rawCode|sourceText|log|rawLog|terminalOutput|stdout|stderr|absolutePath|filePath|fileName|repoName|repositoryName|remoteUrl|gitRemote|branchName|commitMessage|diff|patch|apiKey|secret|tokenRaw|commandText|commandString|username|userName)[""']?\s*[:=]", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex(@"bearer\s+[a-z0-9\._\-]+", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+            new Regex(@"\b(sk|ghp|github_pat|xox[baprs])[_\-][a-z0-9_\-]{12,}\b", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex(@"api[_-]?key\s*[:=]", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex(@"password\s*[:=]", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex(@"secret\s*[:=]", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex(@"authorization\s*[:=]", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+            new Regex(@"\b(repo|repository|branch|username|user)\s*[:=]\s*[^\s\""]+", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+            new Regex(@"\b(public\s+class|private\s+class|function\s+[a-z0-9_]+\s*\(|const\s+[a-z0-9_]+\s*=|var\s+[a-z0-9_]+\s*=|def\s+[a-z0-9_]+\s*\()", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+            new Regex(@"\b(git\s+(status|commit|push|pull|checkout)|npm\s+test|pytest|dotnet\s+test|xcodebuild)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex(@"(^|[\s\""])(/users/|/home/|/volumes/)[^\s\""]+", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex(@"[a-z]:\\users\\[^\s\""]+", RegexOptions.IgnoreCase | RegexOptions.Compiled)
         };

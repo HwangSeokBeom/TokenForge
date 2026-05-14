@@ -14,6 +14,7 @@ namespace TokenForge.Client.Domain
         public TokenUsageBucket TokenUsageBucket { get; set; } = TokenUsageBucket.Unknown;
         public AgentActionSummary ActionSummary { get; set; } = AgentActionSummary.Empty();
         public GitChangeSummary GitChangeSummary { get; set; } = GitChangeSummary.Empty();
+        public AgentActivitySummary AgentActivitySummary { get; set; } = AgentActivitySummary.Empty();
         public ResultStatus ResultStatus { get; set; } = ResultStatus.Unknown;
         public string SourceProvider { get; set; } = string.Empty;
         public List<string> SourceProviders { get; set; } = new List<string>();

@@ -81,6 +81,14 @@ namespace TokenForge.Client.Domain
     }
 
     [Serializable]
+    public sealed class AchievementProgress
+    {
+        public string AchievementId { get; set; } = string.Empty;
+        public DateTimeOffset UnlockedAt { get; set; } = DateTimeOffset.UtcNow;
+        public int Progress { get; set; }
+    }
+
+    [Serializable]
     public sealed class SaveData
     {
         public const int CurrentSaveVersion = 1;
@@ -96,6 +104,7 @@ namespace TokenForge.Client.Domain
         public UserSettings UserSettings { get; set; } = new UserSettings();
         public DailyProgress DailyProgress { get; set; } = new DailyProgress();
         public List<MiniGameSession> MiniGameHistory { get; set; } = new List<MiniGameSession>();
+        public List<AchievementProgress> Achievements { get; set; } = new List<AchievementProgress>();
 
         public static SaveData CreateDefault()
         {

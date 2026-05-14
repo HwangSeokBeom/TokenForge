@@ -60,6 +60,7 @@ namespace TokenForge.Client.Tests
                 typeof(GitChangeSummary),
                 typeof(CharacterProfile),
                 typeof(CharacterStats),
+                typeof(AchievementProgress),
                 typeof(SaveData)
             };
 

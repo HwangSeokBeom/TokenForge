@@ -14,7 +14,11 @@ namespace TokenForge.Client.Privacy
             "SettingsSyncRequest",
             "SessionSummaryDto",
             "WorkTypeDistributionDto",
-            "CharacterStatsDto"
+            "CharacterStatsDto",
+            "SafeSyncPullRequest",
+            "SafeSyncPullResponse",
+            "SafeSyncPushResponse",
+            "SafeAchievementDto"
         };
 
         public SyncPayloadSanitizer(PrivacySanitizer privacySanitizer = null)

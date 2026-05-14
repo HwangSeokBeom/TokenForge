@@ -10,7 +10,13 @@ using TokenForge.Client.Privacy;
 
 namespace TokenForge.Client.Persistence
 {
-    public sealed class SaveDataRepository
+    public interface ILocalSaveDataRepository
+    {
+        Task<SaveData> LoadAsync(CancellationToken cancellationToken = default);
+        Task<Result> SaveAsync(SaveData saveData, CancellationToken cancellationToken = default);
+    }
+
+    public sealed class SaveDataRepository : ILocalSaveDataRepository
     {
         public const string SaveFileName = "tokenforge-save.json";
         private readonly string saveFilePath;

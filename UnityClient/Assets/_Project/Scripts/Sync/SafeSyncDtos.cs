@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 using TokenForge.Client.Domain;
 
 namespace TokenForge.Client.Sync
@@ -39,6 +40,16 @@ namespace TokenForge.Client.Sync
         public ResultStatus ResultStatus { get; set; } = ResultStatus.Unknown;
         public ProviderConfidence Confidence { get; set; } = ProviderConfidence.Unknown;
         public string ProjectPathHash { get; set; } = string.Empty;
+        public AgentProviderType AgentProviderType { get; set; } = AgentProviderType.Unknown;
+        public string AgentSourceIdentifierHash { get; set; } = string.Empty;
+        public string AgentActivityDayBucket { get; set; } = string.Empty;
+        public CountBucket AgentSessionCountBucket { get; set; } = CountBucket.Unknown;
+        public CountBucket AgentInteractionCountBucket { get; set; } = CountBucket.Unknown;
+        public CountBucket AgentCodingActivityBucket { get; set; } = CountBucket.Unknown;
+        public List<AgentToolUsageCategoryBucket> AgentToolUsageCategoryBuckets { get; set; } = new List<AgentToolUsageCategoryBucket>();
+        public List<AgentLanguageCategoryBucket> AgentLanguageCategoryBuckets { get; set; } = new List<AgentLanguageCategoryBucket>();
+        public string SourceProvider { get; set; } = "UNKNOWN";
+        [JsonIgnore]
         public List<string> SourceProviders { get; set; } = new List<string>();
     }
 
@@ -90,5 +101,39 @@ namespace TokenForge.Client.Sync
         public CharacterSnapshotSyncRequest CharacterSnapshot { get; set; } = new CharacterSnapshotSyncRequest();
         public SessionSummaryUploadRequest SessionSummary { get; set; } = new SessionSummaryUploadRequest();
         public SettingsSyncRequest Settings { get; set; } = new SettingsSyncRequest();
+    }
+
+    [Serializable]
+    public sealed class SafeSyncPullRequest
+    {
+        public int SyncVersion { get; set; } = 1;
+        public DateTimeOffset? LastSyncAt { get; set; }
+    }
+
+    [Serializable]
+    public sealed class SafeAchievementDto
+    {
+        public string AchievementId { get; set; } = string.Empty;
+        public DateTimeOffset UnlockedAt { get; set; } = DateTimeOffset.UtcNow;
+        public int Progress { get; set; }
+    }
+
+    [Serializable]
+    public sealed class SafeSyncPullResponse
+    {
+        public int SyncVersion { get; set; } = 1;
+        public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+        public CharacterSnapshotSyncRequest CharacterSnapshot { get; set; }
+        public List<SessionSummaryDto> Sessions { get; set; } = new List<SessionSummaryDto>();
+        public List<SafeAchievementDto> Achievements { get; set; } = new List<SafeAchievementDto>();
+    }
+
+    [Serializable]
+    public sealed class SafeSyncPushResponse
+    {
+        public int SyncVersion { get; set; } = 1;
+        public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+        public int AcceptedSessionCount { get; set; }
+        public int AcceptedAchievementCount { get; set; }
     }
 }

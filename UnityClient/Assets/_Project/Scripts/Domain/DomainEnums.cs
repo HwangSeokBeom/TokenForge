@@ -20,6 +20,38 @@ namespace TokenForge.Client.Domain
         Mock
     }
 
+    public enum AgentProviderType
+    {
+        Unknown,
+        Claude,
+        Codex
+    }
+
+    public enum AgentToolUsageCategory
+    {
+        Unknown,
+        CodeEditing,
+        ShellCommand,
+        TestRun,
+        BuildRun,
+        FileNavigation,
+        Search
+    }
+
+    public enum AgentLanguageCategory
+    {
+        Unknown,
+        CSharp,
+        JavaScript,
+        TypeScript,
+        Python,
+        Web,
+        Config,
+        Docs,
+        Test,
+        Shell
+    }
+
     public enum WorkType
     {
         Unknown,
@@ -98,6 +130,17 @@ namespace TokenForge.Client.Domain
     {
         Unknown,
         None,
+        Small,
+        Medium,
+        Large,
+        Huge
+    }
+
+    public enum CountBucket
+    {
+        Unknown,
+        None,
+        One,
         Small,
         Medium,
         Large,
