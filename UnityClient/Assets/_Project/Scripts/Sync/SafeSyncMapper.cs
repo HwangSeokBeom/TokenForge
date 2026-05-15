@@ -43,6 +43,32 @@ namespace TokenForge.Client.Sync
             return payload;
         }
 
+        public SafeActivitySessionsContractRequest ToActivitySessionsContractRequest(
+            SaveData saveData,
+            string clientSyncId = "unity-sync-v1-001")
+        {
+            if (saveData == null) throw new ArgumentNullException(nameof(saveData));
+
+            var payload = ToPayload(saveData);
+            var sourceBySessionId = (saveData.WorkSessionSummaries ?? new List<AgentWorkSession>())
+                .Where(session => !string.IsNullOrWhiteSpace(session.SessionId))
+                .GroupBy(session => session.SessionId)
+                .ToDictionary(group => group.Key, group => group.First());
+
+            return new SafeActivitySessionsContractRequest
+            {
+                SchemaVersion = 1,
+                ClientSyncId = clientSyncId,
+                Sessions = (payload.SessionSummary?.Sessions ?? new List<SessionSummaryDto>())
+                    .Select(session =>
+                    {
+                        sourceBySessionId.TryGetValue(session.SessionId, out var sourceSession);
+                        return ToContractActivitySession(session, sourceSession);
+                    })
+                    .ToList()
+            };
+        }
+
         public SafeSyncPullRequest ToPullRequest(SaveData saveData)
         {
             if (saveData == null) throw new ArgumentNullException(nameof(saveData));
@@ -352,6 +378,397 @@ namespace TokenForge.Client.Sync
             }
 
             return providers;
+        }
+
+        private static SafeActivitySessionContractDto ToContractActivitySession(
+            SessionSummaryDto session,
+            AgentWorkSession sourceSession)
+        {
+            return new SafeActivitySessionContractDto
+            {
+                ClientSessionId = SafeContractId(session.SessionId),
+                SourceProvider = ToContractSourceProvider(session.SourceProvider, sourceSession),
+                DayBucket = ToContractDayBucket(session, sourceSession),
+                TimeBucket = ToContractTimeBucket(session.StartedAt),
+                Confidence = ToContractConfidence(session.Confidence),
+                WarningIds = BuildContractWarningIds(sourceSession),
+                AnalyzerVersion = ToContractAnalyzerVersion(sourceSession),
+                ParserVersion = ToContractParserVersion(sourceSession),
+                HashedRepositoryId = ToContractHash(session.ProjectPathHash),
+                ChangeCountBucket = ToContractChangedFileBucket(session.ChangedFileCount),
+                LineCountBucket = ToContractLineBucket(session.AddedLineBucket, session.DeletedLineBucket),
+                CommitCountBucket = ToContractCountBucket(sourceSession?.GitChangeSummary?.CommitCountBucket),
+                SessionCountBucket = ToContractCountBucket(session.AgentSessionCountBucket),
+                InteractionCountBucket = ToContractCountBucket(session.AgentInteractionCountBucket),
+                ActivityCategory = ToContractWorkType(session.WorkType),
+                DurationBucket = ToContractDurationBucket(sourceSession?.ActionSummary?.DurationBucket),
+                CategoryBuckets = BuildCategoryBuckets(session),
+                LanguageBuckets = BuildLanguageBuckets(session),
+                ToolBuckets = BuildToolBuckets(session)
+            };
+        }
+
+        private static List<string> BuildContractWarningIds(AgentWorkSession sourceSession)
+        {
+            var warnings = new List<string>();
+            if (sourceSession?.Warnings != null)
+            {
+                warnings.AddRange(sourceSession.Warnings);
+            }
+
+            if (sourceSession?.GitChangeSummary?.PrivacyWarnings != null)
+            {
+                warnings.AddRange(sourceSession.GitChangeSummary.PrivacyWarnings);
+            }
+
+            if (sourceSession?.AgentActivitySummary?.WarningIds != null)
+            {
+                warnings.AddRange(sourceSession.AgentActivitySummary.WarningIds);
+            }
+
+            return warnings
+                .Select(ToContractEnumKey)
+                .Where(value => !string.IsNullOrEmpty(value))
+                .Distinct()
+                .Take(25)
+                .ToList();
+        }
+
+        private static string ToContractAnalyzerVersion(AgentWorkSession sourceSession)
+        {
+            var analyzerVersion = sourceSession?.GitChangeSummary?.AnalyzerVersion;
+            if (string.IsNullOrWhiteSpace(analyzerVersion))
+            {
+                analyzerVersion = sourceSession?.AgentActivitySummary?.AnalyzerVersion;
+            }
+
+            return SafeContractVersion(analyzerVersion);
+        }
+
+        private static string ToContractParserVersion(AgentWorkSession sourceSession)
+        {
+            return SafeContractVersion(sourceSession?.ParserVersion);
+        }
+
+        private static string ToContractSourceProvider(string mappedProvider, AgentWorkSession sourceSession)
+        {
+            var provider = mappedProvider;
+            if (string.IsNullOrWhiteSpace(provider) || string.Equals(provider, "UNKNOWN", StringComparison.OrdinalIgnoreCase))
+            {
+                provider = ToBackendSourceProvider(sourceSession);
+            }
+
+            if (string.Equals(provider, "UNKNOWN", StringComparison.OrdinalIgnoreCase))
+            {
+                return "UNKNOWN_AGENT";
+            }
+
+            if (string.Equals(provider, "MANUAL", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(provider, "GIT", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(provider, "CLAUDE", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(provider, "CODEX", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(provider, "UNKNOWN_AGENT", StringComparison.OrdinalIgnoreCase))
+            {
+                return provider.ToUpperInvariant();
+            }
+
+            return "UNKNOWN_AGENT";
+        }
+
+        private static string ToContractDayBucket(SessionSummaryDto session, AgentWorkSession sourceSession)
+        {
+            if (!string.IsNullOrWhiteSpace(session.AgentActivityDayBucket))
+            {
+                var safeDay = SafeDayBucket(session.AgentActivityDayBucket);
+                if (!string.IsNullOrEmpty(safeDay))
+                {
+                    return safeDay;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(sourceSession?.GitChangeSummary?.AnalysisTimeBucket))
+            {
+                var safeDay = SafeDayBucket(sourceSession.GitChangeSummary.AnalysisTimeBucket);
+                if (!string.IsNullOrEmpty(safeDay))
+                {
+                    return safeDay;
+                }
+            }
+
+            return session.StartedAt.UtcDateTime.ToString("yyyy-MM-dd");
+        }
+
+        private static string ToContractTimeBucket(DateTimeOffset startedAt)
+        {
+            return "HOUR_" + startedAt.UtcDateTime.Hour.ToString("00");
+        }
+
+        private static string ToContractConfidence(ProviderConfidence confidence)
+        {
+            switch (confidence)
+            {
+                case ProviderConfidence.High: return "HIGH";
+                case ProviderConfidence.Medium: return "MEDIUM";
+                case ProviderConfidence.Low: return "LOW";
+                default: return "LOW";
+            }
+        }
+
+        private static string ToContractHash(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            var filtered = new string(value.Trim().Where(Uri.IsHexDigit).ToArray());
+            if (filtered.Length < 16)
+            {
+                return null;
+            }
+
+            return filtered.Length > 128 ? filtered.Substring(0, 128) : filtered;
+        }
+
+        private static string ToContractChangedFileBucket(int changedFileCount)
+        {
+            if (changedFileCount <= 0) return "NONE";
+            if (changedFileCount == 1) return "ONE";
+            if (changedFileCount <= 5) return "FEW";
+            if (changedFileCount <= 30) return "MANY";
+            return "MASSIVE";
+        }
+
+        private static string ToContractLineBucket(LineChangeBucket added, LineChangeBucket deleted)
+        {
+            var rank = Math.Max(LineBucketRank(added), LineBucketRank(deleted));
+            switch (rank)
+            {
+                case 0: return "NONE";
+                case 1: return "FEW";
+                case 2: return "MANY";
+                default: return "MASSIVE";
+            }
+        }
+
+        private static int LineBucketRank(LineChangeBucket bucket)
+        {
+            switch (bucket)
+            {
+                case LineChangeBucket.None: return 0;
+                case LineChangeBucket.Small: return 1;
+                case LineChangeBucket.Medium:
+                case LineChangeBucket.Large: return 2;
+                case LineChangeBucket.Huge: return 3;
+                default: return 0;
+            }
+        }
+
+        private static string ToContractCountBucket(CountBucket? bucket)
+        {
+            if (!bucket.HasValue)
+            {
+                return null;
+            }
+
+            switch (bucket.Value)
+            {
+                case CountBucket.None: return "NONE";
+                case CountBucket.One: return "ONE";
+                case CountBucket.Small: return "FEW";
+                case CountBucket.Medium:
+                case CountBucket.Large: return "MANY";
+                case CountBucket.Huge: return "MASSIVE";
+                default: return null;
+            }
+        }
+
+        private static string ToContractDurationBucket(DurationBucket? bucket)
+        {
+            if (!bucket.HasValue)
+            {
+                return null;
+            }
+
+            switch (bucket.Value)
+            {
+                case DurationBucket.Under5Minutes: return "UNDER_5M";
+                case DurationBucket.FiveTo15Minutes: return "M_5_15";
+                case DurationBucket.FifteenTo60Minutes: return "M_30_60";
+                case DurationBucket.OneTo3Hours: return "H_1_2";
+                case DurationBucket.Over3Hours: return "H_2_PLUS";
+                default: return null;
+            }
+        }
+
+        private static List<SafeBucketContractDto> BuildCategoryBuckets(SessionSummaryDto session)
+        {
+            return new List<SafeBucketContractDto>
+            {
+                new SafeBucketContractDto
+                {
+                    Key = ToContractWorkType(session.WorkType),
+                    CountBucket = "ONE"
+                }
+            };
+        }
+
+        private static List<SafeBucketContractDto> BuildLanguageBuckets(SessionSummaryDto session)
+        {
+            var buckets = (session.AgentLanguageCategoryBuckets ?? new List<AgentLanguageCategoryBucket>())
+                .Select(item => new SafeBucketContractDto
+                {
+                    Key = ToContractLanguage(item.Category),
+                    CountBucket = ToContractCountBucket(item.CountBucket) ?? "FEW"
+                })
+                .ToList();
+
+            if (buckets.Count == 0)
+            {
+                buckets.Add(new SafeBucketContractDto
+                {
+                    Key = "LANG_UNKNOWN",
+                    CountBucket = "FEW"
+                });
+            }
+
+            return buckets;
+        }
+
+        private static List<SafeBucketContractDto> BuildToolBuckets(SessionSummaryDto session)
+        {
+            var buckets = (session.AgentToolUsageCategoryBuckets ?? new List<AgentToolUsageCategoryBucket>())
+                .Select(item => new SafeBucketContractDto
+                {
+                    Key = ToContractTool(item.Category),
+                    CountBucket = ToContractCountBucket(item.CountBucket) ?? "FEW"
+                })
+                .ToList();
+
+            if (buckets.Count == 0)
+            {
+                buckets.Add(new SafeBucketContractDto
+                {
+                    Key = session.SourceProvider == "GIT" ? "TOOL_GIT_COMMIT" : "TOOL_UNKNOWN",
+                    CountBucket = "ONE"
+                });
+            }
+
+            return buckets;
+        }
+
+        private static string ToContractWorkType(WorkType workType)
+        {
+            switch (workType)
+            {
+                case WorkType.Feature: return "WORK_FEATURE";
+                case WorkType.Bugfix: return "WORK_BUGFIX";
+                case WorkType.Refactor: return "WORK_REFACTOR";
+                case WorkType.Test: return "WORK_TEST";
+                case WorkType.UIUX: return "WORK_UIUX";
+                case WorkType.Docs: return "WORK_DOCS";
+                case WorkType.Build: return "WORK_BUILD";
+                case WorkType.Chore: return "WORK_CHORE";
+                case WorkType.Research: return "WORK_RESEARCH";
+                case WorkType.Mixed: return "WORK_MIXED";
+                default: return "WORK_UNKNOWN";
+            }
+        }
+
+        private static string ToContractLanguage(AgentLanguageCategory category)
+        {
+            switch (category)
+            {
+                case AgentLanguageCategory.CSharp: return "LANG_CSHARP";
+                case AgentLanguageCategory.JavaScript: return "LANG_JAVASCRIPT";
+                case AgentLanguageCategory.TypeScript: return "LANG_TYPESCRIPT";
+                case AgentLanguageCategory.Python: return "LANG_PYTHON";
+                case AgentLanguageCategory.Web: return "LANG_WEB";
+                case AgentLanguageCategory.Config: return "LANG_CONFIG";
+                case AgentLanguageCategory.Docs: return "LANG_DOCS";
+                case AgentLanguageCategory.Test: return "LANG_TEST";
+                case AgentLanguageCategory.Shell: return "LANG_SHELL";
+                default: return "LANG_UNKNOWN";
+            }
+        }
+
+        private static string ToContractTool(AgentToolUsageCategory category)
+        {
+            switch (category)
+            {
+                case AgentToolUsageCategory.CodeEditing: return "TOOL_EDIT";
+                case AgentToolUsageCategory.ShellCommand: return "TOOL_SHELL";
+                case AgentToolUsageCategory.TestRun: return "TOOL_TEST";
+                case AgentToolUsageCategory.BuildRun: return "TOOL_BUILD";
+                case AgentToolUsageCategory.FileNavigation: return "TOOL_NAVIGATION";
+                case AgentToolUsageCategory.Search: return "TOOL_SEARCH";
+                default: return "TOOL_UNKNOWN";
+            }
+        }
+
+        private static string SafeContractId(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return "unity-session-unknown";
+            }
+
+            var filtered = new string(value.Trim().Where(character =>
+                char.IsLetterOrDigit(character) ||
+                character == '_' ||
+                character == '-' ||
+                character == ':').ToArray());
+
+            if (string.IsNullOrWhiteSpace(filtered))
+            {
+                return "unity-session-unknown";
+            }
+
+            return filtered.Length > 128 ? filtered.Substring(0, 128) : filtered;
+        }
+
+        private static string SafeContractVersion(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            var filtered = new string(value.Trim().Where(character =>
+                char.IsLetterOrDigit(character) ||
+                character == ':' ||
+                character == '.' ||
+                character == '_' ||
+                character == '-').ToArray());
+
+            if (string.IsNullOrWhiteSpace(filtered))
+            {
+                return null;
+            }
+
+            return filtered.Length > 40 ? filtered.Substring(0, 40) : filtered;
+        }
+
+        private static string ToContractEnumKey(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var normalized = value.Trim().Replace("-", "_").Replace(" ", "_").ToUpperInvariant();
+            var filtered = new string(normalized.Where(character =>
+                char.IsLetterOrDigit(character) ||
+                character == '_' ||
+                character == ':' ||
+                character == '-').ToArray());
+
+            if (string.IsNullOrWhiteSpace(filtered) || !char.IsLetter(filtered[0]))
+            {
+                return string.Empty;
+            }
+
+            return filtered.Length > 64 ? filtered.Substring(0, 64) : filtered;
         }
 
         private static List<AgentToolUsageCategoryBucket> CloneToolBuckets(List<AgentToolUsageCategoryBucket> buckets)

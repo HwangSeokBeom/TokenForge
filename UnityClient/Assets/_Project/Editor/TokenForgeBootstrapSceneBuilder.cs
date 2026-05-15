@@ -1,3 +1,4 @@
+using System.IO;
 using TokenForge.Client;
 using TokenForge.Client.UI;
 using UnityEditor;
@@ -11,26 +12,34 @@ namespace TokenForge.Client.Editor
 {
     public static class TokenForgeBootstrapSceneBuilder
     {
-        private const string MainScenePath = "Assets/_Project/Scenes/Main.unity";
+        private const string BootstrapScenePath = "Assets/_Project/Scenes/Bootstrap.unity";
 
         [MenuItem("Tools/TokenForge/Rebuild Bootstrap Scene")]
         public static void BuildMainScene()
         {
-            var scene = EditorSceneManager.OpenScene(MainScenePath, OpenSceneMode.Single);
+            Phase14UiPrefabBuilder.BuildPrefabs();
+            var scene = File.Exists(BootstrapScenePath)
+                ? EditorSceneManager.OpenScene(BootstrapScenePath, OpenSceneMode.Single)
+                : EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             EnsureCamera();
             EnsureLight();
             EnsureEventSystem();
-            var screenView = EnsureCanvasAndRootPanel();
-            EnsureBootstrapper(screenView);
-
-            EditorBuildSettings.scenes = new[]
-            {
-                new EditorBuildSettingsScene(MainScenePath, true)
-            };
+            var rootView = EnsureCanvasAndRootPanel();
+            EnsureBootstrapper(rootView);
 
             EditorSceneManager.MarkSceneDirty(scene);
-            EditorSceneManager.SaveScene(scene);
+            EditorSceneManager.SaveScene(scene, BootstrapScenePath);
+            AssetDatabase.ImportAsset(BootstrapScenePath);
+            var buildScene = new EditorBuildSettingsScene(BootstrapScenePath, true)
+            {
+                guid = new GUID(AssetDatabase.AssetPathToGUID(BootstrapScenePath))
+            };
+            EditorBuildSettings.scenes = new[]
+            {
+                buildScene
+            };
+
             AssetDatabase.SaveAssets();
         }
 
@@ -81,7 +90,7 @@ namespace TokenForge.Client.Editor
             }
         }
 
-        private static BootstrapScreenView EnsureCanvasAndRootPanel()
+        private static BootstrapRootView EnsureCanvasAndRootPanel()
         {
             var canvasObject = GameObject.Find("Canvas");
             if (canvasObject == null)
@@ -114,16 +123,25 @@ namespace TokenForge.Client.Editor
                 canvasObject.AddComponent<GraphicRaycaster>();
             }
 
-            var root = canvasObject.transform.Find("Root UI Panel");
-            GameObject rootObject;
-            if (root == null)
+            var legacyScriptUi = canvasObject.transform.Find("Root UI Panel");
+            if (legacyScriptUi != null)
             {
-                rootObject = new GameObject("Root UI Panel", typeof(RectTransform), typeof(Image));
-                rootObject.transform.SetParent(canvasObject.transform, false);
+                Object.DestroyImmediate(legacyScriptUi.gameObject);
             }
-            else
+
+            var root = canvasObject.transform.Find("BootstrapRoot");
+            GameObject rootObject = root != null ? root.gameObject : null;
+            if (rootObject == null)
             {
-                rootObject = root.gameObject;
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/UI/BootstrapRoot.prefab");
+                rootObject = prefab != null
+                    ? (GameObject)PrefabUtility.InstantiatePrefab(prefab, canvasObject.transform)
+                    : new GameObject("BootstrapRoot", typeof(RectTransform), typeof(BootstrapRootView));
+                rootObject.name = "BootstrapRoot";
+                if (rootObject.transform.parent == null)
+                {
+                    rootObject.transform.SetParent(canvasObject.transform, false);
+                }
             }
 
             var rect = rootObject.GetComponent<RectTransform>();
@@ -132,24 +150,10 @@ namespace TokenForge.Client.Editor
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
 
-            var image = rootObject.GetComponent<Image>();
-            if (image == null)
-            {
-                image = rootObject.AddComponent<Image>();
-            }
-
-            image.color = new Color(0.035f, 0.045f, 0.06f, 1f);
-
-            var screenView = rootObject.GetComponent<BootstrapScreenView>();
-            if (screenView == null)
-            {
-                screenView = rootObject.AddComponent<BootstrapScreenView>();
-            }
-
-            return screenView;
+            return rootObject.GetComponent<BootstrapRootView>();
         }
 
-        private static void EnsureBootstrapper(BootstrapScreenView screenView)
+        private static void EnsureBootstrapper(BootstrapRootView rootView)
         {
             var bootstrapperObject = GameObject.Find("AppBootstrapper");
             if (bootstrapperObject == null)
@@ -164,7 +168,11 @@ namespace TokenForge.Client.Editor
             }
 
             var serialized = new SerializedObject(bootstrapper);
-            serialized.FindProperty("bootstrapScreen").objectReferenceValue = screenView;
+            serialized.FindProperty("bootstrapRoot").objectReferenceValue = rootView;
+            serialized.FindProperty("bootstrapRootPrefab").objectReferenceValue = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_Project/Prefabs/UI/BootstrapRoot.prefab");
+            serialized.FindProperty("loadAuthSessionOnStart").boolValue = false;
+            serialized.FindProperty("runSafeSmokeFlowWhenEmpty").boolValue = false;
+            serialized.FindProperty("loadPrefabFromAssetPathInEditor").boolValue = true;
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
     }

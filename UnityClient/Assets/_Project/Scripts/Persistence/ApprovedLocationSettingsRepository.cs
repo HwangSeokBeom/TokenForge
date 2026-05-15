@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using TokenForge.Client.Common;
 using TokenForge.Client.Domain;
 using TokenForge.Client.Privacy;
@@ -35,8 +36,11 @@ namespace TokenForge.Client.Persistence
     [Serializable]
     public sealed class ApprovedLocationSettings
     {
-        public const int CurrentVersion = 1;
+        public const int CurrentSchemaVersion = 1;
+        public const int CurrentVersion = CurrentSchemaVersion;
 
+        [JsonProperty("schemaVersion")]
+        public int SchemaVersion { get; set; } = CurrentSchemaVersion;
         public int Version { get; set; } = CurrentVersion;
         public List<ApprovedLocationEntry> Locations { get; set; } = new List<ApprovedLocationEntry>();
 
@@ -80,6 +84,8 @@ namespace TokenForge.Client.Persistence
 
         public string SettingsFilePath => settingsFilePath;
         public string BackupFilePath => settingsFilePath + ".bak";
+        public string CorruptFilePath => settingsFilePath + ".corrupt";
+        public string UnsupportedSchemaFilePath => settingsFilePath + ".unsupported-schema";
 
         public async Task<ApprovedLocationSettings> LoadAsync(CancellationToken cancellationToken = default)
         {
@@ -89,11 +95,39 @@ namespace TokenForge.Client.Persistence
             }
 
             cancellationToken.ThrowIfCancellationRequested();
+            string json;
             using (var reader = new StreamReader(settingsFilePath, Encoding.UTF8))
             {
-                var json = await reader.ReadToEndAsync();
-                cancellationToken.ThrowIfCancellationRequested();
-                return Normalize(JsonConvert.DeserializeObject<ApprovedLocationSettings>(json, serializerSettings) ?? ApprovedLocationSettings.CreateDefault());
+                json = await reader.ReadToEndAsync();
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            JObject root;
+            try
+            {
+                root = JObject.Parse(json);
+            }
+            catch (JsonException)
+            {
+                PreserveRecoveryCopy(CorruptFilePath);
+                return ApprovedLocationSettings.CreateDefault();
+            }
+
+            var schemaVersion = ReadSchemaVersion(root, "schemaVersion", "Version");
+            if (schemaVersion > ApprovedLocationSettings.CurrentSchemaVersion)
+            {
+                PreserveRecoveryCopy(UnsupportedSchemaFilePath);
+                return ApprovedLocationSettings.CreateDefault();
+            }
+
+            try
+            {
+                return Normalize(root.ToObject<ApprovedLocationSettings>(JsonSerializer.Create(serializerSettings)) ?? ApprovedLocationSettings.CreateDefault());
+            }
+            catch (JsonException)
+            {
+                PreserveRecoveryCopy(CorruptFilePath);
+                return ApprovedLocationSettings.CreateDefault();
             }
         }
 
@@ -189,12 +223,16 @@ namespace TokenForge.Client.Persistence
             cancellationToken.ThrowIfCancellationRequested();
             DeleteIfExists(settingsFilePath);
             DeleteIfExists(BackupFilePath);
+            DeleteIfExists(CorruptFilePath);
+            DeleteIfExists(UnsupportedSchemaFilePath);
             DeleteIfExists(settingsFilePath + ".tmp");
             return Task.FromResult(Result.Success());
         }
 
         private ApprovedLocationSettings Normalize(ApprovedLocationSettings settings)
         {
+            settings = settings ?? ApprovedLocationSettings.CreateDefault();
+            settings.SchemaVersion = ApprovedLocationSettings.CurrentSchemaVersion;
             settings.Version = ApprovedLocationSettings.CurrentVersion;
             settings.Locations = (settings.Locations ?? new List<ApprovedLocationEntry>())
                 .Select(NormalizeEntry)
@@ -279,6 +317,33 @@ namespace TokenForge.Client.Persistence
         {
             var safe = new string((value ?? string.Empty).Where(char.IsLetterOrDigit).Take(64).ToArray());
             return string.IsNullOrWhiteSpace(safe) ? Guid.NewGuid().ToString("N") : safe;
+        }
+
+        private static int ReadSchemaVersion(JObject root, string schemaField, string legacyField)
+        {
+            var schemaToken = root[schemaField] ?? root[legacyField];
+            return schemaToken != null && schemaToken.Type == JTokenType.Integer && int.TryParse(schemaToken.ToString(), out var parsed)
+                ? parsed
+                : 0;
+        }
+
+        private void PreserveRecoveryCopy(string recoveryPath)
+        {
+            try
+            {
+                if (File.Exists(settingsFilePath))
+                {
+                    File.Copy(settingsFilePath, recoveryPath, true);
+                }
+            }
+            catch (IOException)
+            {
+                // Recovery copies are best effort; loading still returns a safe local-only default.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Recovery copies are best effort; loading still returns a safe local-only default.
+            }
         }
 
         private static void DeleteIfExists(string path)

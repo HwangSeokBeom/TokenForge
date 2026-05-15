@@ -1,0 +1,18 @@
+{
+  "name": "TokenForge.Client.Editor",
+  "rootNamespace": "TokenForge.Client.Editor",
+  "references": [
+    "TokenForge.Client"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

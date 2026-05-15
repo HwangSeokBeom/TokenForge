@@ -21,6 +21,8 @@ namespace TokenForge.Client.Privacy
 
         private static readonly HashSet<string> ForbiddenExactFieldNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
+            "rawPath",
+            "path",
             "prompt",
             "rawPrompt",
             "response",
@@ -29,6 +31,8 @@ namespace TokenForge.Client.Privacy
             "conversation",
             "code",
             "rawCode",
+            "snippet",
+            "source",
             "sourceText",
             "log",
             "rawLog",
@@ -51,12 +55,18 @@ namespace TokenForge.Client.Privacy
             "commitMessageRaw",
             "apiKey",
             "secret",
+            "token",
             "tokenRaw",
             "commandText",
             "commandString",
+            "command",
             "username",
             "userName",
             "password",
+            "approvedLocation",
+            "approvedLocations",
+            "localPath",
+            "localOnlyPath",
             "bearer",
             "authorization"
         };
@@ -91,6 +101,7 @@ namespace TokenForge.Client.Privacy
         private static readonly Regex[] SensitiveStringPatterns =
         {
             new Regex(@"[""']?(prompt|rawPrompt|response|rawResponse|chatContent|conversation|code|rawCode|sourceText|log|rawLog|terminalOutput|stdout|stderr|absolutePath|filePath|fileName|repoName|repositoryName|remoteUrl|gitRemote|branchName|commitMessage|diff|patch|apiKey|secret|tokenRaw|commandText|commandString|username|userName)[""']?\s*[:=]", RegexOptions.IgnoreCase | RegexOptions.Compiled),
+            new Regex(@"[""']?(rawPath|path|filename|source|snippet|token|command|approvedLocation|approvedLocations|localPath|localOnlyPath)[""']?\s*[:=]", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex(@"bearer\s+[a-z0-9\._\-]+", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex(@"\b(sk|ghp|github_pat|xox[baprs])[_\-][a-z0-9_\-]{12,}\b", RegexOptions.IgnoreCase | RegexOptions.Compiled),
             new Regex(@"api[_-]?key\s*[:=]", RegexOptions.IgnoreCase | RegexOptions.Compiled),

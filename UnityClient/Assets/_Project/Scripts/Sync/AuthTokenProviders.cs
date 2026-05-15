@@ -19,11 +19,36 @@ namespace TokenForge.Client.Sync
         }
     }
 
+    public sealed class NullAuthTokenProvider : IAuthTokenProvider
+    {
+        public Task<string> GetBearerTokenAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(string.Empty);
+        }
+    }
+
     public sealed class DevelopmentAuthTokenProvider : IAuthTokenProvider
     {
         private readonly string token;
 
         public DevelopmentAuthTokenProvider(string token)
+        {
+            this.token = token ?? string.Empty;
+        }
+
+        public Task<string> GetBearerTokenAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(token);
+        }
+    }
+
+    public sealed class StaticAuthTokenProvider : IAuthTokenProvider
+    {
+        private readonly string token;
+
+        public StaticAuthTokenProvider(string token)
         {
             this.token = token ?? string.Empty;
         }

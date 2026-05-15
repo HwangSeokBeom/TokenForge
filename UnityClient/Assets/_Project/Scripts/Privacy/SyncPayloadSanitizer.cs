@@ -18,7 +18,18 @@ namespace TokenForge.Client.Privacy
             "SafeSyncPullRequest",
             "SafeSyncPullResponse",
             "SafeSyncPushResponse",
-            "SafeAchievementDto"
+            "SafeAchievementDto",
+            "SafeActivitySessionsContractRequest",
+            "SafeActivitySessionContractDto",
+            "SafeBucketContractDto",
+            "SafeActivitySessionsUpsertResponse",
+            "SafeActivitySessionUpsertResult",
+            "SafeActivitySessionsListResponse",
+            "RemoteSafeActivitySessionDto",
+            "SafeActivitySessionDeleteResponse",
+            "SafeSyncHealthResponse",
+            "SafeSyncMaxLimits",
+            "SafeSyncPagination"
         };
 
         public SyncPayloadSanitizer(PrivacySanitizer privacySanitizer = null)

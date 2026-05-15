@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 
 namespace TokenForge.Client.Domain
 {
@@ -91,8 +92,11 @@ namespace TokenForge.Client.Domain
     [Serializable]
     public sealed class SaveData
     {
-        public const int CurrentSaveVersion = 1;
+        public const int CurrentSchemaVersion = 1;
+        public const int CurrentSaveVersion = CurrentSchemaVersion;
 
+        [JsonProperty("schemaVersion")]
+        public int SchemaVersion { get; set; } = CurrentSchemaVersion;
         public int SaveVersion { get; set; } = CurrentSaveVersion;
         public CharacterProfile CharacterProfile { get; set; } = new CharacterProfile();
         public List<AgentWorkSession> WorkSessionSummaries { get; set; } = new List<AgentWorkSession>();

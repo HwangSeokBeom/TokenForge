@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using TokenForge.Client.Domain;
 using TokenForge.Client.Privacy;
 
@@ -37,12 +38,39 @@ namespace TokenForge.Client.Persistence
 
             cancellationToken.ThrowIfCancellationRequested();
 
+            string json;
             using (var reader = new StreamReader(saveFilePath, Encoding.UTF8))
             {
-                var json = await reader.ReadToEndAsync();
-                cancellationToken.ThrowIfCancellationRequested();
-                var saveData = JsonConvert.DeserializeObject<SaveData>(json, settings);
-                return saveData ?? SaveData.CreateDefault();
+                json = await reader.ReadToEndAsync();
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            JObject root;
+            try
+            {
+                root = JObject.Parse(json);
+            }
+            catch (JsonException)
+            {
+                PreserveRecoveryCopy(saveFilePath + ".corrupt");
+                return SaveData.CreateDefault();
+            }
+
+            var schemaVersion = ReadSchemaVersion(root);
+            if (schemaVersion > SaveData.CurrentSchemaVersion)
+            {
+                PreserveRecoveryCopy(saveFilePath + ".unsupported-schema");
+                return SaveData.CreateDefault();
+            }
+
+            try
+            {
+                return Migrate(root.ToObject<SaveData>(JsonSerializer.Create(settings)) ?? SaveData.CreateDefault());
+            }
+            catch (JsonException)
+            {
+                PreserveRecoveryCopy(saveFilePath + ".corrupt");
+                return SaveData.CreateDefault();
             }
         }
 
@@ -53,6 +81,8 @@ namespace TokenForge.Client.Persistence
                 throw new ArgumentNullException(nameof(saveData));
             }
 
+            saveData = Migrate(saveData);
+            saveData.SchemaVersion = SaveData.CurrentSchemaVersion;
             saveData.SaveVersion = SaveData.CurrentSaveVersion;
             privacySanitizer.ThrowIfUnsafe(saveData);
 
@@ -94,7 +124,64 @@ namespace TokenForge.Client.Persistence
                 File.Delete(backupPath);
             }
 
+            DeleteIfExists(saveFilePath + ".tmp");
+            DeleteIfExists(saveFilePath + ".corrupt");
+            DeleteIfExists(saveFilePath + ".unsupported-schema");
+
             return Task.CompletedTask;
+        }
+
+        private static SaveData Migrate(SaveData saveData)
+        {
+            saveData = saveData ?? SaveData.CreateDefault();
+            saveData.SchemaVersion = SaveData.CurrentSchemaVersion;
+            saveData.SaveVersion = SaveData.CurrentSaveVersion;
+            saveData.CharacterProfile = saveData.CharacterProfile ?? new CharacterProfile();
+            saveData.WorkSessionSummaries = saveData.WorkSessionSummaries ?? new System.Collections.Generic.List<AgentWorkSession>();
+            saveData.GrowthHistory = saveData.GrowthHistory ?? new System.Collections.Generic.List<CharacterGrowthResult>();
+            saveData.ConnectedProjects = saveData.ConnectedProjects ?? new System.Collections.Generic.List<ConnectedProject>();
+            saveData.ProviderSettings = saveData.ProviderSettings ?? new System.Collections.Generic.List<ProviderSettings>();
+            saveData.SyncState = saveData.SyncState ?? new SyncState();
+            saveData.PrivacyPreferences = saveData.PrivacyPreferences ?? new PrivacyPreferences();
+            saveData.UserSettings = saveData.UserSettings ?? new UserSettings();
+            saveData.UserSettings.PrivacyPreferences = saveData.UserSettings.PrivacyPreferences ?? new PrivacyPreferences();
+            saveData.DailyProgress = saveData.DailyProgress ?? new DailyProgress();
+            saveData.MiniGameHistory = saveData.MiniGameHistory ?? new System.Collections.Generic.List<MiniGameSession>();
+            saveData.Achievements = saveData.Achievements ?? new System.Collections.Generic.List<AchievementProgress>();
+            return saveData;
+        }
+
+        private static int ReadSchemaVersion(JObject root)
+        {
+            var schemaToken = root["schemaVersion"] ?? root["SaveVersion"];
+            return schemaToken != null && schemaToken.Type == JTokenType.Integer && int.TryParse(schemaToken.ToString(), out var parsed)
+                ? parsed
+                : 0;
+        }
+
+        private void PreserveRecoveryCopy(string recoveryPath)
+        {
+            try
+            {
+                if (File.Exists(saveFilePath))
+                {
+                    File.Copy(saveFilePath, recoveryPath, true);
+                }
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+
+        private static void DeleteIfExists(string path)
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
         }
 
         private static string GetDefaultSaveDirectory()

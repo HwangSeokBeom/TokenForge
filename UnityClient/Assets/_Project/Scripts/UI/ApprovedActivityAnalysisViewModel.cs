@@ -4,11 +4,13 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using TokenForge.Client.Agents;
+using TokenForge.Client.Auth;
 using TokenForge.Client.Common;
 using TokenForge.Client.Domain;
 using TokenForge.Client.Persistence;
 using TokenForge.Client.Platform;
 using TokenForge.Client.Privacy;
+using TokenForge.Client.Sync;
 
 namespace TokenForge.Client.UI
 {
@@ -67,6 +69,16 @@ namespace TokenForge.Client.UI
         private readonly ILocalSaveDataRepository repository;
         private readonly IApprovedLocationSettingsRepository approvedLocationRepository;
         private readonly PrivacySanitizer privacySanitizer;
+        private readonly ISafeSyncService safeSyncService;
+        private readonly IAuthSessionService authSessionService;
+        private int loginInProgress;
+        private int signupInProgress;
+        private int refreshUserInProgress;
+        private int logoutInProgress;
+        private int healthInProgress;
+        private int syncInProgress;
+        private int fetchInProgress;
+        private int deleteInProgress;
 
         public ApprovedActivityAnalysisViewModel(
             GitAnalysisFlowController gitFlow,
@@ -74,7 +86,9 @@ namespace TokenForge.Client.UI
             IAgentLogLocationPicker agentLogLocationPicker,
             ILocalSaveDataRepository repository,
             PrivacySanitizer privacySanitizer = null,
-            IApprovedLocationSettingsRepository approvedLocationRepository = null)
+            IApprovedLocationSettingsRepository approvedLocationRepository = null,
+            ISafeSyncService safeSyncService = null,
+            IAuthSessionService authSessionService = null)
         {
             GitFlow = gitFlow ?? throw new ArgumentNullException(nameof(gitFlow));
             AgentFlow = agentFlow ?? throw new ArgumentNullException(nameof(agentFlow));
@@ -82,6 +96,8 @@ namespace TokenForge.Client.UI
             this.repository = repository ?? throw new ArgumentNullException(nameof(repository));
             this.approvedLocationRepository = approvedLocationRepository ?? new ApprovedLocationSettingsRepository();
             this.privacySanitizer = privacySanitizer ?? new PrivacySanitizer();
+            this.safeSyncService = safeSyncService;
+            this.authSessionService = authSessionService;
         }
 
         public GitAnalysisFlowController GitFlow { get; }
@@ -93,6 +109,78 @@ namespace TokenForge.Client.UI
         public List<RecentSafeSessionSummary> RecentSessions { get; private set; } = new List<RecentSafeSessionSummary>();
         public List<ApprovedLocationDisplayItem> ApprovedGitLocations { get; private set; } = new List<ApprovedLocationDisplayItem>();
         public List<ApprovedLocationDisplayItem> ApprovedAgentLocations { get; private set; } = new List<ApprovedLocationDisplayItem>();
+        public List<RemoteSafeSessionSummary> RemoteSafeSessions { get; private set; } = new List<RemoteSafeSessionSummary>();
+        public SafeSyncStatus SafeSyncStatus { get; private set; } = SafeSyncStatus.Idle;
+        public string SafeSyncErrorCode { get; private set; } = string.Empty;
+        public string SafeSyncMessage { get; private set; } = SafeUserMessageMapper.FromSync(SafeSyncStatus.Idle).Message;
+        public int LastSyncAcceptedCount { get; private set; }
+        public int LastSyncRejectedCount { get; private set; }
+        public string SafeSyncBaseUrl => safeSyncService?.BaseUrl ?? SafeSyncApiConfig.DefaultBaseUrl;
+        public bool HasSafeSyncService => safeSyncService != null;
+        public bool IsSafeSyncRequestInProgress => SafeSyncStatus == SafeSyncStatus.CheckingHealth ||
+                                                   SafeSyncStatus == SafeSyncStatus.CheckingServer ||
+                                                   SafeSyncStatus == SafeSyncStatus.Syncing ||
+                                                   SafeSyncStatus == SafeSyncStatus.Fetching ||
+                                                   SafeSyncStatus == SafeSyncStatus.FetchingRemoteSessions ||
+                                                   SafeSyncStatus == SafeSyncStatus.DeleteInProgress ||
+                                                   syncInProgress != 0 ||
+                                                   fetchInProgress != 0 ||
+                                                   deleteInProgress != 0 ||
+                                                   healthInProgress != 0;
+        public bool CanUseAuthenticatedSafeSync => authSessionService == null || authSessionService.HasUsableAccessToken;
+        public AuthState AuthState => authSessionService?.State ?? AuthState.LoggedOut;
+        public string AuthErrorCode { get; private set; } = string.Empty;
+        public string AuthMessage { get; private set; } = SafeUserMessageMapper.FromAuth(AuthState.LoggedOut).Message;
+        public bool HasAuthSessionService => authSessionService != null;
+        public bool IsAuthRequestInProgress => AuthState == AuthState.LoggingIn ||
+                                               AuthState == AuthState.SigningUp ||
+                                               AuthState == AuthState.Refreshing ||
+                                               loginInProgress != 0 ||
+                                               signupInProgress != 0 ||
+                                               refreshUserInProgress != 0 ||
+                                               logoutInProgress != 0;
+        public bool CanSubmitLogin => HasAuthSessionService && loginInProgress == 0 && signupInProgress == 0;
+        public bool CanSubmitSignup => HasAuthSessionService && signupInProgress == 0 && loginInProgress == 0;
+        public bool CanRefreshUser => HasAuthSessionService && refreshUserInProgress == 0 && loginInProgress == 0 && signupInProgress == 0;
+        public bool CanLogout => HasAuthSessionService && logoutInProgress == 0 && AuthState == AuthState.LoggedIn;
+        public string AuthUserSummary
+        {
+            get
+            {
+                var session = authSessionService?.CurrentSession;
+                if (session == null)
+                {
+                    return string.Empty;
+                }
+
+                if (!string.IsNullOrWhiteSpace(session.DisplayName))
+                {
+                    return session.DisplayName;
+                }
+
+                return !string.IsNullOrWhiteSpace(session.Email) ? session.Email : session.UserId;
+            }
+        }
+
+        public DateTimeOffset? AuthTokenExpiresAt => authSessionService?.CurrentSession?.AccessTokenExpiresAt;
+        public string AuthSessionExpirySummary => SafeUserMessageMapper.SessionExpirySummary(AuthState, AuthTokenExpiresAt);
+        public string AuthStatusMessage
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(AuthErrorCode))
+                {
+                    return SafeUserMessageMapper.FromAuthError(AuthErrorCode);
+                }
+
+                if (AuthState == AuthState.LoggedIn)
+                {
+                    return string.IsNullOrWhiteSpace(AuthUserSummary) ? "Logged in for Safe Sync." : "Logged in as " + AuthUserSummary;
+                }
+
+                return SafeUserMessageMapper.FromAuth(AuthState).Message;
+            }
+        }
 
         public async Task<Result> SelectAgentLogLocationAsync(CancellationToken cancellationToken = default)
         {
@@ -289,8 +377,270 @@ namespace TokenForge.Client.UI
 
         public async Task RefreshDashboardAsync(CancellationToken cancellationToken = default)
         {
+            if (authSessionService != null)
+            {
+                await LoadAuthSessionAsync(cancellationToken);
+            }
+
             await RefreshApprovedLocationsAsync(cancellationToken);
             await RefreshRecentSessionsAsync(cancellationToken);
+        }
+
+        public void SetSafeSyncBaseUrl(string baseUrl)
+        {
+            safeSyncService?.SetBaseUrl(baseUrl);
+            authSessionService?.SetBaseUrl(baseUrl);
+        }
+
+        public async Task<AuthResult> LoadAuthSessionAsync(CancellationToken cancellationToken = default)
+        {
+            if (authSessionService == null)
+            {
+                AuthErrorCode = "AUTH_NOT_CONFIGURED";
+                return AuthResult.Failure(AuthState.LoggedOut, AuthErrorCode, "Authentication is not configured.");
+            }
+
+            var result = await authSessionService.LoadSessionAsync(cancellationToken);
+            SetAuthResult(result);
+            return result;
+        }
+
+        public async Task<AuthResult> LoginAsync(string email, string password, CancellationToken cancellationToken = default)
+        {
+            if (authSessionService == null)
+            {
+                AuthErrorCode = "AUTH_NOT_CONFIGURED";
+                return AuthResult.Failure(AuthState.LoggedOut, AuthErrorCode, "Authentication is not configured.");
+            }
+
+            if (Interlocked.Exchange(ref loginInProgress, 1) == 1)
+            {
+                return SetAuthResult(AuthResult.Failure(AuthState, AuthApiError.AlreadyInProgress, AuthApiError.ToSafeMessage(AuthApiError.AlreadyInProgress)));
+            }
+
+            try
+            {
+                var result = await authSessionService.LoginAsync(email, password, cancellationToken);
+                return SetAuthResult(result);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref loginInProgress, 0);
+            }
+        }
+
+        public async Task<AuthResult> SignupAsync(string email, string password, string displayName = "", CancellationToken cancellationToken = default)
+        {
+            if (authSessionService == null)
+            {
+                AuthErrorCode = "AUTH_NOT_CONFIGURED";
+                return AuthResult.Failure(AuthState.LoggedOut, AuthErrorCode, "Authentication is not configured.");
+            }
+
+            if (Interlocked.Exchange(ref signupInProgress, 1) == 1)
+            {
+                return SetAuthResult(AuthResult.Failure(AuthState, AuthApiError.AlreadyInProgress, AuthApiError.ToSafeMessage(AuthApiError.AlreadyInProgress)));
+            }
+
+            try
+            {
+                var result = await authSessionService.SignupAsync(email, password, displayName, cancellationToken);
+                return SetAuthResult(result);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref signupInProgress, 0);
+            }
+        }
+
+        public async Task<AuthResult> LoadCurrentUserAsync(CancellationToken cancellationToken = default)
+        {
+            if (authSessionService == null)
+            {
+                AuthErrorCode = "AUTH_NOT_CONFIGURED";
+                return AuthResult.Failure(AuthState.LoggedOut, AuthErrorCode, "Authentication is not configured.");
+            }
+
+            if (Interlocked.Exchange(ref refreshUserInProgress, 1) == 1)
+            {
+                return SetAuthResult(AuthResult.Failure(AuthState, AuthApiError.AlreadyInProgress, AuthApiError.ToSafeMessage(AuthApiError.AlreadyInProgress)));
+            }
+
+            try
+            {
+                var result = await authSessionService.LoadCurrentUserAsync(cancellationToken);
+                return SetAuthResult(result);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref refreshUserInProgress, 0);
+            }
+        }
+
+        public async Task<AuthResult> LogoutAsync(CancellationToken cancellationToken = default)
+        {
+            if (authSessionService == null)
+            {
+                AuthErrorCode = "AUTH_NOT_CONFIGURED";
+                return AuthResult.Failure(AuthState.LoggedOut, AuthErrorCode, "Authentication is not configured.");
+            }
+
+            if (Interlocked.Exchange(ref logoutInProgress, 1) == 1)
+            {
+                return SetAuthResult(AuthResult.Failure(AuthState, AuthApiError.AlreadyInProgress, AuthApiError.ToSafeMessage(AuthApiError.AlreadyInProgress)));
+            }
+
+            try
+            {
+                var result = await authSessionService.LogoutAsync(cancellationToken);
+                RemoteSafeSessions = new List<RemoteSafeSessionSummary>();
+                return SetAuthResult(result);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref logoutInProgress, 0);
+            }
+        }
+
+        public async Task<SafeSyncResult> CheckSyncHealthAsync(CancellationToken cancellationToken = default)
+        {
+            if (safeSyncService == null)
+            {
+                return SetSafeSyncResult(SafeSyncResult.Failure(SafeSyncStatus.ServerUnavailable, "SYNC_NOT_CONFIGURED", "Safe Sync is not configured."));
+            }
+
+            if (Interlocked.Exchange(ref healthInProgress, 1) == 1)
+            {
+                return SetSafeSyncResult(SafeSyncResult.Failure(SafeSyncStatus.CheckingHealth, SafeSyncApiError.AlreadyInProgress, SafeSyncApiError.ToSafeMessage(SafeSyncApiError.AlreadyInProgress)));
+            }
+
+            try
+            {
+            SafeSyncStatus = SafeSyncStatus.CheckingHealth;
+            return SetSafeSyncResult(await safeSyncService.CheckHealthAsync(cancellationToken));
+            }
+            finally
+            {
+                Interlocked.Exchange(ref healthInProgress, 0);
+            }
+        }
+
+        public async Task<SafeSyncResult> SyncSafeSessionsAsync(CancellationToken cancellationToken = default)
+        {
+            if (safeSyncService == null)
+            {
+                return SetSafeSyncResult(SafeSyncResult.Failure(SafeSyncStatus.ServerUnavailable, "SYNC_NOT_CONFIGURED", "Safe Sync is not configured."));
+            }
+
+            if (!CanUseAuthenticatedSafeSync)
+            {
+                return SetSafeSyncResult(SafeSyncResult.Failure(SafeSyncStatus.AuthRequired, SafeSyncApiError.AuthRequired, SafeSyncApiError.ToSafeMessage(SafeSyncApiError.AuthRequired)));
+            }
+
+            if (Interlocked.Exchange(ref syncInProgress, 1) == 1)
+            {
+                return SetSafeSyncResult(SafeSyncResult.Failure(SafeSyncStatus.Syncing, SafeSyncApiError.AlreadyInProgress, SafeSyncApiError.ToSafeMessage(SafeSyncApiError.AlreadyInProgress)));
+            }
+
+            try
+            {
+            SafeSyncStatus = SafeSyncStatus.Syncing;
+            return SetSafeSyncResult(await safeSyncService.SyncNowAsync(cancellationToken));
+            }
+            finally
+            {
+                Interlocked.Exchange(ref syncInProgress, 0);
+            }
+        }
+
+        public async Task<SafeSyncResult> FetchSyncedSessionsAsync(CancellationToken cancellationToken = default)
+        {
+            if (safeSyncService == null)
+            {
+                return SetSafeSyncResult(SafeSyncResult.Failure(SafeSyncStatus.ServerUnavailable, "SYNC_NOT_CONFIGURED", "Safe Sync is not configured."));
+            }
+
+            if (!CanUseAuthenticatedSafeSync)
+            {
+                return SetSafeSyncResult(SafeSyncResult.Failure(SafeSyncStatus.AuthRequired, SafeSyncApiError.AuthRequired, SafeSyncApiError.ToSafeMessage(SafeSyncApiError.AuthRequired)));
+            }
+
+            if (Interlocked.Exchange(ref fetchInProgress, 1) == 1)
+            {
+                return SetSafeSyncResult(SafeSyncResult.Failure(SafeSyncStatus.Fetching, SafeSyncApiError.AlreadyInProgress, SafeSyncApiError.ToSafeMessage(SafeSyncApiError.AlreadyInProgress)));
+            }
+
+            try
+            {
+            SafeSyncStatus = SafeSyncStatus.Fetching;
+            return SetSafeSyncResult(await safeSyncService.FetchRemoteSessionsAsync(cancellationToken));
+            }
+            finally
+            {
+                Interlocked.Exchange(ref fetchInProgress, 0);
+            }
+        }
+
+        public async Task<SafeSyncResult> DeleteRemoteSessionAsync(string serverSessionId, CancellationToken cancellationToken = default)
+        {
+            if (safeSyncService == null)
+            {
+                return SetSafeSyncResult(SafeSyncResult.Failure(SafeSyncStatus.ServerUnavailable, "SYNC_NOT_CONFIGURED", "Safe Sync is not configured."));
+            }
+
+            if (!CanUseAuthenticatedSafeSync)
+            {
+                return SetSafeSyncResult(SafeSyncResult.Failure(SafeSyncStatus.AuthRequired, SafeSyncApiError.AuthRequired, SafeSyncApiError.ToSafeMessage(SafeSyncApiError.AuthRequired)));
+            }
+
+            if (Interlocked.Exchange(ref deleteInProgress, 1) == 1)
+            {
+                return SetSafeSyncResult(SafeSyncResult.Failure(SafeSyncStatus.DeleteInProgress, SafeSyncApiError.AlreadyInProgress, SafeSyncApiError.ToSafeMessage(SafeSyncApiError.AlreadyInProgress)));
+            }
+
+            try
+            {
+            SafeSyncStatus = SafeSyncStatus.DeleteInProgress;
+            var result = SetSafeSyncResult(await safeSyncService.DeleteRemoteSessionAsync(serverSessionId, cancellationToken));
+            if (result.IsSuccess)
+            {
+                await FetchSyncedSessionsAsync(cancellationToken);
+            }
+
+            return result;
+            }
+            finally
+            {
+                Interlocked.Exchange(ref deleteInProgress, 0);
+            }
+        }
+
+        private AuthResult SetAuthResult(AuthResult result)
+        {
+            result = result ?? AuthResult.Failure(AuthState.Failed, AuthApiError.UnknownAuthError, AuthApiError.ToSafeMessage(AuthApiError.UnknownAuthError));
+            AuthErrorCode = result.ErrorCode ?? string.Empty;
+            AuthMessage = string.IsNullOrWhiteSpace(AuthErrorCode)
+                ? SafeUserMessageMapper.FromAuth(AuthState).Message
+                : SafeUserMessageMapper.FromAuthError(AuthErrorCode);
+            return result;
+        }
+
+        private SafeSyncResult SetSafeSyncResult(SafeSyncResult result)
+        {
+            result = result ?? SafeSyncResult.Failure(SafeSyncStatus.Failed, "SYNC_EMPTY_RESULT", "Safe Sync returned no result.");
+            SafeSyncStatus = result.Status;
+            SafeSyncErrorCode = result.ErrorCode ?? string.Empty;
+            SafeSyncMessage = SafeUserMessageMapper.FromSyncResult(result);
+            LastSyncAcceptedCount = result.AcceptedCount;
+            LastSyncRejectedCount = result.RejectedCount;
+            if (result.RemoteSessions != null)
+            {
+                RemoteSafeSessions = result.RemoteSessions
+                    .Where(summary => privacySanitizer.ValidateNoForbiddenFields(summary).IsSuccess)
+                    .ToList();
+            }
+
+            return result;
         }
 
         private async Task<ApprovedLocationEntry> FindApprovedLocationAsync(string localId, ApprovedLocationSourceType sourceType, CancellationToken cancellationToken)
