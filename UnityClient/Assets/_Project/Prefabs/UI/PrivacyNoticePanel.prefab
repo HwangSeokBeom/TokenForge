@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 275581638345996515}
   - component: {fileID: 1953543002804935561}
   - component: {fileID: 5065218588932263821}
+  - component: {fileID: 835970552379787295}
   - component: {fileID: 3092040116283258643}
   m_Layer: 0
   m_Name: PrivacyNoticePanel
@@ -64,7 +65,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0.05, g: 0.06, b: 0.08, a: 1}
+  m_Color: {r: 0.052, g: 0.066, b: 0.09, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -94,12 +95,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Padding:
-    m_Left: 18
-    m_Right: 18
-    m_Top: 14
-    m_Bottom: 14
+    m_Left: 22
+    m_Right: 22
+    m_Top: 18
+    m_Bottom: 18
   m_ChildAlignment: 0
-  m_Spacing: 8
+  m_Spacing: 10
   m_ChildForceExpandWidth: 1
   m_ChildForceExpandHeight: 0
   m_ChildControlWidth: 1
@@ -121,12 +122,27 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_IgnoreLayout: 0
   m_MinWidth: -1
-  m_MinHeight: 138
+  m_MinHeight: 166
   m_PreferredWidth: -1
-  m_PreferredHeight: 138
+  m_PreferredHeight: 166
   m_FlexibleWidth: -1
   m_FlexibleHeight: -1
   m_LayoutPriority: 1
+--- !u!114 &835970552379787295
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1854634886112323932}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e19747de3f5aca642ab2be37e372fb86, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  m_EffectColor: {r: 0.18, g: 0.24, b: 0.3, a: 0.9}
+  m_EffectDistance: {x: 1, y: -1}
+  m_UseGraphicAlpha: 1
 --- !u!114 &3092040116283258643
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -200,7 +216,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 0.92, g: 0.64, b: 0.28, a: 1}
+  m_Color: {r: 0.94, g: 0.67, b: 0.3, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -209,7 +225,7 @@ MonoBehaviour:
       m_Calls: []
   m_FontData:
     m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
-    m_FontSize: 18
+    m_FontSize: 19
     m_FontStyle: 1
     m_BestFit: 0
     m_MinSize: 10
@@ -235,7 +251,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_IgnoreLayout: 0
   m_MinWidth: -1
-  m_MinHeight: 28
+  m_MinHeight: 30
   m_PreferredWidth: -1
   m_PreferredHeight: -1
   m_FlexibleWidth: 1
@@ -322,7 +338,9 @@ MonoBehaviour:
     m_VerticalOverflow: 1
     m_LineSpacing: 1
   m_Text: Safe Sync sends aggregate-only session summaries. Approved locations stay
-    on this device and are never synced. Raw local data is never synced.
+    on this device and are never synced. Raw local paths, prompts, responses, commands,
+    filenames, repo names, branch names, source snippets, tokens, and payload bodies
+    are not rendered or synced.
 --- !u!114 &2490808628544048536
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -337,7 +355,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_IgnoreLayout: 0
   m_MinWidth: -1
-  m_MinHeight: 70
+  m_MinHeight: 98
   m_PreferredWidth: -1
   m_PreferredHeight: -1
   m_FlexibleWidth: 1

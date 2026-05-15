@@ -167,6 +167,284 @@ namespace TokenForge.Client.Tests
 
             fixture.Destroy();
         }
+
+        [UnityTest]
+        public IEnumerator Phase22RetryConflictAndTombstoneSectionsAreExplicitAndSafe()
+        {
+            var fixture = Phase14UiFixture.Create(loggedIn: true);
+            fixture.Sync.RetrySummary = new SafeSyncRetryQueueSummary
+            {
+                PendingCount = 1,
+                FailedCount = 1,
+                SafeEntries = new List<SafeSyncRetryQueueEntry>
+                {
+                    new SafeSyncRetryQueueEntry
+                    {
+                        QueueEntryId = "retry-entry-1",
+                        OperationType = SafeSyncRetryOperationType.UPSERT_ACTIVITY_SESSIONS,
+                        Status = SafeSyncRetryQueueEntryStatus.Pending,
+                        AttemptCount = 1,
+                        MaxAttempts = 4,
+                        LastSafeErrorCode = SafeSyncApiError.ServerUnavailable,
+                        ClientSessionIds = new List<string> { "client-session-1" }
+                    }
+                }
+            };
+            fixture.Sync.ConflictSummary = new SafeSyncConflictSummary
+            {
+                UnresolvedCount = 1,
+                SafeConflicts = new List<SafeSyncConflict>
+                {
+                    new SafeSyncConflict
+                    {
+                        ClientSessionId = "client-session-1",
+                        ConflictType = SafeSyncConflictType.RemoteDifferent,
+                        SafeErrorCode = SafeSyncApiError.ConflictDetected
+                    }
+                }
+            };
+            fixture.Sync.ConflictAuditSummary = new SafeConflictAuditSummary
+            {
+                TotalCount = 1,
+                ResolvedCount = 1,
+                SafeEntries = new List<SafeConflictAuditEntry>
+                {
+                    new SafeConflictAuditEntry
+                    {
+                        Action = "applyMergePolicy",
+                        Policy = SafeConflictMergePolicy.KeepRemote,
+                        ResultStatus = "resolved",
+                        SafeDiffFieldNames = new List<string> { "dayBucket", "confidence" },
+                        WarningIds = new List<string> { SafeSyncApiError.KeepRemoteApplied },
+                        UserMessageCode = SafeSyncApiError.KeepRemoteApplied
+                    }
+                }
+            };
+            fixture.Sync.TombstoneSummary = new SafeSyncTombstoneSummary { PendingDeleteCount = 1 };
+            yield return fixture.RefreshDashboard();
+
+            Assert.IsNotNull(fixture.Root.safeSyncPanel.retryPendingButton);
+            Assert.IsTrue(fixture.Root.safeSyncPanel.retryQueueLabel.text.Contains("pending 1"));
+            Assert.IsTrue(fixture.Root.safeSyncPanel.conflictLabel.text.Contains("unresolved 1"));
+            Assert.IsTrue(fixture.Root.safeSyncPanel.tombstoneLabel.text.Contains("pending 1"));
+            Assert.AreEqual(0, fixture.Sync.RetryCount);
+
+            fixture.Root.safeSyncPanel.retryPendingButton.onClick.Invoke();
+            Assert.IsTrue(fixture.Root.safeSyncPanel.confirmationPanel.activeSelf);
+            ConfirmSafeSyncAction(fixture);
+            yield return null;
+
+            Assert.AreEqual(1, fixture.Sync.RetryCount);
+            Assert.IsFalse(fixture.Root.safeSyncPanel.retryPendingButton.interactable);
+
+            fixture.Sync.CompleteRetry();
+            yield return null;
+            yield return null;
+
+            Assert.IsTrue(fixture.Root.safeSyncPanel.retryQueueLabel.text.Contains("succeeded 1"));
+            UiTextScanner.AssertNoForbiddenVisibleText(fixture.Root.gameObject, new[]
+            {
+                "access-token-secret",
+                "refresh-token-secret",
+                fixture.RawRepositoryPath,
+                fixture.RawAgentLogPath,
+                "{\"",
+                "/Users/"
+            });
+
+            fixture.Destroy();
+        }
+
+        [UnityTest]
+        public IEnumerator Phase23DeleteTombstoneAndConflictControlsAreExplicitAndSafe()
+        {
+            var fixture = Phase14UiFixture.Create(loggedIn: true);
+            fixture.Repository.Current.WorkSessionSummaries.Add(new AgentWorkSession
+            {
+                SessionId = "local-session-1",
+                SourceProvider = "CODEX",
+                WorkType = WorkType.Feature,
+                EndedAt = new DateTimeOffset(2026, 5, 15, 2, 0, 0, TimeSpan.Zero),
+                Confidence = ProviderConfidence.High,
+                AgentActivitySummary = new AgentActivitySummary { DayBucket = "2026-05-15", SessionCountBucket = CountBucket.One, InteractionCountBucket = CountBucket.Small },
+                GitChangeSummary = new GitChangeSummary { ChangedFileCountBucket = CountBucket.Small, AddedLineBucket = LineChangeBucket.Small, DeletedLineBucket = LineChangeBucket.Small }
+            });
+            fixture.Sync.TombstoneSummary = new SafeSyncTombstoneSummary
+            {
+                PendingDeleteCount = 1,
+                SafeTombstones = new List<SafeSyncTombstone>
+                {
+                    new SafeSyncTombstone { TombstoneId = "tombstone-1", ClientSessionId = "local-session-1", ServerSessionId = "server-1", SyncStatus = SafeSyncTombstoneStatus.PendingDelete }
+                }
+            };
+            fixture.Sync.ConflictSummary = new SafeSyncConflictSummary
+            {
+                UnresolvedCount = 1,
+                SafeConflicts = new List<SafeSyncConflict>
+                {
+                    new SafeSyncConflict
+                    {
+                        ConflictId = "conflict-1",
+                        ClientSessionId = "local-session-1",
+                        ConflictType = SafeSyncConflictType.RemoteDifferent,
+                        SafeErrorCode = SafeSyncApiError.ConflictDetected,
+                        SafeLocalSummary = new SafeSyncSessionSafeSummary { DayBucket = "2026-05-15", SourceProvider = "CODEX" },
+                        SafeRemoteSummary = new SafeSyncSessionSafeSummary { DayBucket = "2026-05-16", SourceProvider = "CODEX" }
+                    }
+                }
+            };
+            yield return fixture.RefreshDashboard();
+
+            Assert.IsNotNull(fixture.Root.recentSessionsPanel.deleteLocalSessionButton);
+            Assert.IsTrue(fixture.Root.recentSessionsPanel.deleteLocalSessionButton.interactable);
+            Assert.IsTrue(fixture.Root.safeSyncPanel.tombstoneLabel.text.Contains("pending 1"));
+            Assert.IsTrue(fixture.Root.safeSyncPanel.conflictLabel.text.Contains("unresolved 1"));
+            Assert.AreEqual(0, fixture.Sync.LocalDeleteCount);
+            Assert.AreEqual(0, fixture.Sync.TombstoneProcessCount);
+
+            fixture.Root.recentSessionsPanel.deleteLocalSessionButton.onClick.Invoke();
+            fixture.Root.recentSessionsPanel.deleteLocalSessionButton.onClick.Invoke();
+            yield return null;
+            Assert.AreEqual(1, fixture.Sync.LocalDeleteCount);
+
+            fixture.Root.safeSyncPanel.enqueueTombstoneDeletesButton.onClick.Invoke();
+            yield return null;
+            fixture.Root.safeSyncPanel.processTombstoneDeletesButton.onClick.Invoke();
+            ConfirmSafeSyncAction(fixture);
+            yield return null;
+            Assert.AreEqual(1, fixture.Sync.TombstoneEnqueueCount);
+            Assert.AreEqual(1, fixture.Sync.TombstoneProcessCount);
+
+            fixture.Root.safeSyncPanel.keepLocalButton.onClick.Invoke();
+            ConfirmSafeSyncAction(fixture);
+            yield return null;
+            fixture.Root.safeSyncPanel.keepRemoteButton.onClick.Invoke();
+            ConfirmSafeSyncAction(fixture);
+            yield return null;
+            fixture.Root.safeSyncPanel.markConflictResolvedButton.onClick.Invoke();
+            ConfirmSafeSyncAction(fixture);
+            yield return null;
+            Assert.AreEqual(1, fixture.Sync.KeepLocalCount);
+            Assert.AreEqual(1, fixture.Sync.KeepRemoteCount);
+            Assert.AreEqual(1, fixture.Sync.MarkResolvedCount);
+
+            Assert.IsFalse(UiTextScanner.VisibleTextContains(fixture.Root.gameObject, "{\""));
+            Assert.IsFalse(UiTextScanner.VisibleTextContains(fixture.Root.gameObject, fixture.RawRepositoryPath));
+            Assert.IsFalse(UiTextScanner.VisibleTextContains(fixture.Root.gameObject, "access-token-secret"));
+            Assert.AreEqual(0, fixture.Sync.RetryCount);
+
+            fixture.Destroy();
+        }
+
+        [UnityTest]
+        public IEnumerator Phase24ConflictReviewAndBatchButtonsAreExplicitAndSafe()
+        {
+            var fixture = Phase14UiFixture.Create(loggedIn: true);
+            fixture.Sync.RetrySummary = new SafeSyncRetryQueueSummary
+            {
+                PendingCount = 1,
+                FailedCount = 1,
+                PausedCount = 1,
+                SafeEntries = new List<SafeSyncRetryQueueEntry>
+                {
+                    new SafeSyncRetryQueueEntry { QueueEntryId = "retry-1", OperationType = SafeSyncRetryOperationType.UPSERT_ACTIVITY_SESSIONS, Status = SafeSyncRetryQueueEntryStatus.Pending },
+                    new SafeSyncRetryQueueEntry { QueueEntryId = "retry-failed", OperationType = SafeSyncRetryOperationType.DELETE_REMOTE_SESSION, Status = SafeSyncRetryQueueEntryStatus.Failed }
+                }
+            };
+            fixture.Sync.TombstoneSummary = new SafeSyncTombstoneSummary
+            {
+                PendingDeleteCount = 1,
+                DeleteFailedCount = 1,
+                SafeTombstones = new List<SafeSyncTombstone>
+                {
+                    new SafeSyncTombstone { TombstoneId = "tombstone-1", ServerSessionId = "server-1", SyncStatus = SafeSyncTombstoneStatus.DeleteFailed }
+                }
+            };
+            fixture.Sync.ConflictSummary = new SafeSyncConflictSummary
+            {
+                UnresolvedCount = 1,
+                SafeConflicts = new List<SafeSyncConflict>
+                {
+                    new SafeSyncConflict
+                    {
+                        ConflictId = "conflict-1",
+                        ConflictType = SafeSyncConflictType.RemoteDifferent,
+                        SafeErrorCode = SafeSyncApiError.KeepRemoteApplied,
+                        SafeLocalSummary = new SafeSyncSessionSafeSummary { ClientSessionId = "client-session-1234", SourceProvider = "CODEX", DayBucket = "2026-05-15", Confidence = "HIGH", CategoryBucketSummary = "WORK_FEATURE:ONE" },
+                        SafeRemoteSummary = new SafeSyncSessionSafeSummary { ServerSessionId = "server-session-1234", SourceProvider = "CODEX", DayBucket = "2026-05-16", Confidence = "MEDIUM", CategoryBucketSummary = "WORK_BUGFIX:ONE" },
+                        SafeDiffSummary = new SafeSessionDiffSummary { IsDifferent = true, ChangedSafeFieldNames = new List<string> { "dayBucket", "confidence" } }
+                    }
+                }
+            };
+            fixture.Sync.NextFetchResult = new SafeSyncResult
+            {
+                IsSuccess = true,
+                Status = SafeSyncStatus.Ready,
+                AcceptedCount = 2,
+                ConflictDetectedCount = 1,
+                ConflictSummary = fixture.Sync.ConflictSummary
+            };
+            yield return fixture.RefreshDashboard();
+
+            Assert.IsTrue(fixture.Root.safeSyncPanel.conflictLabel.text.Contains("Local:"));
+            Assert.IsTrue(fixture.Root.safeSyncPanel.conflictLabel.text.Contains("Remote:"));
+            Assert.IsTrue(fixture.Root.safeSyncPanel.conflictLabel.text.Contains("Prefer Higher Confidence"));
+            Assert.IsTrue(fixture.Root.safeSyncPanel.conflictLabel.text.Contains("Conflict History"));
+            Assert.IsNotNull(fixture.Root.safeSyncPanel.cancelAllFailedTombstonesButton);
+            Assert.IsNotNull(fixture.Root.safeSyncPanel.cancelAllFailedRetryButton);
+            Assert.IsNotNull(fixture.Root.safeSyncPanel.pauseAllPendingRetryButton);
+            Assert.IsNotNull(fixture.Root.safeSyncPanel.resumeAllPausedRetryButton);
+
+            fixture.Root.safeSyncPanel.keepRemoteButton.onClick.Invoke();
+            Assert.IsTrue(fixture.Root.safeSyncPanel.confirmationPanel.activeSelf);
+            ConfirmSafeSyncAction(fixture);
+            yield return null;
+            Assert.AreEqual(1, fixture.Sync.KeepRemoteCount);
+
+            fixture.Root.safeSyncPanel.cancelAllFailedTombstonesButton.onClick.Invoke();
+            ConfirmSafeSyncAction(fixture, "CANCEL DELETE");
+            yield return null;
+            fixture.Root.safeSyncPanel.cancelAllFailedRetryButton.onClick.Invoke();
+            ConfirmSafeSyncAction(fixture);
+            yield return null;
+            fixture.Root.safeSyncPanel.pauseAllPendingRetryButton.onClick.Invoke();
+            ConfirmSafeSyncAction(fixture);
+            yield return null;
+            fixture.Root.safeSyncPanel.resumeAllPausedRetryButton.onClick.Invoke();
+            yield return null;
+            ConfirmSafeSyncAction(fixture);
+            yield return null;
+            Assert.AreEqual(1, fixture.Sync.CancelAllFailedTombstonesCount);
+            Assert.AreEqual(1, fixture.Sync.CancelAllFailedRetryCount);
+            Assert.AreEqual(1, fixture.Sync.PauseAllPendingRetryCount);
+            Assert.AreEqual(1, fixture.Sync.ResumeAllPausedRetryCount);
+
+            fixture.Root.safeSyncPanel.fetchButton.onClick.Invoke();
+            yield return null;
+            Assert.AreEqual(1, fixture.Sync.FetchCount);
+            Assert.IsTrue(fixture.Root.safeSyncPanel.statusLabel.text.Contains("Accepted 2"));
+
+            UiTextScanner.AssertNoForbiddenVisibleText(fixture.Root.gameObject, new[]
+            {
+                "{\"",
+                fixture.RawRepositoryPath,
+                fixture.RawAgentLogPath,
+                "access-token-secret",
+                "refresh-token-secret"
+            });
+
+            fixture.Destroy();
+        }
+
+        private static void ConfirmSafeSyncAction(Phase14UiFixture fixture, string typedPhrase = "")
+        {
+            if (fixture.Root.safeSyncPanel.confirmationTypedPhraseInput != null)
+            {
+                fixture.Root.safeSyncPanel.confirmationTypedPhraseInput.text = typedPhrase;
+            }
+
+            fixture.Root.safeSyncPanel.confirmationConfirmButton.onClick.Invoke();
+        }
     }
 
     public sealed class Phase14ActivityAnalysisPanelPlayModeTests
@@ -484,14 +762,30 @@ namespace TokenForge.Client.Tests
     internal sealed class FakeSafeSyncService : ISafeSyncService
     {
         private TaskCompletionSource<SafeSyncResult> syncCompletion;
+        private TaskCompletionSource<SafeSyncResult> retryCompletion;
 
         public int HealthCount { get; private set; }
         public int SyncCount { get; private set; }
         public int FetchCount { get; private set; }
+        public int RetryCount { get; private set; }
+        public int LocalDeleteCount { get; private set; }
+        public int TombstoneEnqueueCount { get; private set; }
+        public int TombstoneProcessCount { get; private set; }
+        public int CancelAllFailedTombstonesCount { get; private set; }
+        public int CancelAllFailedRetryCount { get; private set; }
+        public int PauseAllPendingRetryCount { get; private set; }
+        public int ResumeAllPausedRetryCount { get; private set; }
+        public int KeepLocalCount { get; private set; }
+        public int KeepRemoteCount { get; private set; }
+        public int MarkResolvedCount { get; private set; }
         public SafeSyncStatus Status { get; private set; } = SafeSyncStatus.Idle;
         public string BaseUrl { get; private set; } = "http://localhost:3000/api/v1";
         public SafeSyncResult NextHealthResult { get; set; } = SafeSyncResult.Success(SafeSyncStatus.Ready);
         public SafeSyncResult NextFetchResult { get; set; } = SafeSyncResult.Success(SafeSyncStatus.Ready);
+        public SafeSyncRetryQueueSummary RetrySummary { get; set; } = new SafeSyncRetryQueueSummary();
+        public SafeSyncConflictSummary ConflictSummary { get; set; } = new SafeSyncConflictSummary();
+        public SafeConflictAuditSummary ConflictAuditSummary { get; set; } = new SafeConflictAuditSummary();
+        public SafeSyncTombstoneSummary TombstoneSummary { get; set; } = new SafeSyncTombstoneSummary();
 
         public void SetBaseUrl(string baseUrl)
         {
@@ -513,6 +807,11 @@ namespace TokenForge.Client.Tests
             return syncCompletion.Task;
         }
 
+        public Task<SafeSyncResult> EnqueueSyncSafeSessionsAsync(CancellationToken cancellationToken = default)
+        {
+            return SyncNowAsync(cancellationToken);
+        }
+
         public void CompleteSync(int accepted, int rejected)
         {
             Status = SafeSyncStatus.Synced;
@@ -531,6 +830,128 @@ namespace TokenForge.Client.Tests
             Status = NextFetchResult.Status;
             return Task.FromResult(NextFetchResult);
         }
+
+        public Task<SafeSyncResult> ProcessRetryQueueOnceAsync(CancellationToken cancellationToken = default)
+        {
+            RetryCount += 1;
+            Status = SafeSyncStatus.RetryInProgress;
+            retryCompletion = new TaskCompletionSource<SafeSyncResult>();
+            return retryCompletion.Task;
+        }
+
+        public Task<SafeSyncResult> ProcessAllEligibleRetryEntriesOnceAsync(CancellationToken cancellationToken = default)
+        {
+            return ProcessRetryQueueOnceAsync(cancellationToken);
+        }
+
+        public Task<SafeSyncResult> ForceRetryEntryAsync(string queueEntryId, bool explicitConfirmation, CancellationToken cancellationToken = default)
+        {
+            RetryCount += 1;
+            return Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.RetrySucceeded, RetryQueueSummary = RetrySummary, ErrorCode = SafeSyncApiError.ForcedRetrySucceeded });
+        }
+
+        public void CompleteRetry()
+        {
+            Status = SafeSyncStatus.RetrySucceeded;
+            RetrySummary.PendingCount = 0;
+            RetrySummary.SucceededCount = 1;
+            retryCompletion?.TrySetResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.RetrySucceeded, RetryQueueSummary = RetrySummary });
+        }
+
+        public Task<SafeSyncResult> CancelRetryEntryAsync(string queueEntryId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, RetryQueueSummary = RetrySummary });
+        }
+
+        public Task<SafeSyncResult> CancelAllFailedRetryEntriesAsync(CancellationToken cancellationToken = default)
+        {
+            CancelAllFailedRetryCount += 1;
+            return Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, RetryQueueSummary = RetrySummary });
+        }
+
+        public Task<SafeSyncResult> ClearSucceededRetryEntriesAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, RetryQueueSummary = RetrySummary });
+        }
+
+        public Task<SafeSyncResult> PauseAllPendingRetryEntriesAsync(CancellationToken cancellationToken = default)
+        {
+            PauseAllPendingRetryCount += 1;
+            return Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, RetryQueueSummary = RetrySummary });
+        }
+
+        public Task<SafeSyncResult> ResumeAllPausedRetryEntriesAsync(CancellationToken cancellationToken = default)
+        {
+            ResumeAllPausedRetryCount += 1;
+            return Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.RetryPending, RetryQueueSummary = RetrySummary });
+        }
+
+        public Task<SafeSyncRetryQueueSummary> GetRetryQueueSummaryAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(RetrySummary);
+        }
+
+        public Task<SafeSyncConflictSummary> GetConflictSummaryAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(ConflictSummary);
+        }
+
+        public Task<SafeSyncTombstoneSummary> GetTombstoneSummaryAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(TombstoneSummary);
+        }
+
+        public Task<SafeSyncResult> DeleteLocalSavedSessionAsync(string clientSessionId, CancellationToken cancellationToken = default)
+        {
+            LocalDeleteCount += 1;
+            return Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, ErrorCode = SafeSyncApiError.LocalSessionDeleted, RetryQueueSummary = RetrySummary, TombstoneSummary = TombstoneSummary });
+        }
+
+        public Task<SafeSyncResult> EnqueuePendingTombstoneDeletesAsync(CancellationToken cancellationToken = default)
+        {
+            TombstoneEnqueueCount += 1;
+            return Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.RetryPending, TombstoneSummary = TombstoneSummary, RetryQueueSummary = RetrySummary });
+        }
+
+        public Task<SafeSyncResult> ProcessPendingTombstoneDeletesOnceAsync(CancellationToken cancellationToken = default)
+        {
+            TombstoneProcessCount += 1;
+            return Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.RetrySucceeded, TombstoneSummary = TombstoneSummary });
+        }
+
+        public Task<SafeSyncResult> CancelTombstoneAsync(string tombstoneId, CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, TombstoneSummary = TombstoneSummary });
+        public Task<SafeSyncResult> CancelAllFailedTombstonesAsync(CancellationToken cancellationToken = default)
+        {
+            CancelAllFailedTombstonesCount += 1;
+            return Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, TombstoneSummary = TombstoneSummary });
+        }
+        public Task<SafeSyncResult> MarkTombstoneResolvedAsync(string tombstoneId, CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, TombstoneSummary = TombstoneSummary });
+        public Task<SafeSyncResult> ClearResolvedTombstonesAsync(CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, TombstoneSummary = TombstoneSummary });
+
+        public Task<SafeSyncResult> KeepLocalConflictAsync(string conflictId, CancellationToken cancellationToken = default)
+        {
+            KeepLocalCount += 1;
+            return Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.RetryPending, ConflictSummary = ConflictSummary, RetryQueueSummary = RetrySummary });
+        }
+
+        public Task<SafeSyncResult> KeepRemoteConflictAsync(string conflictId, CancellationToken cancellationToken = default)
+        {
+            KeepRemoteCount += 1;
+            return Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, ConflictSummary = ConflictSummary });
+        }
+
+        public Task<SafeSyncResult> MarkConflictResolvedAsync(string conflictId, CancellationToken cancellationToken = default)
+        {
+            MarkResolvedCount += 1;
+            return Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, ConflictSummary = ConflictSummary });
+        }
+
+        public Task<SafeSyncResult> CancelConflictResolutionAsync(string conflictId, CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.ConflictDetected, ConflictSummary = ConflictSummary });
+
+        public Task<SafeConflictMergePreview> GetConflictMergePreviewAsync(string conflictId, SafeConflictMergePolicy policy, CancellationToken cancellationToken = default) => Task.FromResult(new SafeConflictMergePreview { ConflictId = conflictId, SelectedPolicy = policy, CanApply = true });
+        public Task<SafeConflictMergeResult> ApplyConflictMergePolicyAsync(string conflictId, SafeConflictMergePolicy policy, bool explicitConfirmation, CancellationToken cancellationToken = default) => Task.FromResult(new SafeConflictMergeResult { ConflictId = conflictId, Policy = policy, Applied = explicitConfirmation, SyncResult = SafeSyncResult.Success(SafeSyncStatus.Ready) });
+        public Task<SafeConflictAuditSummary> GetConflictAuditHistoryAsync(CancellationToken cancellationToken = default) => Task.FromResult(ConflictAuditSummary);
+        public Task<SafeSyncResult> ClearResolvedConflictAuditHistoryAsync(bool explicitConfirmation, CancellationToken cancellationToken = default) => Task.FromResult(SafeSyncResult.Success(SafeSyncStatus.Ready));
 
         public Task<SafeSyncResult> DeleteRemoteSessionAsync(string serverSessionId, CancellationToken cancellationToken = default)
         {

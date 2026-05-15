@@ -125,6 +125,7 @@ namespace TokenForge.Client
             {
                 await approvedActivityAnalysis.RefreshApprovedLocationsAsync();
                 await approvedActivityAnalysis.RefreshRecentSessionsAsync();
+                await approvedActivityAnalysis.RefreshSafeSyncLocalStateAsync();
             }
 
             if (bootstrapRoot != null)

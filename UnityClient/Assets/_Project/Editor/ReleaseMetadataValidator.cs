@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEngine;
 
 namespace TokenForge.Editor
@@ -34,6 +35,9 @@ namespace TokenForge.Editor
         public const string BootstrapScenePath = "Assets/_Project/Scenes/Bootstrap.unity";
         public const string EntitlementsRelativePath = "BuildSupport/macOS/TokenForge.entitlements";
         public const string ReleaseDocsRelativePath = "Docs/macos-release.md";
+        public const string AppIconAssetPath = "Assets/_Project/Art/AppIcon/TokenForgeReleaseIcon.png";
+        public const string AppIconMetaPath = AppIconAssetPath + ".meta";
+        public const string PlaceholderAppIconAssetPath = "Assets/_Project/Art/AppIcon/TokenForgePlaceholderIcon.png";
 
         public static void ValidateForRelease()
         {
@@ -84,7 +88,8 @@ namespace TokenForge.Editor
             ValidateBootstrapScene(report.Errors);
             ValidateMacOSBuildTarget(report.Errors);
             ValidateEntitlements(report.Errors);
-            ValidateReleaseDocs(report.Errors, report.Warnings, report.AppIconConfigured);
+            ValidateAppIcon(report.Errors);
+            ValidateReleaseDocs(report.Errors, report.Warnings);
             ValidateGitIgnore(report.Errors);
 
             return report;
@@ -121,7 +126,80 @@ namespace TokenForge.Editor
             }
         }
 
-        private static void ValidateReleaseDocs(List<string> errors, List<string> warnings, bool appIconConfigured)
+        private static void ValidateAppIcon(List<string> errors)
+        {
+            if (File.Exists(Path.Combine(ProjectRoot(), PlaceholderAppIconAssetPath)))
+            {
+                errors.Add("Placeholder app icon asset must not be present in a release candidate.");
+            }
+
+            if (AppIconAssetPath.IndexOf("Placeholder", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                errors.Add("Release app icon path must not contain Placeholder.");
+            }
+
+            if (!File.Exists(Path.Combine(ProjectRoot(), AppIconAssetPath)))
+            {
+                errors.Add("macOS Standalone app icon asset is missing.");
+                return;
+            }
+
+            if (!File.Exists(Path.Combine(ProjectRoot(), AppIconMetaPath)))
+            {
+                errors.Add("macOS Standalone app icon .meta file is missing.");
+            }
+
+            var icon = AssetDatabase.LoadAssetAtPath<Texture2D>(AppIconAssetPath);
+            if (icon == null)
+            {
+                errors.Add("macOS Standalone app icon asset is not a valid Texture2D.");
+            }
+            else
+            {
+                if (icon.name.IndexOf("Placeholder", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    errors.Add("Release app icon asset name must not contain Placeholder.");
+                }
+
+                if (icon.width < 1024 || icon.height < 1024)
+                {
+                    errors.Add("Release app icon must be at least 1024x1024.");
+                }
+            }
+
+            var importer = AssetImporter.GetAtPath(AppIconAssetPath) as TextureImporter;
+            if (importer == null)
+            {
+                errors.Add("Release app icon importer metadata is missing or invalid.");
+            }
+            else
+            {
+                if (importer.maxTextureSize < 1024)
+                {
+                    errors.Add("Release app icon importer max texture size must be at least 1024.");
+                }
+
+                if (importer.alphaIsTransparency)
+                {
+                    errors.Add("Release app icon must import as an opaque app icon.");
+                }
+            }
+
+            if (!HasConfiguredStandaloneIcon())
+            {
+                errors.Add("macOS Standalone app icon is not configured in PlayerSettings.");
+                return;
+            }
+
+            var referencesExpectedIcon = StandaloneIconPaths()
+                .Any(path => string.Equals(path, AppIconAssetPath, StringComparison.Ordinal));
+            if (!referencesExpectedIcon)
+            {
+                errors.Add("macOS Standalone app icon must reference " + AppIconAssetPath + ".");
+            }
+        }
+
+        private static void ValidateReleaseDocs(List<string> errors, List<string> warnings)
         {
             var docsPath = RepoPath(ReleaseDocsRelativePath);
             if (!File.Exists(docsPath))
@@ -135,12 +213,8 @@ namespace TokenForge.Editor
             RequireContains(errors, docs, "sign", "release docs must mention signing requirements.");
             RequireContains(errors, docs, "notar", "release docs must mention notarization requirements.");
             RequireContains(errors, docs, "schemaVersion", "release docs must mention persistence schema metadata.");
-
-            if (!appIconConfigured)
-            {
-                RequireContains(errors, docs, "App icon", "release docs must document the app icon limitation when no icon is configured.");
-                warnings.Add("No Standalone app icon is configured; documented as a known limitation.");
-            }
+            RequireContains(errors, docs, AppIconAssetPath, "release docs must document the app icon asset path.");
+            RequireContains(errors, docs, "original TokenForge release icon", "release docs must document the app icon license/source status.");
         }
 
         private static void ValidateGitIgnore(List<string> errors)
@@ -166,7 +240,12 @@ namespace TokenForge.Editor
                 "*.dmg",
                 "*.pkg",
                 "*.corrupt",
-                "*.unsupported-schema"
+                "*.unsupported-schema",
+                "*.unsafe",
+                "*.notarytool*",
+                "*.credentials",
+                "*.p12",
+                "AuthKey_*.p8"
             };
 
             foreach (var entry in requiredEntries)
@@ -177,22 +256,48 @@ namespace TokenForge.Editor
 
         private static bool HasConfiguredStandaloneIcon()
         {
+            return StandaloneIconPaths().Any();
+        }
+
+        private static IEnumerable<string> StandaloneIconPaths()
+        {
             var icons = PlayerSettings.GetIconsForTargetGroup(BuildTargetGroup.Standalone);
-            if (icons == null || icons.Length == 0 || icons.All(icon => icon == null))
+            foreach (var path in ValidIconPaths(icons))
             {
-                return false;
+                yield return path;
+            }
+
+            var kinds = PlayerSettings.GetSupportedIconKinds(NamedBuildTarget.Standalone);
+            foreach (var kind in kinds)
+            {
+                var platformIcons = PlayerSettings.GetPlatformIcons(NamedBuildTarget.Standalone, kind);
+                if (platformIcons == null)
+                {
+                    continue;
+                }
+
+                foreach (var path in ValidIconPaths(platformIcons.SelectMany(platformIcon => platformIcon.GetTextures() ?? new Texture2D[0])))
+                {
+                    yield return path;
+                }
+            }
+        }
+
+        private static IEnumerable<string> ValidIconPaths(IEnumerable<Texture2D> icons)
+        {
+            if (icons == null)
+            {
+                yield break;
             }
 
             foreach (var icon in icons.Where(icon => icon != null))
             {
                 var path = AssetDatabase.GetAssetPath(icon);
-                if (string.IsNullOrWhiteSpace(path) || AssetDatabase.LoadAssetAtPath<Texture2D>(path) == null)
+                if (!string.IsNullOrWhiteSpace(path) && AssetDatabase.LoadAssetAtPath<Texture2D>(path) != null)
                 {
-                    return false;
+                    yield return path;
                 }
             }
-
-            return true;
         }
 
         private static string ReadStandaloneBuildNumber()

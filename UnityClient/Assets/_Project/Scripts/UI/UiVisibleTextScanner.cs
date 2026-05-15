@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
+using TokenForge.Client.Sync;
 
 namespace TokenForge.Client.UI
 {
@@ -53,6 +54,20 @@ namespace TokenForge.Client.UI
         public static IReadOnlyList<string> FindForbiddenRuntimeText(GameObject root, IEnumerable<string> extraForbiddenFragments = null)
         {
             var allText = string.Join("\n", Collect(root));
+            return FindForbiddenRuntimeText(allText, extraForbiddenFragments);
+        }
+
+        public static IReadOnlyList<string> FindForbiddenRuntimeText(SafeSyncConfirmationRequest request, IEnumerable<string> extraForbiddenFragments = null)
+        {
+            var allText = request == null
+                ? string.Empty
+                : string.Join("\n", SafeSyncConfirmationRequestFactory.AllText(request));
+            return FindForbiddenRuntimeText(allText, extraForbiddenFragments);
+        }
+
+        public static IReadOnlyList<string> FindForbiddenRuntimeText(string allText, IEnumerable<string> extraForbiddenFragments = null)
+        {
+            allText = allText ?? string.Empty;
             var fragments = ForbiddenRuntimeTextFragments
                 .Concat(extraForbiddenFragments ?? Array.Empty<string>())
                 .Where(fragment => !string.IsNullOrWhiteSpace(fragment))

@@ -107,6 +107,13 @@ namespace TokenForge.Client.UI
                 case SafeSyncStatus.FetchingRemoteSessions:
                     return "Fetching Remote Sessions";
                 case SafeSyncStatus.DeleteInProgress: return "Delete In Progress";
+                case SafeSyncStatus.RetryPending: return "Retry Pending";
+                case SafeSyncStatus.RetryInProgress: return "Retry In Progress";
+                case SafeSyncStatus.RetrySucceeded: return "Retry Succeeded";
+                case SafeSyncStatus.RetryFailed: return "Retry Failed";
+                case SafeSyncStatus.RetryWaiting: return "Retry Waiting";
+                case SafeSyncStatus.PrivacyBlocked: return "Privacy Blocked";
+                case SafeSyncStatus.ConflictDetected: return "Conflict Detected";
                 case SafeSyncStatus.ServerUnavailable: return "Server Unavailable";
                 case SafeSyncStatus.Failed: return "Failed";
                 default: return "Idle";
@@ -164,7 +171,21 @@ namespace TokenForge.Client.UI
                 case SafeSyncStatus.FetchingRemoteSessions:
                     return "Fetching remote session summaries.";
                 case SafeSyncStatus.DeleteInProgress:
-                    return "Deleting selected remote session.";
+                    return "Deleting selected session.";
+                case SafeSyncStatus.RetryPending:
+                    return SafeSyncApiError.ToSafeMessage(SafeSyncApiError.RetryQueued);
+                case SafeSyncStatus.RetryInProgress:
+                    return SafeSyncApiError.ToSafeMessage(SafeSyncApiError.RetryInProgress);
+                case SafeSyncStatus.RetrySucceeded:
+                    return "Retry completed.";
+                case SafeSyncStatus.RetryFailed:
+                    return SafeSyncApiError.ToSafeMessage(SafeSyncApiError.RetryExhausted);
+                case SafeSyncStatus.RetryWaiting:
+                    return SafeSyncApiError.ToSafeMessage(SafeSyncApiError.RetryWaiting);
+                case SafeSyncStatus.PrivacyBlocked:
+                    return SafeSyncApiError.ToSafeMessage(SafeSyncApiError.PrivacyGuardBlockedPayload);
+                case SafeSyncStatus.ConflictDetected:
+                    return SafeSyncApiError.ToSafeMessage(SafeSyncApiError.ConflictDetected);
                 case SafeSyncStatus.ServerUnavailable:
                     return "The server is unavailable. Your local data is safe.";
                 case SafeSyncStatus.Failed:

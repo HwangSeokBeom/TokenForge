@@ -130,13 +130,23 @@ namespace TokenForge.Client.UI
 
             return string.Join("\n", viewModel.RecentSessions.Select(session =>
             {
-                if (session.SourceProvider == "AI_AGENT")
-                {
-                    return $"{session.DayBucket} | AI agent {session.AgentProviderType} | sessions {session.AgentSessionCountBucket} | interactions {session.AgentInteractionCountBucket} | confidence {session.Confidence}";
-                }
-
-                return $"{session.DayBucket} | {session.SourceProvider} | work {session.WorkType} | changes {session.GitChangeCountBucket} | lines +{session.GitAddedLineBucket} -{session.GitDeletedLineBucket} | confidence {session.Confidence}";
+                return SafeLocalSessionLabel(session);
             }));
+        }
+
+        public static string SafeLocalSessionLabel(RecentSafeSessionSummary session)
+        {
+            if (session == null)
+            {
+                return "Unknown local session";
+            }
+
+            if (session.SourceProvider == "AI_AGENT")
+            {
+                return $"{session.DayBucket} | AI agent {session.AgentProviderType} | sessions {session.AgentSessionCountBucket} | interactions {session.AgentInteractionCountBucket} | confidence {session.Confidence}";
+            }
+
+            return $"{session.DayBucket} | {session.SourceProvider} | work {session.WorkType} | changes {session.GitChangeCountBucket} | lines +{session.GitAddedLineBucket} -{session.GitDeletedLineBucket} | confidence {session.Confidence}";
         }
 
         public static string AuthStatus(ApprovedActivityAnalysisViewModel viewModel)
@@ -191,6 +201,129 @@ namespace TokenForge.Client.UI
             return builder.ToString();
         }
 
+        public static string RetryQueueStatus(ApprovedActivityAnalysisViewModel viewModel)
+        {
+            var summary = viewModel?.RetryQueueSummary ?? new SafeSyncRetryQueueSummary();
+            var builder = new StringBuilder();
+            builder.Append("Retry Queue: pending ");
+            builder.Append(summary.PendingCount);
+            builder.Append(" | failed ");
+            builder.Append(summary.FailedCount);
+            builder.Append(" | paused ");
+            builder.Append(summary.PausedCount);
+            builder.Append(" | succeeded ");
+            builder.Append(summary.SucceededCount);
+            if (summary.NextAttemptAt.HasValue)
+            {
+                builder.Append(" | next ");
+                builder.Append(summary.NextAttemptAt.Value.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss"));
+                builder.Append(" UTC");
+            }
+
+            return builder.ToString();
+        }
+
+        public static string ConflictStatus(ApprovedActivityAnalysisViewModel viewModel)
+        {
+            var summary = viewModel?.ConflictSummary ?? new SafeSyncConflictSummary();
+            if (summary.UnresolvedCount == 0)
+            {
+                return "Conflicts: none unresolved.";
+            }
+
+            var first = summary.SafeConflicts.FirstOrDefault();
+            if (first == null)
+            {
+                return "Conflicts: unresolved " + summary.UnresolvedCount;
+            }
+
+            var diff = first.SafeDiffSummary?.ChangedSafeFieldNames == null || first.SafeDiffSummary.ChangedSafeFieldNames.Count == 0
+                ? "none"
+                : string.Join(", ", first.SafeDiffSummary.ChangedSafeFieldNames.Take(6));
+            return "Conflicts: unresolved " + summary.UnresolvedCount +
+                   " | " + first.ConflictType +
+                   " | " + first.ResolutionStatus +
+                   " | detected " + first.DetectedAt.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss") + " UTC" +
+                   "\nLocal: " + SafeConflictSummaryLine(first.SafeLocalSummary, includeServer: false) +
+                   "\nRemote: " + SafeConflictSummaryLine(first.SafeRemoteSummary, includeServer: true) +
+                   "\nChanged safe fields: " + diff +
+                   "\nPolicies: Keep Local, Keep Remote, Prefer Higher Confidence, Prefer Newer Safe Timestamp, Merge Non-Conflicting Aggregates, Mark Resolved Only." +
+                   "\nKeep Local queues safe re-upload. Keep Remote applies safe remote aggregate locally when possible. Aggregate merge only uses deterministic safe fields." +
+                   "\nResult: " + SafeUserMessageMapper.FromSyncError(first.SafeErrorCode);
+        }
+
+        public static string ConflictAuditHistory(ApprovedActivityAnalysisViewModel viewModel)
+        {
+            var summary = viewModel?.ConflictAuditSummary ?? new SafeConflictAuditSummary();
+            if (summary.SafeEntries == null || summary.SafeEntries.Count == 0)
+            {
+                return "Conflict History: no local-only audit entries. Latest 200 resolved decisions are retained when present.";
+            }
+
+            var first = summary.SafeEntries.First();
+            var fields = first.SafeDiffFieldNames == null || first.SafeDiffFieldNames.Count == 0
+                ? "none"
+                : string.Join(", ", first.SafeDiffFieldNames.Take(6));
+            var warnings = first.WarningIds == null || first.WarningIds.Count == 0
+                ? "none"
+                : string.Join(", ", first.WarningIds.Take(4));
+            var retry = string.IsNullOrWhiteSpace(first.QueuedRetryEntryId) ? "none" : "queued";
+            return "Conflict History: total " + summary.TotalCount +
+                   " | resolved " + summary.ResolvedCount +
+                   " | failed " + summary.FailedCount +
+                   " | local-only latest 200" +
+                   "\nRecent: " + first.CreatedAt.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss") + " UTC" +
+                   " | " + first.Action +
+                   " | " + SafeSyncConfirmationRequestFactory.PolicyLabel(first.Policy) +
+                   " | " + first.ResultStatus +
+                   "\nFields: " + fields +
+                   "\nRetry: " + retry +
+                   "\nWarnings: " + warnings +
+                   "\nMessage: " + SafeUserMessageMapper.FromSyncError(first.UserMessageCode);
+        }
+
+        public static string TombstoneStatus(ApprovedActivityAnalysisViewModel viewModel)
+        {
+            var summary = viewModel?.TombstoneSummary ?? new SafeSyncTombstoneSummary();
+            return $"Deletes: pending {summary.PendingDeleteCount} | synced {summary.DeleteSyncedCount} | failed {summary.DeleteFailedCount} | resolved {summary.DeleteResolvedCount}";
+        }
+
+        public static string SafeTombstoneLabel(SafeSyncTombstone tombstone)
+        {
+            if (tombstone == null)
+            {
+                return "Unknown tombstone";
+            }
+
+            return $"{tombstone.SyncStatus} | source {tombstone.DeleteSource} | code {tombstone.LastSafeErrorCode}";
+        }
+
+        public static string SafeConflictLabel(SafeSyncConflict conflict)
+        {
+            if (conflict == null)
+            {
+                return "Unknown conflict";
+            }
+
+            return $"{conflict.ConflictType} | {conflict.ResolutionStatus} | day {conflict.SafeLocalSummary?.DayBucket ?? conflict.SafeRemoteSummary?.DayBucket ?? string.Empty} | code {conflict.SafeErrorCode}";
+        }
+
+        public static string SafeConflictSummaryLine(SafeSyncSessionSafeSummary summary, bool includeServer)
+        {
+            summary = summary ?? new SafeSyncSessionSafeSummary();
+            var id = includeServer ? ShortId(summary.ServerSessionId) : ShortId(summary.ClientSessionId);
+            var idLabel = includeServer ? "server " : "client ";
+            return (string.IsNullOrWhiteSpace(id) ? string.Empty : idLabel + id + " | ") +
+                   summary.SourceProvider +
+                   " | day " + summary.DayBucket +
+                   (string.IsNullOrWhiteSpace(summary.TimeBucket) ? string.Empty : " | " + summary.TimeBucket) +
+                   " | confidence " + summary.Confidence +
+                   " | warnings " + summary.WarningCount +
+                   " | category " + EmptyAsNone(summary.CategoryBucketSummary, summary.ActivityCategory) +
+                   " | tool " + EmptyAsNone(summary.ToolBucketSummary, "none") +
+                   " | language " + EmptyAsNone(summary.LanguageBucketSummary, "none");
+        }
+
         public static string RemoteSessions(ApprovedActivityAnalysisViewModel viewModel)
         {
             if (viewModel?.RemoteSafeSessions == null || viewModel.RemoteSafeSessions.Count == 0)
@@ -209,6 +342,21 @@ namespace TokenForge.Client.UI
             }
 
             return $"{session.DayBucket} | {session.SourceProvider} | {session.ActivityCategory} | changes {session.ChangeCountBucket} | lines {session.LineCountBucket} | sessions {session.SessionCountBucket} | interactions {session.InteractionCountBucket} | confidence {session.Confidence} | warnings {session.WarningCount} | schema {session.SchemaVersion}";
+        }
+
+        private static string ShortId(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            return value.Length <= 8 ? value : value.Substring(0, 8);
+        }
+
+        private static string EmptyAsNone(string value, string fallback)
+        {
+            return string.IsNullOrWhiteSpace(value) ? fallback : value;
         }
 
         public static string ApprovedLocationLabel(ApprovedLocationDisplayItem item)

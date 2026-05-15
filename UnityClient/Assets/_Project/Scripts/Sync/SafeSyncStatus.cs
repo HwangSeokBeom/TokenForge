@@ -12,6 +12,13 @@ namespace TokenForge.Client.Sync
         Fetching,
         FetchingRemoteSessions,
         DeleteInProgress,
+        RetryPending,
+        RetryInProgress,
+        RetrySucceeded,
+        RetryFailed,
+        RetryWaiting,
+        PrivacyBlocked,
+        ConflictDetected,
         Failed,
         AuthRequired,
         ServerUnavailable

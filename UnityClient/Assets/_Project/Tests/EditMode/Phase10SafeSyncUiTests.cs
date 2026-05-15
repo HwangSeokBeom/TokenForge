@@ -24,6 +24,9 @@ namespace TokenForge.Client.Tests
             public SafeSyncStatus Status { get; private set; } = SafeSyncStatus.Idle;
             public string BaseUrl { get; private set; } = "http://localhost:3000/api/v1";
             public SafeSyncResult NextSyncResult { get; set; } = SafeSyncResult.Success(SafeSyncStatus.Synced);
+            public SafeSyncRetryQueueSummary RetrySummary { get; set; } = new SafeSyncRetryQueueSummary();
+            public SafeSyncConflictSummary ConflictSummary { get; set; } = new SafeSyncConflictSummary();
+            public SafeSyncTombstoneSummary TombstoneSummary { get; set; } = new SafeSyncTombstoneSummary();
 
             public void SetBaseUrl(string baseUrl)
             {
@@ -43,6 +46,65 @@ namespace TokenForge.Client.Tests
                 Status = NextSyncResult.Status;
                 return Task.FromResult(NextSyncResult);
             }
+
+            public Task<SafeSyncResult> EnqueueSyncSafeSessionsAsync(CancellationToken cancellationToken = default)
+            {
+                return SyncNowAsync(cancellationToken);
+            }
+
+            public Task<SafeSyncResult> ProcessRetryQueueOnceAsync(CancellationToken cancellationToken = default)
+            {
+                return Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.RetrySucceeded, RetryQueueSummary = RetrySummary });
+            }
+
+            public Task<SafeSyncResult> ProcessAllEligibleRetryEntriesOnceAsync(CancellationToken cancellationToken = default) => ProcessRetryQueueOnceAsync(cancellationToken);
+            public Task<SafeSyncResult> ForceRetryEntryAsync(string queueEntryId, bool explicitConfirmation, CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.RetrySucceeded, RetryQueueSummary = RetrySummary });
+
+            public Task<SafeSyncResult> CancelRetryEntryAsync(string queueEntryId, CancellationToken cancellationToken = default)
+            {
+                return Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, RetryQueueSummary = RetrySummary });
+            }
+
+            public Task<SafeSyncResult> CancelAllFailedRetryEntriesAsync(CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, RetryQueueSummary = RetrySummary });
+
+            public Task<SafeSyncResult> ClearSucceededRetryEntriesAsync(CancellationToken cancellationToken = default)
+            {
+                return Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, RetryQueueSummary = RetrySummary });
+            }
+
+            public Task<SafeSyncResult> PauseAllPendingRetryEntriesAsync(CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, RetryQueueSummary = RetrySummary });
+            public Task<SafeSyncResult> ResumeAllPausedRetryEntriesAsync(CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.RetryPending, RetryQueueSummary = RetrySummary });
+
+            public Task<SafeSyncRetryQueueSummary> GetRetryQueueSummaryAsync(CancellationToken cancellationToken = default)
+            {
+                return Task.FromResult(RetrySummary);
+            }
+
+            public Task<SafeSyncConflictSummary> GetConflictSummaryAsync(CancellationToken cancellationToken = default)
+            {
+                return Task.FromResult(ConflictSummary);
+            }
+
+            public Task<SafeSyncTombstoneSummary> GetTombstoneSummaryAsync(CancellationToken cancellationToken = default)
+            {
+                return Task.FromResult(TombstoneSummary);
+            }
+
+            public Task<SafeSyncResult> DeleteLocalSavedSessionAsync(string clientSessionId, CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, TombstoneSummary = TombstoneSummary, RetryQueueSummary = RetrySummary });
+            public Task<SafeSyncResult> EnqueuePendingTombstoneDeletesAsync(CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.RetryPending, TombstoneSummary = TombstoneSummary, RetryQueueSummary = RetrySummary });
+            public Task<SafeSyncResult> ProcessPendingTombstoneDeletesOnceAsync(CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.RetrySucceeded, TombstoneSummary = TombstoneSummary });
+            public Task<SafeSyncResult> CancelTombstoneAsync(string tombstoneId, CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, TombstoneSummary = TombstoneSummary });
+            public Task<SafeSyncResult> CancelAllFailedTombstonesAsync(CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, TombstoneSummary = TombstoneSummary });
+            public Task<SafeSyncResult> MarkTombstoneResolvedAsync(string tombstoneId, CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, TombstoneSummary = TombstoneSummary });
+            public Task<SafeSyncResult> ClearResolvedTombstonesAsync(CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, TombstoneSummary = TombstoneSummary });
+            public Task<SafeSyncResult> KeepLocalConflictAsync(string conflictId, CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.RetryPending, ConflictSummary = ConflictSummary, RetryQueueSummary = RetrySummary });
+            public Task<SafeSyncResult> KeepRemoteConflictAsync(string conflictId, CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, ConflictSummary = ConflictSummary });
+            public Task<SafeSyncResult> MarkConflictResolvedAsync(string conflictId, CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.Ready, ConflictSummary = ConflictSummary });
+            public Task<SafeSyncResult> CancelConflictResolutionAsync(string conflictId, CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.ConflictDetected, ConflictSummary = ConflictSummary });
+            public Task<SafeConflictMergePreview> GetConflictMergePreviewAsync(string conflictId, SafeConflictMergePolicy policy, CancellationToken cancellationToken = default) => Task.FromResult(new SafeConflictMergePreview { ConflictId = conflictId, SelectedPolicy = policy, CanApply = true });
+            public Task<SafeConflictMergeResult> ApplyConflictMergePolicyAsync(string conflictId, SafeConflictMergePolicy policy, bool explicitConfirmation, CancellationToken cancellationToken = default) => Task.FromResult(new SafeConflictMergeResult { ConflictId = conflictId, Policy = policy, Applied = explicitConfirmation, SyncResult = SafeSyncResult.Success(SafeSyncStatus.Ready) });
+            public Task<SafeConflictAuditSummary> GetConflictAuditHistoryAsync(CancellationToken cancellationToken = default) => Task.FromResult(new SafeConflictAuditSummary());
+            public Task<SafeSyncResult> ClearResolvedConflictAuditHistoryAsync(bool explicitConfirmation, CancellationToken cancellationToken = default) => Task.FromResult(SafeSyncResult.Success(SafeSyncStatus.Ready));
 
             public Task<SafeSyncResult> FetchRemoteSessionsAsync(CancellationToken cancellationToken = default)
             {
