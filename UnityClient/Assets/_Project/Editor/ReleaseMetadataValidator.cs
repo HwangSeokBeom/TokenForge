@@ -32,7 +32,7 @@ namespace TokenForge.Editor
         public const string ExpectedBundleIdentifier = "com.tokenforge.client";
         public const string ExpectedAppVersion = "0.18.0";
         public const string ExpectedBuildNumber = "18";
-        public const string BootstrapScenePath = "Assets/_Project/Scenes/Bootstrap.unity";
+        public const string BootstrapScenePath = TokenForge.Client.Editor.TokenForgeStartupSceneSettings.StartupScenePath;
         public const string EntitlementsRelativePath = "BuildSupport/macOS/TokenForge.entitlements";
         public const string ReleaseDocsRelativePath = "Docs/macos-release.md";
         public const string AppIconAssetPath = "Assets/_Project/Art/AppIcon/TokenForgeReleaseIcon.png";
@@ -99,14 +99,14 @@ namespace TokenForge.Editor
         {
             if (AssetDatabase.LoadAssetAtPath<SceneAsset>(BootstrapScenePath) == null)
             {
-                errors.Add("Bootstrap scene asset is missing.");
+                errors.Add("TokenForge startup scene asset is missing.");
                 return;
             }
 
             var buildScene = EditorBuildSettings.scenes.FirstOrDefault(scene => scene.path == BootstrapScenePath);
             if (buildScene == null || !buildScene.enabled)
             {
-                errors.Add("Bootstrap scene is not enabled in build settings.");
+                errors.Add("TokenForge startup scene is not enabled in build settings.");
             }
         }
 

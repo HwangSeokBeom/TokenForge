@@ -9,7 +9,7 @@ namespace TokenForge.Editor
 {
     public static class MacOSBuildSmokeCommand
     {
-        public const string BootstrapScenePath = "Assets/_Project/Scenes/Bootstrap.unity";
+        public const string BootstrapScenePath = TokenForge.Client.Editor.TokenForgeStartupSceneSettings.StartupScenePath;
         public const string DefaultBuildOutput = "/tmp/tokenforge-macos-build/TokenForge.app";
 
         public static void Build()
@@ -63,7 +63,7 @@ namespace TokenForge.Editor
 
             Debug.Log("TokenForge macOS build smoke starting.");
             Debug.Log("Build target: StandaloneOSX");
-            Debug.Log("Build scene: Bootstrap.unity");
+            Debug.Log("Build scene: " + TokenForge.Client.Editor.TokenForgeStartupSceneSettings.StartupSceneName + ".unity");
             Debug.Log("Build output: " + outputPath);
 
             var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
@@ -91,13 +91,13 @@ namespace TokenForge.Editor
         {
             if (AssetDatabase.LoadAssetAtPath<SceneAsset>(BootstrapScenePath) == null)
             {
-                throw new FileNotFoundException("Bootstrap.unity is missing.");
+                throw new FileNotFoundException(TokenForge.Client.Editor.TokenForgeStartupSceneSettings.StartupSceneName + ".unity is missing.");
             }
 
             var buildScene = EditorBuildSettings.scenes.FirstOrDefault(scene => scene.path == BootstrapScenePath);
             if (buildScene == null || !buildScene.enabled)
             {
-                throw new InvalidOperationException("Bootstrap.unity is not enabled in EditorBuildSettings.");
+                throw new InvalidOperationException(TokenForge.Client.Editor.TokenForgeStartupSceneSettings.StartupSceneName + ".unity is not enabled in EditorBuildSettings.");
             }
         }
 

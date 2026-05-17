@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using NUnit.Framework;
+using TokenForge.Client.Editor;
 using TokenForge.Editor;
 using TokenForge.Client.UI;
 using UnityEditor;
@@ -11,7 +12,7 @@ namespace TokenForge.Client.Tests
 {
     public sealed class Phase16BuildSettingsEditModeTests
     {
-        private const string BootstrapScenePath = "Assets/_Project/Scenes/Bootstrap.unity";
+        private const string BootstrapScenePath = TokenForgeStartupSceneSettings.StartupScenePath;
         private const string BootstrapRootPrefabPath = "Assets/_Project/Prefabs/UI/BootstrapRoot.prefab";
 
         [Test]
@@ -39,6 +40,29 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void BootstrapSceneKeepsAudioDisabledWithoutAudioListenerComponents()
+        {
+            var repoRoot = FindRepoRoot();
+            var manifest = File.ReadAllText(Path.Combine(repoRoot, "UnityClient", "Packages", "manifest.json"));
+            var packagesLock = File.ReadAllText(Path.Combine(repoRoot, "UnityClient", "Packages", "packages-lock.json"));
+            var audioManagerPaths = Directory.GetFiles(Path.Combine(repoRoot, "UnityClient", "ProjectSettings"), "AudioManager*.asset");
+            var bootstrapScene = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scenes/TokenForgeMain.unity"));
+            var sceneBuilder = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Editor/TokenForgeBootstrapSceneBuilder.cs"));
+
+            Assert.That(manifest, Does.Not.Contain("\"com.unity.modules.audio\""));
+            Assert.That(packagesLock, Does.Not.Contain("\"com.unity.modules.audio\""));
+            Assert.That(audioManagerPaths, Is.Not.Empty);
+            foreach (var audioManagerPath in audioManagerPaths)
+            {
+                Assert.That(File.ReadAllText(audioManagerPath), Does.Contain("m_DisableAudio: 1"), audioManagerPath);
+            }
+
+            Assert.That(bootstrapScene, Does.Not.Contain("AudioListener:"));
+            Assert.That(bootstrapScene, Does.Not.Contain("--- !u!81"));
+            Assert.That(sceneBuilder, Does.Not.Contain("typeof(AudioListener)"));
+        }
+
+        [Test]
         public void LocalGeneratedArtifactsAreIgnoredButSourceAssetsAreNot()
         {
             var repoRoot = FindRepoRoot();
@@ -53,6 +77,7 @@ namespace TokenForge.Client.Tests
 
             Assert.That(ignore, Does.Not.Contain("Assets/_Project/Prefabs/UI/*.prefab"));
             Assert.That(ignore, Does.Not.Contain("Assets/_Project/Scenes/Bootstrap.unity"));
+            Assert.That(ignore, Does.Not.Contain("Assets/_Project/Scenes/TokenForgeMain.unity"));
             Assert.That(ignore, Does.Not.Contain("*.meta"));
         }
 

@@ -436,6 +436,71 @@ namespace TokenForge.Client.Tests
             fixture.Destroy();
         }
 
+        [UnityTest]
+        public IEnumerator Phase27ConfirmationModalQaStatesAreVisibleAndBlocking()
+        {
+            var fixture = Phase14UiFixture.Create(loggedIn: true);
+            fixture.Sync.RetrySummary = new SafeSyncRetryQueueSummary
+            {
+                PendingCount = 1,
+                SafeEntries = new List<SafeSyncRetryQueueEntry>
+                {
+                    new SafeSyncRetryQueueEntry { QueueEntryId = "retry-1", OperationType = SafeSyncRetryOperationType.UPSERT_ACTIVITY_SESSIONS, Status = SafeSyncRetryQueueEntryStatus.Pending }
+                }
+            };
+            fixture.Sync.ConflictSummary = new SafeSyncConflictSummary
+            {
+                UnresolvedCount = 1,
+                SafeConflicts = new List<SafeSyncConflict>
+                {
+                    new SafeSyncConflict
+                    {
+                        ConflictId = "conflict-1",
+                        ConflictType = SafeSyncConflictType.RemoteDifferent,
+                        SafeErrorCode = SafeSyncApiError.ConflictDetected,
+                        SafeDiffSummary = new SafeSessionDiffSummary { ChangedSafeFieldNames = new List<string> { "confidence" } }
+                    }
+                }
+            };
+            fixture.Sync.ConflictAuditSummary = new SafeConflictAuditSummary { ResolvedCount = 1 };
+            yield return fixture.RefreshDashboard();
+
+            fixture.Root.safeSyncPanel.applyMergePolicyButton.onClick.Invoke();
+            yield return null;
+            Assert.IsTrue(fixture.Root.safeSyncPanel.confirmationPanel.activeSelf);
+            Assert.IsTrue(fixture.Root.safeSyncPanel.confirmationPreviewLabel.text.Contains("Action: applyMergePolicy"));
+            Assert.IsTrue(fixture.Root.safeSyncPanel.confirmationPreviewLabel.text.Contains("Expected result:"));
+            Assert.IsTrue(fixture.Root.safeSyncPanel.confirmationBodyLabel.text.Contains("Type MERGE to confirm"));
+
+            ConfirmSafeSyncAction(fixture, "WRONG");
+            yield return null;
+            Assert.AreEqual(0, fixture.Sync.MergeApplyCount);
+            Assert.IsTrue(fixture.Root.safeSyncPanel.statusLabel.text.Contains("No Safe Sync action was applied"));
+
+            fixture.Root.safeSyncPanel.confirmationTypedPhraseInput.text = "MERGE";
+            fixture.Root.safeSyncPanel.confirmationCancelButton.onClick.Invoke();
+            yield return null;
+            Assert.AreEqual(0, fixture.Sync.MergeApplyCount);
+            Assert.IsTrue(fixture.Root.safeSyncPanel.statusLabel.text.Contains("canceled"));
+
+            fixture.Root.safeSyncPanel.forceRetryButton.onClick.Invoke();
+            yield return null;
+            Assert.IsTrue(fixture.Root.safeSyncPanel.confirmationBodyLabel.text.Contains("Type FORCE RETRY to confirm"));
+            ConfirmSafeSyncAction(fixture, "FORCE RETRY");
+            yield return null;
+            Assert.AreEqual(1, fixture.Sync.RetryCount);
+            Assert.IsTrue(fixture.Root.safeSyncPanel.statusLabel.text.Contains("completed"));
+
+            fixture.Root.safeSyncPanel.clearConflictAuditButton.onClick.Invoke();
+            yield return null;
+            Assert.IsTrue(fixture.Root.safeSyncPanel.confirmationBodyLabel.text.Contains("Type CLEAR HISTORY to confirm"));
+            ConfirmSafeSyncAction(fixture, "CLEAR HISTORY");
+            yield return null;
+            Assert.AreEqual(1, fixture.Sync.ClearAuditCount);
+
+            fixture.Destroy();
+        }
+
         private static void ConfirmSafeSyncAction(Phase14UiFixture fixture, string typedPhrase = "")
         {
             if (fixture.Root.safeSyncPanel.confirmationTypedPhraseInput != null)
@@ -778,6 +843,8 @@ namespace TokenForge.Client.Tests
         public int KeepLocalCount { get; private set; }
         public int KeepRemoteCount { get; private set; }
         public int MarkResolvedCount { get; private set; }
+        public int MergeApplyCount { get; private set; }
+        public int ClearAuditCount { get; private set; }
         public SafeSyncStatus Status { get; private set; } = SafeSyncStatus.Idle;
         public string BaseUrl { get; private set; } = "http://localhost:3000/api/v1";
         public SafeSyncResult NextHealthResult { get; set; } = SafeSyncResult.Success(SafeSyncStatus.Ready);
@@ -948,10 +1015,26 @@ namespace TokenForge.Client.Tests
 
         public Task<SafeSyncResult> CancelConflictResolutionAsync(string conflictId, CancellationToken cancellationToken = default) => Task.FromResult(new SafeSyncResult { IsSuccess = true, Status = SafeSyncStatus.ConflictDetected, ConflictSummary = ConflictSummary });
 
-        public Task<SafeConflictMergePreview> GetConflictMergePreviewAsync(string conflictId, SafeConflictMergePolicy policy, CancellationToken cancellationToken = default) => Task.FromResult(new SafeConflictMergePreview { ConflictId = conflictId, SelectedPolicy = policy, CanApply = true });
-        public Task<SafeConflictMergeResult> ApplyConflictMergePolicyAsync(string conflictId, SafeConflictMergePolicy policy, bool explicitConfirmation, CancellationToken cancellationToken = default) => Task.FromResult(new SafeConflictMergeResult { ConflictId = conflictId, Policy = policy, Applied = explicitConfirmation, SyncResult = SafeSyncResult.Success(SafeSyncStatus.Ready) });
+        public Task<SafeConflictMergePreview> GetConflictMergePreviewAsync(string conflictId, SafeConflictMergePolicy policy, CancellationToken cancellationToken = default) => Task.FromResult(new SafeConflictMergePreview { ConflictId = conflictId, SelectedPolicy = policy, EffectivePolicy = policy, CanApply = true });
+        public Task<SafeConflictMergeResult> ApplyConflictMergePolicyAsync(string conflictId, SafeConflictMergePolicy policy, bool explicitConfirmation, CancellationToken cancellationToken = default)
+        {
+            if (explicitConfirmation)
+            {
+                MergeApplyCount += 1;
+            }
+
+            return Task.FromResult(new SafeConflictMergeResult { ConflictId = conflictId, Policy = policy, Applied = explicitConfirmation, SyncResult = SafeSyncResult.Success(SafeSyncStatus.Ready) });
+        }
         public Task<SafeConflictAuditSummary> GetConflictAuditHistoryAsync(CancellationToken cancellationToken = default) => Task.FromResult(ConflictAuditSummary);
-        public Task<SafeSyncResult> ClearResolvedConflictAuditHistoryAsync(bool explicitConfirmation, CancellationToken cancellationToken = default) => Task.FromResult(SafeSyncResult.Success(SafeSyncStatus.Ready));
+        public Task<SafeSyncResult> ClearResolvedConflictAuditHistoryAsync(bool explicitConfirmation, CancellationToken cancellationToken = default)
+        {
+            if (explicitConfirmation)
+            {
+                ClearAuditCount += 1;
+            }
+
+            return Task.FromResult(SafeSyncResult.Success(SafeSyncStatus.Ready));
+        }
 
         public Task<SafeSyncResult> DeleteRemoteSessionAsync(string serverSessionId, CancellationToken cancellationToken = default)
         {

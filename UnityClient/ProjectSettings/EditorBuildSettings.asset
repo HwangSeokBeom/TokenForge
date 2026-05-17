@@ -6,6 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/_Project/Scenes/TokenForgeMain.unity
+    guid: a5c371a15bb664eca9c5c390c76cbbcc
+  - enabled: 1
     path: Assets/_Project/Scenes/Bootstrap.unity
     guid: bd2be3841dd2d4628b6c299a368767a4
   m_configObjects: {}

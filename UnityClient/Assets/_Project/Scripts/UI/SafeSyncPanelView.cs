@@ -35,6 +35,7 @@ namespace TokenForge.Client.UI
         [SerializeField] public Dropdown conflictsDropdown;
         [SerializeField] public Button keepLocalButton;
         [SerializeField] public Button keepRemoteButton;
+        [SerializeField] public Button applyMergePolicyButton;
         [SerializeField] public Button markConflictResolvedButton;
         [SerializeField] public Button clearConflictAuditButton;
         [SerializeField] public Button cancelConflictResolutionButton;
@@ -53,6 +54,7 @@ namespace TokenForge.Client.UI
             base.Bind(viewModel, requestRender);
             this.viewModel = viewModel;
             EnsureConfirmationPanel();
+            EnsureMergePolicyButton();
 
             ReplaceClick(healthButton, () =>
             {
@@ -84,6 +86,10 @@ namespace TokenForge.Client.UI
             ReplaceClick(clearResolvedTombstonesButton, () => BeginConfirmation(() => this.viewModel.BeginCancelTombstoneBatchConfirmation(token => this.viewModel.ClearResolvedTombstonesAsync(token))));
             ReplaceClick(keepLocalButton, () => BeginConfirmation(() => this.viewModel.BeginKeepLocalConflictConfirmation(SelectedConflictId())));
             ReplaceClick(keepRemoteButton, () => BeginConfirmation(() => this.viewModel.BeginKeepRemoteConflictConfirmation(SelectedConflictId())));
+            ReplaceClick(applyMergePolicyButton, () => RunViewModelAction(async () =>
+            {
+                await this.viewModel.BeginApplyConflictMergePolicyConfirmationAsync(SelectedConflictId(), SafeConflictMergePolicy.MergeNonConflictingAggregates);
+            }));
             ReplaceClick(markConflictResolvedButton, () => BeginConfirmation(() => this.viewModel.BeginMarkConflictResolvedConfirmation(SelectedConflictId())));
             ReplaceClick(clearConflictAuditButton, () => BeginConfirmation(() => this.viewModel.BeginClearResolvedConflictAuditHistoryConfirmation()));
             ReplaceClick(cancelConflictResolutionButton, () => RunViewModelAction(() => this.viewModel.CancelConflictResolutionAsync(SelectedConflictId())));
@@ -140,6 +146,7 @@ namespace TokenForge.Client.UI
             SetButton(clearResolvedTombstonesButton, hasService && !busy && viewModel.TombstoneSummary.DeleteResolvedCount + viewModel.TombstoneSummary.DeleteSyncedCount > 0);
             SetButton(keepLocalButton, hasService && !busy && viewModel.ConflictSummary.SafeConflicts.Any(item => item.ResolutionStatus == TokenForge.Client.Sync.SafeSyncConflictResolutionStatus.Unresolved));
             SetButton(keepRemoteButton, hasService && !busy && viewModel.ConflictSummary.SafeConflicts.Any(item => item.ResolutionStatus == TokenForge.Client.Sync.SafeSyncConflictResolutionStatus.Unresolved));
+            SetButton(applyMergePolicyButton, hasService && !busy && viewModel.ConflictSummary.SafeConflicts.Any(item => item.ResolutionStatus == TokenForge.Client.Sync.SafeSyncConflictResolutionStatus.Unresolved));
             SetButton(markConflictResolvedButton, hasService && !busy && viewModel.ConflictSummary.SafeConflicts.Any(item => item.ResolutionStatus == TokenForge.Client.Sync.SafeSyncConflictResolutionStatus.Unresolved));
             SetButton(clearConflictAuditButton, hasService && !busy && viewModel.ConflictAuditSummary.ResolvedCount > 0);
             SetButton(cancelConflictResolutionButton, hasService && !busy && viewModel.ConflictSummary.SafeConflicts.Any(item => item.ResolutionStatus == TokenForge.Client.Sync.SafeSyncConflictResolutionStatus.Unresolved));
@@ -168,13 +175,19 @@ namespace TokenForge.Client.UI
 
             SetText(confirmationTitleLabel, request.Title);
             var typed = request.RequiresTypedConfirmation
-                ? "\nType " + request.TypedConfirmationPhrase + " to confirm."
+                ? "\n" + request.TypedPhrasePrompt
                 : string.Empty;
             SetText(confirmationBodyLabel, request.Body + typed);
             var warnings = request.WarningLines == null || request.WarningLines.Count == 0
                 ? "Warnings: none"
                 : "Warnings:\n" + string.Join("\n", request.WarningLines);
-            SetText(confirmationPreviewLabel, string.Join("\n", request.SafePreviewLines ?? new System.Collections.Generic.List<string>()) + "\n" + warnings);
+            var qaLines = new System.Collections.Generic.List<string>
+            {
+                "Action: " + request.SafeActionLabel,
+                "Expected result: " + request.SafeResultExpectation
+            };
+            qaLines.AddRange(request.SafePreviewLines ?? new System.Collections.Generic.List<string>());
+            SetText(confirmationPreviewLabel, string.Join("\n", qaLines) + "\n" + warnings);
             SetText(ButtonLabel(confirmationConfirmButton), request.ConfirmButtonLabel);
             SetText(ButtonLabel(confirmationCancelButton), request.CancelButtonLabel);
             if (confirmationTypedPhraseInput != null)
@@ -216,6 +229,16 @@ namespace TokenForge.Client.UI
             confirmationConfirmButton = RuntimeButton("Confirm", row.transform);
             confirmationCancelButton = RuntimeButton("Cancel", row.transform);
             confirmationPanel.SetActive(false);
+        }
+
+        private void EnsureMergePolicyButton()
+        {
+            if (applyMergePolicyButton != null)
+            {
+                return;
+            }
+
+            applyMergePolicyButton = RuntimeButton("Apply Merge", transform);
         }
 
         private Text RuntimeText(string name, Transform parent, int size, FontStyle style, float minHeight)

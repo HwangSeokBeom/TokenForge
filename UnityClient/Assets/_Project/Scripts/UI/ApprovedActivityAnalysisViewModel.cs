@@ -927,10 +927,14 @@ namespace TokenForge.Client.UI
 
         public SafeSyncConfirmationResult CancelSafeSyncConfirmation()
         {
+            var request = PendingSafeSyncConfirmation;
             var result = SafeSyncConfirmationRequestFactory.Cancel(PendingSafeSyncConfirmation);
             PendingSafeSyncConfirmation = null;
             pendingSafeSyncConfirmationAction = null;
             SafeSyncConfirmationTypedPhrase = string.Empty;
+            SafeSyncStatus = SafeSyncStatus.Ready;
+            SafeSyncErrorCode = string.Empty;
+            SafeSyncMessage = request?.CancelResultMessage ?? "Safe Sync action canceled. No changes were applied.";
             return result;
         }
 
@@ -940,19 +944,29 @@ namespace TokenForge.Client.UI
             var action = pendingSafeSyncConfirmationAction;
             if (request == null || action == null)
             {
-                return SetSafeSyncResult(SafeSyncResult.Failure(SafeSyncStatus.Ready, SafeSyncApiError.MergePolicyConfirmationRequired, "Open a confirmation before applying this Safe Sync action."));
+                var stale = SetSafeSyncResult(SafeSyncResult.Failure(SafeSyncStatus.Ready, SafeSyncApiError.MergePolicyConfirmationRequired, "Safe Sync state changed. Review the latest safe summary before trying again."));
+                SafeSyncMessage = request?.StaleStateMessage ?? "Safe Sync state changed. Review the latest safe summary before trying again.";
+                return stale;
             }
 
             var result = SafeSyncConfirmationRequestFactory.Confirm(request, string.IsNullOrWhiteSpace(typedPhrase) ? SafeSyncConfirmationTypedPhrase : typedPhrase);
             if (!result.Confirmed)
             {
-                return SetSafeSyncResult(SafeSyncResult.Failure(SafeSyncStatus.Ready, SafeSyncApiError.MergePolicyConfirmationRequired, "Typed confirmation did not match."));
+                var failed = SetSafeSyncResult(SafeSyncResult.Failure(SafeSyncStatus.Ready, SafeSyncApiError.MergePolicyConfirmationRequired, request.ValidationErrorMessage));
+                SafeSyncMessage = request.ValidationErrorMessage;
+                return failed;
             }
 
             PendingSafeSyncConfirmation = null;
             pendingSafeSyncConfirmationAction = null;
             SafeSyncConfirmationTypedPhrase = string.Empty;
-            return await action(cancellationToken);
+            var syncResult = await action(cancellationToken);
+            if (syncResult != null)
+            {
+                SafeSyncMessage = syncResult.IsSuccess ? request.SuccessResultMessage : request.FailureResultMessage;
+            }
+
+            return syncResult;
         }
 
         public async Task<SafeSyncResult> CancelRetryEntryAsync(string queueEntryId, CancellationToken cancellationToken = default)

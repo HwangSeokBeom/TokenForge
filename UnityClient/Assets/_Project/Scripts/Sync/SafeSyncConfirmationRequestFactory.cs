@@ -28,7 +28,7 @@ namespace TokenForge.Client.Sync
             request.SafePreviewLines.Add("Selected policy: " + PolicyLabel(preview.SelectedPolicy));
             request.SafePreviewLines.Add("Effective policy: " + policyLabel);
             request.SafePreviewLines.Add("Changed safe fields: " + SafeList(preview.DiffSummary?.ChangedSafeFieldNames, "none"));
-            request.SafePreviewLines.Add("Expected result: " + MergeExpectation(preview.EffectivePolicy));
+            SetExpectation(request, MergeExpectation(preview.EffectivePolicy));
             AddWarnings(request, preview.Warnings);
             return SafeOrBlocked(request);
         }
@@ -38,7 +38,7 @@ namespace TokenForge.Client.Sync
             var request = Base(actionType, ConflictTitle(actionType), ConflictBody(actionType), "Confirm", RiskFor(actionType), PhraseFor(actionType));
             request.SafePreviewLines.Add("Conflict: " + SafeConflictKind(conflict));
             request.SafePreviewLines.Add("Changed safe fields: " + SafeList(conflict?.SafeDiffSummary?.ChangedSafeFieldNames, "none"));
-            request.SafePreviewLines.Add("Expected result: " + ConflictExpectation(actionType));
+            SetExpectation(request, ConflictExpectation(actionType));
             if ((conflict?.SafeLocalSummary?.WarningCount ?? 0) > 0 || (conflict?.SafeRemoteSummary?.WarningCount ?? 0) > 0)
             {
                 request.WarningLines.Add("Warning count: local " + (conflict?.SafeLocalSummary?.WarningCount ?? 0) + " | remote " + (conflict?.SafeRemoteSummary?.WarningCount ?? 0));
@@ -57,7 +57,7 @@ namespace TokenForge.Client.Sync
                 request.SafePreviewLines.Add("Safe status: " + SafeCode(selectedEntry.LastSafeErrorCode));
             }
 
-            request.SafePreviewLines.Add("Expected result: " + RetryExpectation(actionType));
+            SetExpectation(request, RetryExpectation(actionType));
             return SafeOrBlocked(request);
         }
 
@@ -72,7 +72,7 @@ namespace TokenForge.Client.Sync
                 request.SafePreviewLines.Add("Safe status: " + SafeCode(selectedTombstone.LastSafeErrorCode));
             }
 
-            request.SafePreviewLines.Add("Expected result: " + TombstoneExpectation(actionType));
+            SetExpectation(request, TombstoneExpectation(actionType));
             return SafeOrBlocked(request);
         }
 
@@ -88,7 +88,7 @@ namespace TokenForge.Client.Sync
                 "CLEAR HISTORY");
             request.SafePreviewLines.Add("Resolved audit entries: " + summary.ResolvedCount);
             request.SafePreviewLines.Add("Retention cap: latest 200 local-only entries.");
-            request.SafePreviewLines.Add("Expected result: resolved conflict audit entries are removed from local-only history.");
+            SetExpectation(request, "resolved conflict audit entries are removed from local-only history.");
             return SafeOrBlocked(request);
         }
 
@@ -136,9 +136,17 @@ namespace TokenForge.Client.Sync
                 {
                     request.Title,
                     request.Body,
+                    request.SafeActionLabel,
+                    request.SafeResultExpectation,
                     request.ConfirmButtonLabel,
                     request.CancelButtonLabel,
-                    request.TypedConfirmationPhrase
+                    request.TypedConfirmationPhrase,
+                    request.TypedPhrasePrompt,
+                    request.ValidationErrorMessage,
+                    request.CancelResultMessage,
+                    request.StaleStateMessage,
+                    request.SuccessResultMessage,
+                    request.FailureResultMessage
                 }
                 .Concat(request.SafePreviewLines ?? new List<string>())
                 .Concat(request.WarningLines ?? new List<string>())
@@ -173,12 +181,25 @@ namespace TokenForge.Client.Sync
                 ActionType = actionType,
                 Title = title,
                 Body = body,
+                SafeActionLabel = ActionLabel(actionType),
                 ConfirmButtonLabel = confirmLabel,
                 CancelButtonLabel = "Cancel",
                 RiskLevel = riskLevel,
                 RequiresTypedConfirmation = riskLevel == SafeSyncConfirmationRiskLevel.High,
-                TypedConfirmationPhrase = riskLevel == SafeSyncConfirmationRiskLevel.High ? phrase : string.Empty
+                TypedConfirmationPhrase = riskLevel == SafeSyncConfirmationRiskLevel.High ? phrase : string.Empty,
+                TypedPhrasePrompt = riskLevel == SafeSyncConfirmationRiskLevel.High ? "Type " + phrase + " to confirm." : string.Empty,
+                ValidationErrorMessage = "Typed confirmation did not match. No Safe Sync action was applied.",
+                CancelResultMessage = "Safe Sync action canceled. No changes were applied.",
+                StaleStateMessage = "Safe Sync state changed. Review the latest safe summary before trying again.",
+                SuccessResultMessage = "Safe Sync action completed. Review the updated safe summary.",
+                FailureResultMessage = "Safe Sync action did not complete. Review the safe status message."
             };
+        }
+
+        private static void SetExpectation(SafeSyncConfirmationRequest request, string expectation)
+        {
+            request.SafeResultExpectation = expectation;
+            request.SafePreviewLines.Add("Expected result: " + expectation);
         }
 
         private static SafeSyncConfirmationRequest SafeOrBlocked(SafeSyncConfirmationRequest request)
@@ -264,6 +285,35 @@ namespace TokenForge.Client.Sync
                     return "CLEAR HISTORY";
                 default:
                     return string.Empty;
+            }
+        }
+
+        private static string ActionLabel(SafeSyncConfirmationActionType actionType)
+        {
+            switch (actionType)
+            {
+                case SafeSyncConfirmationActionType.ApplyConflictMergePolicy:
+                    return "applyMergePolicy";
+                case SafeSyncConfirmationActionType.ForceRetry:
+                    return "forceRetry";
+                case SafeSyncConfirmationActionType.ProcessRetryBatch:
+                    return "processRetryBatch";
+                case SafeSyncConfirmationActionType.CancelRetryBatch:
+                    return "updateRetryBatch";
+                case SafeSyncConfirmationActionType.ProcessTombstoneBatch:
+                    return "processDeleteTombstones";
+                case SafeSyncConfirmationActionType.CancelTombstoneBatch:
+                    return "updateDeleteTombstones";
+                case SafeSyncConfirmationActionType.ClearResolvedAuditHistory:
+                    return "clearResolvedConflictAuditHistory";
+                case SafeSyncConfirmationActionType.MarkConflictResolved:
+                    return "markConflictResolved";
+                case SafeSyncConfirmationActionType.KeepLocal:
+                    return "keepLocal";
+                case SafeSyncConfirmationActionType.KeepRemote:
+                    return "keepRemote";
+                default:
+                    return "safeSyncAction";
             }
         }
 
