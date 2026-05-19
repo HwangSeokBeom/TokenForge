@@ -15,7 +15,14 @@ namespace TokenForge.Client.Editor
 
         static TokenForgeStartupSceneSettings()
         {
-            EditorApplication.delayCall += ConfigureEditorPlayModeStartScene;
+            if (IsCommandLineTestRun())
+            {
+                EditorApplication.delayCall += ClearEditorPlayModeStartSceneForCommandLineTests;
+            }
+            else
+            {
+                EditorApplication.delayCall += ConfigureEditorPlayModeStartScene;
+            }
         }
 
         public static void ConfigureEditorPlayModeStartScene()
@@ -30,6 +37,27 @@ namespace TokenForge.Client.Editor
             {
                 EditorSceneManager.playModeStartScene = sceneAsset;
             }
+        }
+
+        private static void ClearEditorPlayModeStartSceneForCommandLineTests()
+        {
+            if (EditorSceneManager.playModeStartScene != null)
+            {
+                EditorSceneManager.playModeStartScene = null;
+            }
+        }
+
+        private static bool IsCommandLineTestRun()
+        {
+            foreach (var argument in System.Environment.GetCommandLineArgs())
+            {
+                if (string.Equals(argument, "-runTests", System.StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         public static void EnsureStartupSceneIsFirstInBuildSettings()

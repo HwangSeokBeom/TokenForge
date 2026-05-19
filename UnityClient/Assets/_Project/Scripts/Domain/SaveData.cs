@@ -99,6 +99,8 @@ namespace TokenForge.Client.Domain
         public int SchemaVersion { get; set; } = CurrentSchemaVersion;
         public int SaveVersion { get; set; } = CurrentSaveVersion;
         public CharacterProfile CharacterProfile { get; set; } = new CharacterProfile();
+        public CompanionState CompanionState { get; set; } = CompanionState.CreateDefault();
+        public DesktopCompanionSettings DesktopCompanionSettings { get; set; } = DesktopCompanionSettings.CreateDefault();
         public List<AgentWorkSession> WorkSessionSummaries { get; set; } = new List<AgentWorkSession>();
         public List<CharacterGrowthResult> GrowthHistory { get; set; } = new List<CharacterGrowthResult>();
         public List<ConnectedProject> ConnectedProjects { get; set; } = new List<ConnectedProject>();

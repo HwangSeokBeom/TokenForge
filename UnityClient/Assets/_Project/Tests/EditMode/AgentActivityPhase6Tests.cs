@@ -35,7 +35,7 @@ namespace TokenForge.Client.Tests
         {
             var summary = ParseClaudeSample();
 
-            Assert.AreEqual(AgentProviderType.Claude, summary.ProviderType);
+            Assert.AreEqual(AgentProviderType.ClaudeCode, summary.ProviderType);
             Assert.AreEqual("2026-05-14", summary.DayBucket);
             Assert.AreEqual(CountBucket.One, summary.SessionCountBucket);
             Assert.AreEqual(CountBucket.Medium, summary.InteractionCountBucket);
@@ -97,7 +97,7 @@ namespace TokenForge.Client.Tests
             AssertNoRawAgentData(payload);
             Assert.AreEqual("AI_AGENT", session.SourceProvider);
             Assert.AreEqual("AI_AGENT", payload.SessionSummary.Sessions[0].SourceProvider);
-            Assert.AreEqual(AgentProviderType.Claude, payload.SessionSummary.Sessions[0].AgentProviderType);
+            Assert.AreEqual(AgentProviderType.ClaudeCode, payload.SessionSummary.Sessions[0].AgentProviderType);
             Assert.IsTrue(new PrivacySanitizer().ValidateSafeSaveData(saveData).IsSuccess);
             Assert.IsTrue(new SyncPayloadSanitizer().ValidatePayload(payload).IsSafe);
         }
@@ -128,7 +128,7 @@ namespace TokenForge.Client.Tests
                     SourceProvider = "AI_AGENT",
                     AgentActivitySummary = new AgentActivitySummary
                     {
-                        ProviderType = AgentProviderType.Claude,
+                        ProviderType = AgentProviderType.ClaudeCode,
                         SourceIdentifierHash = "safehash",
                         DayBucket = "2026-05-14",
                         WarningIds = { value }
@@ -225,14 +225,14 @@ namespace TokenForge.Client.Tests
             var fixture = CreateAgentFlowFixture();
 
             var saveBeforeReview = RunAsync(() => fixture.Controller.SaveSessionAsync(CancellationToken.None));
-            fixture.Controller.SelectApprovedLogLocation(Input(AgentProviderType.Claude));
+            fixture.Controller.SelectApprovedLogLocation(Input(AgentProviderType.ClaudeCode));
             var review = RunAsync(() => fixture.Controller.AnalyzeAsync(CancellationToken.None));
             var syncBeforeSave = RunAsync(() => fixture.Controller.SyncNowAsync(CancellationToken.None));
             var save = RunAsync(() => fixture.Controller.SaveSessionAsync(CancellationToken.None));
             var sync = RunAsync(() => fixture.Controller.SyncNowAsync(CancellationToken.None));
 
             Assert.IsFalse(saveBeforeReview.IsSuccess);
-            Assert.IsTrue(review.IsSuccess, review.ErrorMessage);
+            Assert.IsTrue(review.IsSuccess, review.ErrorMessage + " " + review.ErrorCode + " " + fixture.Controller.ErrorCategory);
             Assert.IsFalse(syncBeforeSave.IsSuccess);
             Assert.AreEqual("sync_requires_saved_session", syncBeforeSave.ErrorCode);
             Assert.IsTrue(save.IsSuccess, save.ErrorMessage);
@@ -252,7 +252,7 @@ namespace TokenForge.Client.Tests
                 null,
                 new PrivacySanitizer());
 
-            controller.SelectApprovedLogLocation(Input(AgentProviderType.Claude));
+            controller.SelectApprovedLogLocation(Input(AgentProviderType.ClaudeCode));
             var review = RunAsync(() => controller.AnalyzeAsync(CancellationToken.None));
             var save = RunAsync(() => controller.SaveSessionAsync(CancellationToken.None));
             var json = File.ReadAllText(repository.SaveFilePath);
@@ -286,7 +286,7 @@ namespace TokenForge.Client.Tests
 
         private static AgentActivitySummary ParseClaudeSample()
         {
-            var result = new ClaudeAgentLogParser().Parse(Input(AgentProviderType.Claude), ClaudeSampleEntries());
+            var result = new ClaudeAgentLogParser().Parse(Input(AgentProviderType.ClaudeCode), ClaudeSampleEntries());
             Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
             return result.Value;
         }

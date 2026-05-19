@@ -861,9 +861,19 @@ namespace TokenForge.Client.Sync
                 return "CODEX";
             }
 
+            if (normalized.IndexOf("CURSOR", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "CURSOR";
+            }
+
             if (normalized.IndexOf("CLAUDE", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 return "CLAUDE";
+            }
+
+            if (normalized.IndexOf("COPILOT", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "GITHUB_COPILOT";
             }
 
             if (normalized.IndexOf("GIT", StringComparison.OrdinalIgnoreCase) >= 0)

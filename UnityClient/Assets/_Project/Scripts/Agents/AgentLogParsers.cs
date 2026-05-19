@@ -13,7 +13,14 @@ namespace TokenForge.Client.Agents
     public sealed class ClaudeAgentLogParser : SafeAgentLogParser
     {
         public const string Version = "claude-agent-parser-v1";
-        public override AgentProviderType ProviderType => AgentProviderType.Claude;
+        public override AgentProviderType ProviderType => AgentProviderType.ClaudeCode;
+        public override string ParserVersion => Version;
+    }
+
+    public sealed class CursorAgentLogParser : SafeAgentLogParser
+    {
+        public const string Version = "cursor-agent-parser-v1";
+        public override AgentProviderType ProviderType => AgentProviderType.Cursor;
         public override string ParserVersion => Version;
     }
 
@@ -21,6 +28,20 @@ namespace TokenForge.Client.Agents
     {
         public const string Version = "codex-agent-parser-v1";
         public override AgentProviderType ProviderType => AgentProviderType.Codex;
+        public override string ParserVersion => Version;
+    }
+
+    public sealed class GitHubCopilotAgentLogParser : SafeAgentLogParser
+    {
+        public const string Version = "github-copilot-agent-parser-v1";
+        public override AgentProviderType ProviderType => AgentProviderType.GitHubCopilot;
+        public override string ParserVersion => Version;
+    }
+
+    public sealed class ManualAgentLogParser : SafeAgentLogParser
+    {
+        public const string Version = "manual-agent-parser-v1";
+        public override AgentProviderType ProviderType => AgentProviderType.Manual;
         public override string ParserVersion => Version;
     }
 
@@ -115,8 +136,11 @@ namespace TokenForge.Client.Agents
             var summary = new AgentActivitySummary
             {
                 ProviderType = ProviderType,
+                SourceKind = input.SourceKind == AgentSourceKind.Unknown ? AgentSourceKind.ManualFolder : input.SourceKind,
+                SafeSourceAlias = SafeAlias(input.SafeSourceAlias, ProviderType),
                 SourceIdentifierHash = SafeHashUtility.ComputeProjectPathHash(input.SelectedLocationPath, "TokenForge.AgentLogSource.v1"),
                 DayBucket = SelectDayBucket(dayCounts),
+                FileCountBucket = SafeAgentLogParser.ToCountBucket(entries.Select(entry => entry?.LastWriteTimeUtc?.UtcDateTime.Ticks ?? 0).Distinct().Count()),
                 SessionCountBucket = ToCountBucket(Math.Max(sessionKeys.Count, entries.Count > 0 ? 1 : 0)),
                 InteractionCountBucket = ToCountBucket(interactionCount),
                 EstimatedCodingActivityBucket = ToCountBucket(toolCounts.Where(item => item.Key != AgentToolUsageCategory.Unknown).Sum(item => item.Value)),
@@ -253,13 +277,34 @@ namespace TokenForge.Client.Agents
         {
             switch (ProviderType)
             {
+                case AgentProviderType.Cursor:
+                    return text.IndexOf("cursor", StringComparison.OrdinalIgnoreCase) >= 0;
                 case AgentProviderType.Claude:
+                case AgentProviderType.ClaudeCode:
                     return text.IndexOf("claude", StringComparison.OrdinalIgnoreCase) >= 0;
                 case AgentProviderType.Codex:
                     return text.IndexOf("codex", StringComparison.OrdinalIgnoreCase) >= 0;
+                case AgentProviderType.GitHubCopilot:
+                    return text.IndexOf("copilot", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                           text.IndexOf("github", StringComparison.OrdinalIgnoreCase) >= 0;
                 default:
                     return false;
             }
+        }
+
+        private static string SafeAlias(string alias, AgentProviderType providerType)
+        {
+            var safe = string.IsNullOrWhiteSpace(alias)
+                ? MacAgentSourceDetector.SafeProviderLabel(providerType) + " local source"
+                : alias.Trim();
+            if (safe.Length > 80)
+            {
+                safe = safe.Substring(0, 80);
+            }
+
+            return safe.IndexOf("/", StringComparison.Ordinal) >= 0 || safe.IndexOf("\\", StringComparison.Ordinal) >= 0
+                ? MacAgentSourceDetector.SafeProviderLabel(providerType) + " local source"
+                : safe;
         }
 
         private static bool TryParseJson(string text, out JToken json)

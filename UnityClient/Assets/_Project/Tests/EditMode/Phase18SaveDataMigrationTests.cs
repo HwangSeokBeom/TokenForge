@@ -41,6 +41,10 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(SaveData.CurrentSchemaVersion, loaded.SchemaVersion);
             Assert.AreEqual(SaveData.CurrentSaveVersion, loaded.SaveVersion);
             Assert.AreEqual(42, loaded.CharacterProfile.TotalExp);
+            Assert.AreEqual(CompanionStage.Egg, loaded.CompanionState.Stage);
+            Assert.IsNotNull(loaded.DesktopCompanionSettings);
+            Assert.IsFalse(loaded.DesktopCompanionSettings.IsDesktopCompanionEnabled);
+            Assert.IsTrue(loaded.DesktopCompanionSettings.IsClickThroughEnabled);
             Assert.IsFalse(File.Exists(repository.CorruptFilePath));
         }
 
@@ -56,6 +60,8 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(SaveData.CurrentSaveVersion, loaded.SaveVersion);
             Assert.AreEqual(2, loaded.CharacterProfile.Level);
             Assert.IsNotNull(loaded.WorkSessionSummaries);
+            Assert.AreEqual(CompanionStage.Egg, loaded.CompanionState.Stage);
+            Assert.IsFalse(loaded.DesktopCompanionSettings.IsDesktopCompanionEnabled);
         }
 
         [Test]

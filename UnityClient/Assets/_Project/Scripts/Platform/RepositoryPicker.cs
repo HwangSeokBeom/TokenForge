@@ -1,6 +1,11 @@
 using System.Threading;
 using System.Threading.Tasks;
 
+#if UNITY_STANDALONE_OSX && !UNITY_EDITOR
+using System.Diagnostics;
+using System.Text;
+#endif
+
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -106,6 +111,11 @@ namespace TokenForge.Client.Platform
             return Task.FromResult(string.IsNullOrWhiteSpace(selectedPath)
                 ? RepositoryPickerResult.Cancelled()
                 : RepositoryPickerResult.Selected(selectedPath));
+#elif UNITY_STANDALONE_OSX
+            var selectedPath = MacOSFolderDialog.PickFolder("Select Git Repository");
+            return Task.FromResult(string.IsNullOrWhiteSpace(selectedPath)
+                ? RepositoryPickerResult.Cancelled()
+                : RepositoryPickerResult.Selected(selectedPath));
 #else
             return Task.FromResult(RepositoryPickerResult.Unavailable());
 #endif
@@ -141,9 +151,77 @@ namespace TokenForge.Client.Platform
             return Task.FromResult(string.IsNullOrWhiteSpace(selectedPath)
                 ? AgentLogLocationPickerResult.Cancelled()
                 : AgentLogLocationPickerResult.Selected(selectedPath));
+#elif UNITY_STANDALONE_OSX
+            var selectedPath = MacOSFolderDialog.PickFolder("Select AI Agent Log Folder");
+            return Task.FromResult(string.IsNullOrWhiteSpace(selectedPath)
+                ? AgentLogLocationPickerResult.Cancelled()
+                : AgentLogLocationPickerResult.Selected(selectedPath));
 #else
             return Task.FromResult(AgentLogLocationPickerResult.Unavailable());
 #endif
         }
     }
+
+#if UNITY_STANDALONE_OSX && !UNITY_EDITOR
+    internal static class MacOSFolderDialog
+    {
+        public static string PickFolder(string prompt)
+        {
+            try
+            {
+                var script = "POSIX path of (choose folder with prompt " + Quote(prompt) + ")";
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = "/usr/bin/osascript",
+                    Arguments = "-e " + Quote(script),
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    StandardOutputEncoding = Encoding.UTF8,
+                    StandardErrorEncoding = Encoding.UTF8,
+                    CreateNoWindow = true
+                };
+
+                using (var process = Process.Start(startInfo))
+                {
+                    if (process == null)
+                    {
+                        return string.Empty;
+                    }
+
+                    var output = process.StandardOutput.ReadToEnd();
+                    if (!process.WaitForExit(120000))
+                    {
+                        try
+                        {
+                            process.Kill();
+                        }
+                        catch
+                        {
+                            // Best effort cleanup; selection simply fails closed.
+                        }
+
+                        return string.Empty;
+                    }
+
+                    if (process.ExitCode != 0)
+                    {
+                        return string.Empty;
+                    }
+
+                    return (output ?? string.Empty).Trim();
+                }
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string Quote(string value)
+        {
+            return "\"" + (value ?? string.Empty).Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+        }
+    }
+#endif
 }

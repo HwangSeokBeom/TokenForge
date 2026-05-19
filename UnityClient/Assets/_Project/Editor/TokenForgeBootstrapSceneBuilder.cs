@@ -13,29 +13,81 @@ namespace TokenForge.Client.Editor
     public static class TokenForgeBootstrapSceneBuilder
     {
         private const string BootstrapScenePath = TokenForgeStartupSceneSettings.StartupScenePath;
+        private const string HierarchyLogPrefix = "[TokenForgeHierarchy]";
+        private static readonly Vector2 ReferenceResolution = new Vector2(1280f, 720f);
+        private static bool rebuildPendingAfterPlayMode;
 
         [MenuItem("Tools/TokenForge/Rebuild Startup Scene")]
         public static void BuildMainScene()
         {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                Debug.Log("INFO " + HierarchyLogPrefix + " stopping Play Mode before rebuilding startup scene.");
+                if (!rebuildPendingAfterPlayMode)
+                {
+                    rebuildPendingAfterPlayMode = true;
+                    EditorApplication.update += BuildMainSceneAfterPlayModeStops;
+                }
+
+                EditorApplication.isPlaying = false;
+                return;
+            }
+
             Phase14UiPrefabBuilder.BuildPrefabs();
-            var scene = File.Exists(BootstrapScenePath)
-                ? EditorSceneManager.OpenScene(BootstrapScenePath, OpenSceneMode.Single)
-                : EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            EnsureSceneFolder();
+            var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            if (File.Exists(BootstrapScenePath))
+            {
+                AssetDatabase.DeleteAsset(BootstrapScenePath);
+                Debug.Log("INFO " + HierarchyLogPrefix + " deleted stale startup scene asset path=" + BootstrapScenePath);
+            }
 
             EnsureCamera();
-            EnsureLight();
             EnsureEventSystem();
             var rootView = EnsureCanvasAndRootPanel();
             EnsureBootstrapper(rootView);
 
             EditorSceneManager.MarkSceneDirty(scene);
-            EditorSceneManager.SaveScene(scene, BootstrapScenePath);
+            if (!EditorSceneManager.SaveScene(scene, BootstrapScenePath))
+            {
+                Debug.LogError("ERROR " + HierarchyLogPrefix + " failed to save startup scene path=" + BootstrapScenePath);
+                return;
+            }
+
             AssetDatabase.ImportAsset(BootstrapScenePath);
             TokenForgeStartupSceneSettings.EnsureStartupSceneIsFirstInBuildSettings();
             TokenForgeStartupSceneSettings.ConfigureEditorPlayModeStartScene();
 
             AssetDatabase.SaveAssets();
-            Debug.Log("TokenForge startup scene rebuilt: " + BootstrapScenePath);
+            AssetDatabase.Refresh();
+            var reopenedScene = EditorSceneManager.OpenScene(BootstrapScenePath, OpenSceneMode.Single);
+            VerifySavedSceneHierarchy(reopenedScene);
+            Debug.Log("INFO " + HierarchyLogPrefix + " startup scene rebuilt and saved path=" + BootstrapScenePath);
+        }
+
+        private static void BuildMainSceneAfterPlayModeStops()
+        {
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                return;
+            }
+
+            EditorApplication.update -= BuildMainSceneAfterPlayModeStops;
+            rebuildPendingAfterPlayMode = false;
+            BuildMainScene();
+        }
+
+        private static void EnsureSceneFolder()
+        {
+            if (!AssetDatabase.IsValidFolder("Assets/_Project"))
+            {
+                AssetDatabase.CreateFolder("Assets", "_Project");
+            }
+
+            if (!AssetDatabase.IsValidFolder("Assets/_Project/Scenes"))
+            {
+                AssetDatabase.CreateFolder("Assets/_Project", "Scenes");
+            }
         }
 
         private static void EnsureCamera()
@@ -62,20 +114,6 @@ namespace TokenForge.Client.Editor
                     Object.DestroyImmediate(component);
                 }
             }
-        }
-
-        private static void EnsureLight()
-        {
-            if (GameObject.Find("Directional Light") != null)
-            {
-                return;
-            }
-
-            var lightObject = new GameObject("Directional Light", typeof(Light));
-            var light = lightObject.GetComponent<Light>();
-            light.type = LightType.Directional;
-            light.intensity = 1f;
-            lightObject.transform.rotation = Quaternion.Euler(50f, -30f, 0f);
         }
 
         private static void EnsureEventSystem()
@@ -112,6 +150,9 @@ namespace TokenForge.Client.Editor
             var canvasRect = canvasObject.GetComponent<RectTransform>();
             if (canvasRect != null)
             {
+                canvasRect.anchorMin = Vector2.zero;
+                canvasRect.anchorMax = Vector2.zero;
+                canvasRect.anchoredPosition = Vector2.zero;
                 canvasRect.sizeDelta = new Vector2(1920f, 1080f);
                 canvasRect.pivot = new Vector2(0.5f, 0.5f);
             }
@@ -127,6 +168,8 @@ namespace TokenForge.Client.Editor
             canvas.pixelPerfect = false;
             canvas.enabled = true;
             canvas.targetDisplay = 0;
+            canvas.overrideSorting = false;
+            canvas.sortingOrder = 0;
 
             var scaler = canvasObject.GetComponent<CanvasScaler>();
             if (scaler == null)
@@ -135,7 +178,7 @@ namespace TokenForge.Client.Editor
             }
 
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.referenceResolution = ReferenceResolution;
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             scaler.matchWidthOrHeight = 0.5f;
 
@@ -143,6 +186,10 @@ namespace TokenForge.Client.Editor
             {
                 canvasObject.AddComponent<GraphicRaycaster>();
             }
+
+            canvasObject.transform.localPosition = Vector3.zero;
+            canvasObject.transform.localRotation = Quaternion.identity;
+            canvasObject.transform.localScale = Vector3.one;
 
             var legacyScriptUi = canvasObject.transform.Find("Root UI Panel");
             if (legacyScriptUi != null)
@@ -160,6 +207,11 @@ namespace TokenForge.Client.Editor
             var rootObject = prefab != null
                 ? (GameObject)PrefabUtility.InstantiatePrefab(prefab, canvasObject.transform)
                 : new GameObject("BootstrapRoot", typeof(RectTransform), typeof(BootstrapRootView));
+            if (prefab != null)
+            {
+                PrefabUtility.UnpackPrefabInstance(rootObject, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
+            }
+
             rootObject.name = "BootstrapRoot";
             if (rootObject.transform.parent == null)
             {
@@ -206,6 +258,97 @@ namespace TokenForge.Client.Editor
             serialized.FindProperty("runSafeSmokeFlowWhenEmpty").boolValue = false;
             serialized.FindProperty("loadPrefabFromAssetPathInEditor").boolValue = true;
             serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void VerifySavedSceneHierarchy(Scene scene)
+        {
+            Debug.Log("INFO " + HierarchyLogPrefix + " saved scene verification Scene=" + scene.name
+                + " path=" + scene.path
+                + " rootCount=" + scene.rootCount);
+
+            foreach (var rootObject in scene.GetRootGameObjects())
+            {
+                Debug.Log("INFO " + HierarchyLogPrefix + " saved root=" + rootObject.name
+                    + " active=" + rootObject.activeInHierarchy
+                    + " childCount=" + rootObject.transform.childCount
+                    + " scale=" + FormatVector(rootObject.transform.lossyScale));
+            }
+
+            var canvasObject = GameObject.Find("Canvas");
+            var bootstrapperObject = GameObject.Find("AppBootstrapper");
+            var eventSystemObject = GameObject.Find("EventSystem");
+            var cameraObject = GameObject.Find("Main Camera");
+            if (canvasObject == null)
+            {
+                Debug.LogError("ERROR " + HierarchyLogPrefix + " Canvas missing in saved startup scene");
+                return;
+            }
+
+            if (bootstrapperObject == null)
+            {
+                Debug.LogError("ERROR " + HierarchyLogPrefix + " AppBootstrapper missing in saved startup scene");
+            }
+
+            if (eventSystemObject == null)
+            {
+                Debug.LogError("ERROR " + HierarchyLogPrefix + " EventSystem missing in saved startup scene");
+            }
+
+            if (cameraObject == null)
+            {
+                Debug.LogError("ERROR " + HierarchyLogPrefix + " Main Camera missing in saved startup scene");
+            }
+
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Background");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Start Screen Root");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Game Dashboard Root");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Run Analysis Root");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Settings Advanced Root");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Developer Diagnostics Root");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Settings Advanced Root/AccountPanel");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Settings Advanced Root/PrivacyNoticePanel");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Run Analysis Root/Run Analysis Grid/ActivityAnalysisPanel");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Run Analysis Root/Run Analysis Grid/ReviewPanel");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Developer Diagnostics Root/ApprovedLocationsPanel");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Developer Diagnostics Root/RecentSessionsPanel");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Developer Diagnostics Root/SafeSyncPanel");
+        }
+
+        private static void LogSavedPath(Transform canvasTransform, string expectedPath)
+        {
+            var relativePath = expectedPath.StartsWith("Canvas/", System.StringComparison.Ordinal)
+                ? expectedPath.Substring("Canvas/".Length)
+                : expectedPath;
+            var target = canvasTransform != null ? canvasTransform.Find(relativePath) : null;
+            if (target == null)
+            {
+                Debug.LogError("ERROR " + HierarchyLogPrefix + " saved path=" + expectedPath + " missing");
+                return;
+            }
+
+            var rect = target.GetComponent<RectTransform>();
+            Debug.Log("INFO " + HierarchyLogPrefix + " saved path=" + expectedPath
+                + " active=" + target.gameObject.activeInHierarchy
+                + " childCount=" + target.childCount
+                + " scale=" + FormatVector(target.lossyScale)
+                + " worldCorners=" + (rect != null ? FormatWorldCorners(rect) : "<none>"));
+        }
+
+        private static string FormatWorldCorners(RectTransform rectTransform)
+        {
+            var corners = new Vector3[4];
+            rectTransform.GetWorldCorners(corners);
+            return FormatVector(corners[0]) + " " + FormatVector(corners[1]) + " "
+                + FormatVector(corners[2]) + " " + FormatVector(corners[3]);
+        }
+
+        private static string FormatVector(Vector3 value)
+        {
+            return "(" + value.x.ToString("0.##") + "," + value.y.ToString("0.##") + "," + value.z.ToString("0.##") + ")";
         }
     }
 }

@@ -66,13 +66,13 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
-        public void DiscardClearsPendingRawInputAndReviewState()
+        public void ClearSelectionClearsPendingRawInputAndDiscardClearsReviewState()
         {
             var fixture = CreateFixture();
 
             RunAsync(() => fixture.Dashboard.GitFlow.SelectRepositoryAsync(CancellationToken.None));
             Assert.AreEqual(GitAnalysisFlowState.Selected, fixture.Dashboard.GitFlow.State);
-            fixture.Dashboard.DiscardGitReview();
+            fixture.Dashboard.ClearGitForOnboarding();
             var gitAnalyze = RunAsync(() => fixture.Dashboard.GitFlow.AnalyzeAsync(CancellationToken.None));
 
             RunAsync(() => fixture.Dashboard.SelectAgentLogLocationAsync(CancellationToken.None));
@@ -95,12 +95,12 @@ namespace TokenForge.Client.Tests
         public void AgentReview_ShowsOnlySafeAggregateFields()
         {
             var fixture = CreateFixture();
-            fixture.Dashboard.SelectedAgentProviderType = AgentProviderType.Claude;
+            fixture.Dashboard.SelectedAgentProviderType = AgentProviderType.ClaudeCode;
 
             RunAsync(() => fixture.Dashboard.SelectAgentLogLocationAsync(CancellationToken.None));
             var review = RunAsync(() => fixture.Dashboard.AnalyzeAgentActivityAsync(CancellationToken.None)).Value;
 
-            Assert.AreEqual(AgentProviderType.Claude, review.ProviderType);
+            Assert.AreEqual(AgentProviderType.ClaudeCode, review.ProviderType);
             Assert.AreEqual("2026-05-14", review.DayBucket);
             Assert.AreEqual(CountBucket.One, review.SessionCountBucket);
             Assert.AreEqual(ClaudeAgentLogParser.Version, review.AnalyzerVersion);

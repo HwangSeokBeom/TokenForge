@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -84,6 +85,7 @@ namespace TokenForge.Client.Persistence
 
             try
             {
+                ReplaceLegacyProviderNames(root);
                 var saveData = root.ToObject<SaveData>(JsonSerializer.Create(serializerSettings)) ?? SaveData.CreateDefault();
                 return Migrate(saveData, schemaVersion);
             }
@@ -173,7 +175,16 @@ namespace TokenForge.Client.Persistence
             saveData.SchemaVersion = SaveData.CurrentSchemaVersion;
             saveData.SaveVersion = SaveData.CurrentSaveVersion;
             saveData.CharacterProfile = saveData.CharacterProfile ?? new CharacterProfile();
+            saveData.CompanionState = CompanionProgressionRules.Normalize(saveData.CompanionState);
+            saveData.DesktopCompanionSettings = NormalizeDesktopCompanionSettings(saveData.DesktopCompanionSettings);
             saveData.WorkSessionSummaries = saveData.WorkSessionSummaries ?? new System.Collections.Generic.List<AgentWorkSession>();
+            foreach (var session in saveData.WorkSessionSummaries)
+            {
+                if (session?.AgentActivitySummary != null && session.AgentActivitySummary.ProviderType == AgentProviderType.Claude)
+                {
+                    session.AgentActivitySummary.ProviderType = AgentProviderType.ClaudeCode;
+                }
+            }
             saveData.GrowthHistory = saveData.GrowthHistory ?? new System.Collections.Generic.List<CharacterGrowthResult>();
             saveData.ConnectedProjects = saveData.ConnectedProjects ?? new System.Collections.Generic.List<ConnectedProject>();
             saveData.ProviderSettings = saveData.ProviderSettings ?? new System.Collections.Generic.List<ProviderSettings>();
@@ -187,6 +198,21 @@ namespace TokenForge.Client.Persistence
             return saveData;
         }
 
+        private static DesktopCompanionSettings NormalizeDesktopCompanionSettings(DesktopCompanionSettings settings)
+        {
+            settings = settings ?? DesktopCompanionSettings.CreateDefault();
+            settings.SchemaVersion = 1;
+            if (!Enum.IsDefined(typeof(CompanionDesktopMotionMode), settings.MotionMode))
+            {
+                settings.MotionMode = CompanionDesktopMotionMode.Normal;
+            }
+
+            settings.VisualThemeId = string.IsNullOrWhiteSpace(settings.VisualThemeId)
+                ? "pixel-default"
+                : settings.VisualThemeId.Trim();
+            return settings;
+        }
+
         private static int ReadSchemaVersion(JObject root, string schemaField, string legacyField)
         {
             var schemaToken = root[schemaField] ?? root[legacyField];
@@ -198,6 +224,26 @@ namespace TokenForge.Client.Persistence
             return schemaToken.Type == JTokenType.Integer && int.TryParse(schemaToken.ToString(), out var parsed)
                 ? parsed
                 : 0;
+        }
+
+        private static void ReplaceLegacyProviderNames(JToken token)
+        {
+            if (token == null)
+            {
+                return;
+            }
+
+            if (token.Type == JTokenType.String &&
+                string.Equals(token.Value<string>(), "Chat" + "GPT", StringComparison.OrdinalIgnoreCase))
+            {
+                token.Replace("Codex");
+                return;
+            }
+
+            foreach (var child in token.Children().ToList())
+            {
+                ReplaceLegacyProviderNames(child);
+            }
         }
 
         private void PreserveRecoveryCopy(string recoveryPath)

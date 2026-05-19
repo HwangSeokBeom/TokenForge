@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Text;
 using TokenForge.Client.Agents;
+using TokenForge.Client.Auth;
 using TokenForge.Client.Domain;
 using TokenForge.Client.Sync;
 
@@ -17,7 +18,7 @@ namespace TokenForge.Client.UI
             }
 
             var builder = new StringBuilder();
-            builder.Append("State: ");
+            builder.Append("Git: ");
             builder.Append(flow.State);
             builder.Append(" | ");
             builder.Append(flow.SelectionStatus);
@@ -33,6 +34,36 @@ namespace TokenForge.Client.UI
             return builder.ToString();
         }
 
+        public static string FriendlyGitStatus(ApprovedActivityAnalysisViewModel viewModel)
+        {
+            var flow = viewModel?.GitFlow;
+            if (flow == null)
+            {
+                return "Git activity is unavailable.";
+            }
+
+            switch (flow.State)
+            {
+                case GitAnalysisFlowState.Selected:
+                    return "Ready. Repository selected as " + GitSafeAlias(viewModel) + ".";
+                case GitAnalysisFlowState.Analyzing:
+                    return "Analyzing Git activity.";
+                case GitAnalysisFlowState.ReviewReady:
+                    return "Review ready.";
+                case GitAnalysisFlowState.Saved:
+                    return "Saved.";
+                case GitAnalysisFlowState.Failed:
+                    return FriendlyError(flow.ErrorCategory, flow.UserMessage);
+                default:
+                    if (viewModel != null && viewModel.Onboarding.GitSkipped)
+                    {
+                        return "Skipped for now.";
+                    }
+
+                    return "No Git source selected.";
+            }
+        }
+
         public static string AgentStatus(ApprovedActivityAnalysisViewModel viewModel)
         {
             var flow = viewModel?.AgentFlow;
@@ -41,11 +72,9 @@ namespace TokenForge.Client.UI
                 return "Agent analysis is unavailable.";
             }
 
-            var provider = viewModel.SelectedAgentProviderType == AgentProviderType.Unknown
-                ? "Unknown/Auto"
-                : viewModel.SelectedAgentProviderType.ToString();
+            var provider = AgentSourceLabel(viewModel.SelectedAgentProviderType);
             var builder = new StringBuilder();
-            builder.Append("State: ");
+            builder.Append("Agent: ");
             builder.Append(flow.State);
             builder.Append(" | ");
             builder.Append(viewModel.AgentSelectionStatus);
@@ -67,6 +96,178 @@ namespace TokenForge.Client.UI
             }
 
             return builder.ToString();
+        }
+
+        public static string FriendlyAgentStatus(ApprovedActivityAnalysisViewModel viewModel)
+        {
+            var flow = viewModel?.AgentFlow;
+            if (flow == null)
+            {
+                return "AI agent activity is unavailable.";
+            }
+
+            switch (flow.State)
+            {
+                case AgentAnalysisFlowState.Selected:
+                    return "Ready. Manual log folder selected.";
+                case AgentAnalysisFlowState.Analyzing:
+                    return "Analyzing safe local aggregate.";
+                case AgentAnalysisFlowState.ReviewReady:
+                    return "Review ready.";
+                case AgentAnalysisFlowState.Saved:
+                    return "Saved.";
+                case AgentAnalysisFlowState.Failed:
+                    return FriendlyError(flow.ErrorCategory, flow.UserMessage);
+                default:
+                    return SelectedAgentSummary(viewModel);
+            }
+        }
+
+        public static string SelectedAgentSummary(ApprovedActivityAnalysisViewModel viewModel)
+        {
+            var selected = viewModel?.Onboarding.AgentSources
+                .Where(source => source.Selected)
+                .Select(SafeAgentSourceSummary)
+                .ToList();
+            if (selected == null || selected.Count == 0)
+            {
+                return "No local agent source selected yet.";
+            }
+
+            return string.Join(", ", selected);
+        }
+
+        public static string SafeAgentSourceSummary(ConnectedAgentSource source)
+        {
+            if (source == null)
+            {
+                return "Unknown source";
+            }
+
+            if (source.SourceType == ConnectedAgentSourceType.OtherManualLogFolder)
+            {
+                return string.IsNullOrWhiteSpace(source.SafeLabel)
+                    ? "Manual Log Folder: needs review"
+                    : source.SafeLabel;
+            }
+
+            if (source.State == AgentSourceSetupState.ReadyToAnalyze)
+            {
+                return source.DisplayName + " ready to analyze";
+            }
+
+            if (source.State == AgentSourceSetupState.AnalysisComplete)
+            {
+                return source.DisplayName + " analysis complete";
+            }
+
+            if (source.State == AgentSourceSetupState.LocalSourceDetected)
+            {
+                return source.DisplayName + " local source detected";
+            }
+
+            if (source.State == AgentSourceSetupState.ManualImportRequired)
+            {
+                return source.DisplayName + " manual import required";
+            }
+
+            return source.DisplayName + " selected";
+        }
+
+        public static int SelectedAgentCount(ApprovedActivityAnalysisViewModel viewModel)
+        {
+            return viewModel?.Onboarding.AgentSources.Count(source => source.Selected) ?? 0;
+        }
+
+        public static int DetectedLocalSourceCount(ApprovedActivityAnalysisViewModel viewModel)
+        {
+            return viewModel?.Onboarding.AgentSources.Count(source =>
+                source.State == AgentSourceSetupState.ReadyToAnalyze ||
+                source.State == AgentSourceSetupState.AnalysisComplete) ?? 0;
+        }
+
+        public static int ReadyToAnalyzeCount(ApprovedActivityAnalysisViewModel viewModel)
+        {
+            return viewModel?.Onboarding.AgentSources.Count(source => source.State == AgentSourceSetupState.ReadyToAnalyze) ?? 0;
+        }
+
+        public static string LocalSourcesSettings(ApprovedActivityAnalysisViewModel viewModel)
+        {
+            if (viewModel?.Onboarding.AgentSources == null)
+            {
+                return "Local Sources: unavailable.";
+            }
+
+            var rows = viewModel.Onboarding.AgentSources.Select(source =>
+            {
+                var scan = source.LastScanTimeUtc.HasValue
+                    ? " | Last scan " + source.LastScanTimeUtc.Value.UtcDateTime.ToString("yyyy-MM-dd HH:mm")
+                    : string.Empty;
+                return source.DisplayName + ": " + SourceStateLabel(source.State) + scan;
+            });
+            return "Local Sources\n" + string.Join("\n", rows) + "\nClear approved local source: Remove. Re-scan local sources: Detect.";
+        }
+
+        public static string SourceStateLabel(AgentSourceSetupState state)
+        {
+            switch (state)
+            {
+                case AgentSourceSetupState.Selected: return "selected";
+                case AgentSourceSetupState.DetectingLocalSource: return "detecting local source";
+                case AgentSourceSetupState.LocalSourceDetected:
+                case AgentSourceSetupState.ReadyToAnalyze: return "detected";
+                case AgentSourceSetupState.PermissionRequired: return "permission required";
+                case AgentSourceSetupState.ManualImportRequired: return "manual import required";
+                case AgentSourceSetupState.AnalysisComplete: return "analysis complete";
+                case AgentSourceSetupState.AnalysisFailedSafely: return "analysis failed safely";
+                default: return "not detected";
+            }
+        }
+
+        public static string GitSafeAlias(ApprovedActivityAnalysisViewModel viewModel)
+        {
+            if (viewModel == null)
+            {
+                return "No source selected";
+            }
+
+            if (!string.IsNullOrWhiteSpace(viewModel.Onboarding.GitSafeAlias))
+            {
+                return viewModel.Onboarding.GitSafeAlias;
+            }
+
+            return viewModel.GitFlow.State == GitAnalysisFlowState.Selected ? "Local Repository 1" : "No source selected";
+        }
+
+        public static string FriendlyError(string errorCode, string fallbackMessage)
+        {
+            switch (errorCode)
+            {
+                case "missing_repository_selection":
+                    return "Select a repository before analyzing.";
+                case "missing_repository_path":
+                    return "Choose a repository folder first.";
+                case "missing_agent_log_location":
+                    return "Select an agent log folder before analyzing.";
+                case "agent_source_manual_import_required":
+                    return "Detect a local source or choose a manual log folder before analyzing.";
+                case "agent_source_permission_required":
+                    return "Permission is required before local source analysis.";
+                case "agent_log_picker_failed":
+                case "agent_log_picker_unavailable":
+                    return "The log folder picker is unavailable.";
+                case "agent_log_entry_limit_reached":
+                    return "Agent log entry limit reached. Review the safe aggregate summary or increase the entry limit.";
+                case "agent_log_location_unavailable":
+                    return "The selected agent log folder is unavailable.";
+                case "approved_location_not_found":
+                    return "The approved location is no longer available.";
+                case "":
+                case null:
+                    return string.IsNullOrWhiteSpace(fallbackMessage) ? "Something needs attention before continuing." : fallbackMessage;
+                default:
+                    return "Something needs attention before continuing.";
+            }
         }
 
         public static string ReviewSummary(ApprovedActivityAnalysisViewModel viewModel)
@@ -92,8 +293,12 @@ namespace TokenForge.Client.UI
                 builder.Append(review.DeletedLinesBucket);
                 builder.Append(" | confidence ");
                 builder.Append(review.ConfidenceLevel);
-                builder.Append(" | warning IDs ");
-                builder.Append(review.PrivacyWarningCategories.Count == 0 ? "none" : string.Join(", ", review.PrivacyWarningCategories));
+                builder.Append(" | warnings ");
+                builder.Append(review.PrivacyWarningCount);
+                builder.Append(" | XP preview +");
+                builder.Append(review.DerivedExpGained);
+                builder.Append(" | stat preview ");
+                builder.Append(TopStatCategory(review.DerivedStatDeltas));
                 builder.AppendLine();
             }
 
@@ -110,14 +315,18 @@ namespace TokenForge.Client.UI
                 builder.Append(review.InteractionCountBucket);
                 builder.Append(" | confidence ");
                 builder.Append(review.ConfidenceLevel);
-                builder.Append(" | warning IDs ");
-                builder.Append(review.WarningIds.Count == 0 ? "none" : string.Join(", ", review.WarningIds));
+                builder.Append(" | warnings ");
+                builder.Append(review.WarningCount);
+                builder.Append(" | XP preview +");
+                builder.Append(review.DerivedExpGained);
+                builder.Append(" | stat preview ");
+                builder.Append(TopStatCategory(review.DerivedStatDeltas));
                 builder.Append(" | save ");
                 builder.Append(review.SaveEligible ? "eligible" : "blocked");
             }
 
             return builder.Length == 0
-                ? "No review ready. Select an approved location and run analysis to review safe aggregate data before saving."
+                ? "No review yet. Run a local analysis first. Save Review is disabled until a safe aggregate summary is ready."
                 : builder.ToString();
         }
 
@@ -125,7 +334,7 @@ namespace TokenForge.Client.UI
         {
             if (viewModel?.RecentSessions == null || viewModel.RecentSessions.Count == 0)
             {
-                return "Local: no saved safe sessions yet.";
+                return "Local: no saved safe sessions yet. Save an approved aggregate review to gain XP.";
             }
 
             return string.Join("\n", viewModel.RecentSessions.Select(session =>
@@ -143,10 +352,10 @@ namespace TokenForge.Client.UI
 
             if (session.SourceProvider == "AI_AGENT")
             {
-                return $"{session.DayBucket} | AI agent {session.AgentProviderType} | sessions {session.AgentSessionCountBucket} | interactions {session.AgentInteractionCountBucket} | confidence {session.Confidence}";
+                return $"{session.DayBucket} | {AgentSourceLabel(session.AgentProviderType)} | category {session.WorkType} | confidence {session.Confidence} | warnings {WarningCount(session)} | +{session.ExpGained} XP{TopStatSuffix(session)} | sessions {session.AgentSessionCountBucket} | interactions {session.AgentInteractionCountBucket}";
             }
 
-            return $"{session.DayBucket} | {session.SourceProvider} | work {session.WorkType} | changes {session.GitChangeCountBucket} | lines +{session.GitAddedLineBucket} -{session.GitDeletedLineBucket} | confidence {session.Confidence}";
+            return $"{session.DayBucket} | {SourceLabel(session.SourceProvider)} | category {session.WorkType} | confidence {session.Confidence} | warnings {WarningCount(session)} | +{session.ExpGained} XP{TopStatSuffix(session)} | changes {session.GitChangeCountBucket} | lines +{session.GitAddedLineBucket} -{session.GitDeletedLineBucket}";
         }
 
         public static string AuthStatus(ApprovedActivityAnalysisViewModel viewModel)
@@ -156,8 +365,13 @@ namespace TokenForge.Client.UI
                 return "Authentication is unavailable.";
             }
 
+            if (viewModel.AuthState == AuthState.LoggedOut)
+            {
+                return "Local gameplay works offline. Create an account only for Safe Sync.";
+            }
+
             var builder = new StringBuilder();
-            builder.Append("Status: ");
+            builder.Append("Account: ");
             builder.Append(SafeUserMessageMapper.AuthStateLabel(viewModel.AuthState));
             builder.Append(" | ");
             builder.Append(viewModel.AuthStatusMessage);
@@ -179,15 +393,30 @@ namespace TokenForge.Client.UI
                 return "Safe Sync is unavailable.";
             }
 
+            if (!viewModel.CanUseAuthenticatedSafeSync)
+            {
+                return "Connection: " + viewModel.SafeSyncConnection.StatusLabel
+                       + "\nLocal gameplay works without login or server."
+                       + "\nSafe Sync is optional."
+                       + "\nServer: " + viewModel.SafeSyncBaseUrl
+                       + "\nLast sync result: " + viewModel.SafeSyncConnection.LastSyncResult;
+            }
+
             var builder = new StringBuilder();
-            builder.Append("Status: ");
+            builder.Append("Connection: ");
+            builder.Append(viewModel.SafeSyncConnection.StatusLabel);
+            builder.Append(" | Local gameplay available");
+            builder.Append("\n");
+            builder.Append("Sync: ");
             builder.Append(SafeUserMessageMapper.SafeSyncStatusLabel(viewModel.SafeSyncStatus));
             builder.Append(" | Auth: ");
             builder.Append(SafeUserMessageMapper.AuthStateLabel(viewModel.AuthState));
             builder.Append(" | Server: ");
             builder.Append(viewModel.SafeSyncBaseUrl);
-            builder.Append(" | Message: ");
+            builder.Append("\nMessage: ");
             builder.Append(viewModel.SafeSyncMessage);
+            builder.Append("\nLast sync result: ");
+            builder.Append(viewModel.SafeSyncConnection.LastSyncResult);
             builder.Append(" | Accepted ");
             builder.Append(viewModel.LastSyncAcceptedCount);
             builder.Append(" / rejected ");
@@ -199,6 +428,58 @@ namespace TokenForge.Client.UI
             }
 
             return builder.ToString();
+        }
+
+        private static string SourceLabel(string sourceProvider)
+        {
+            return sourceProvider == "GIT" ? "Git" : "Unknown Agent";
+        }
+
+        private static string AgentSourceLabel(AgentProviderType providerType)
+        {
+            switch (providerType)
+            {
+                case AgentProviderType.Cursor:
+                    return "Cursor";
+                case AgentProviderType.ClaudeCode:
+                    return "Claude Code";
+                case AgentProviderType.Codex:
+                    return "Codex";
+                case AgentProviderType.GitHubCopilot:
+                    return "GitHub Copilot";
+                case AgentProviderType.Manual:
+                    return "Other / Manual Log Folder";
+                default:
+                    return "Unknown Agent";
+            }
+        }
+
+        private static int WarningCount(RecentSafeSessionSummary session)
+        {
+            return session?.WarningIds?.Count ?? 0;
+        }
+
+        private static string TopStatSuffix(RecentSafeSessionSummary session)
+        {
+            return string.IsNullOrWhiteSpace(session?.TopStatCategory) ? string.Empty : " | stat " + session.TopStatCategory;
+        }
+
+        private static string TopStatCategory(CharacterStats stats)
+        {
+            if (stats == null)
+            {
+                return "none";
+            }
+
+            var pairs = new[]
+            {
+                new { Name = "Code", Value = stats.Logic + stats.Architecture + stats.Velocity },
+                new { Name = "Focus", Value = stats.Efficiency + stats.Stability },
+                new { Name = "Debug", Value = stats.Debug },
+                new { Name = "Design", Value = stats.Design + stats.Creativity }
+            };
+            var top = pairs.OrderByDescending(item => item.Value).FirstOrDefault();
+            return top != null && top.Value > 0 ? top.Name : "none";
         }
 
         public static string RetryQueueStatus(ApprovedActivityAnalysisViewModel viewModel)
@@ -250,6 +531,18 @@ namespace TokenForge.Client.UI
                    "\nPolicies: Keep Local, Keep Remote, Prefer Higher Confidence, Prefer Newer Safe Timestamp, Merge Non-Conflicting Aggregates, Mark Resolved Only." +
                    "\nKeep Local queues safe re-upload. Keep Remote applies safe remote aggregate locally when possible. Aggregate merge only uses deterministic safe fields." +
                    "\nResult: " + SafeUserMessageMapper.FromSyncError(first.SafeErrorCode);
+        }
+
+        public static string CompactConflictBanner(ApprovedActivityAnalysisViewModel viewModel)
+        {
+            var summary = viewModel?.ConflictSummary ?? new SafeSyncConflictSummary();
+            if (summary.UnresolvedCount <= 0)
+            {
+                return "Conflicts: none unresolved.";
+            }
+
+            var suffix = summary.UnresolvedCount == 1 ? "conflict" : "conflicts";
+            return summary.UnresolvedCount + " unresolved sync " + suffix + " detected. Review in Settings.";
         }
 
         public static string ConflictAuditHistory(ApprovedActivityAnalysisViewModel viewModel)

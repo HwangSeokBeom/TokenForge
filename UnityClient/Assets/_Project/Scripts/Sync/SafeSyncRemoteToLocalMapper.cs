@@ -110,7 +110,9 @@ namespace TokenForge.Client.Sync
         private static AgentProviderType ToAgentProviderType(string sourceProvider)
         {
             if (string.Equals(sourceProvider, "CODEX", StringComparison.OrdinalIgnoreCase)) return AgentProviderType.Codex;
-            if (string.Equals(sourceProvider, "CLAUDE", StringComparison.OrdinalIgnoreCase)) return AgentProviderType.Claude;
+            if (string.Equals(sourceProvider, "CLAUDE", StringComparison.OrdinalIgnoreCase)) return AgentProviderType.ClaudeCode;
+            if (string.Equals(sourceProvider, "CURSOR", StringComparison.OrdinalIgnoreCase)) return AgentProviderType.Cursor;
+            if (string.Equals(sourceProvider, "GITHUB_COPILOT", StringComparison.OrdinalIgnoreCase)) return AgentProviderType.GitHubCopilot;
             return AgentProviderType.Unknown;
         }
 

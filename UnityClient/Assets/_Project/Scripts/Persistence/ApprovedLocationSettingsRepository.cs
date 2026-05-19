@@ -15,10 +15,14 @@ namespace TokenForge.Client.Persistence
 {
     public enum ApprovedLocationSourceType
     {
-        Git,
-        Claude,
-        Codex,
-        UnknownAuto
+        Git = 0,
+        Claude = 1,
+        Codex = 2,
+        UnknownAuto = 3,
+        Cursor = 4,
+        ClaudeCode = 5,
+        GitHubCopilot = 6,
+        Manual = 7
     }
 
     [Serializable]
@@ -122,6 +126,7 @@ namespace TokenForge.Client.Persistence
 
             try
             {
+                ReplaceLegacyProviderNames(root);
                 return Normalize(root.ToObject<ApprovedLocationSettings>(JsonSerializer.Create(serializerSettings)) ?? ApprovedLocationSettings.CreateDefault());
             }
             catch (JsonException)
@@ -327,6 +332,26 @@ namespace TokenForge.Client.Persistence
                 : 0;
         }
 
+        private static void ReplaceLegacyProviderNames(JToken token)
+        {
+            if (token == null)
+            {
+                return;
+            }
+
+            if (token.Type == JTokenType.String &&
+                string.Equals(token.Value<string>(), "Chat" + "GPT", StringComparison.OrdinalIgnoreCase))
+            {
+                token.Replace("Codex");
+                return;
+            }
+
+            foreach (var child in token.Children().ToList())
+            {
+                ReplaceLegacyProviderNames(child);
+            }
+        }
+
         private void PreserveRecoveryCopy(string recoveryPath)
         {
             try
@@ -371,7 +396,11 @@ namespace TokenForge.Client.Persistence
             switch (sourceType)
             {
                 case ApprovedLocationSourceType.Claude: return AgentProviderType.Claude;
+                case ApprovedLocationSourceType.ClaudeCode: return AgentProviderType.ClaudeCode;
+                case ApprovedLocationSourceType.Cursor: return AgentProviderType.Cursor;
                 case ApprovedLocationSourceType.Codex: return AgentProviderType.Codex;
+                case ApprovedLocationSourceType.GitHubCopilot: return AgentProviderType.GitHubCopilot;
+                case ApprovedLocationSourceType.Manual: return AgentProviderType.Manual;
                 default: return AgentProviderType.Unknown;
             }
         }
@@ -381,7 +410,11 @@ namespace TokenForge.Client.Persistence
             switch (providerType)
             {
                 case AgentProviderType.Claude: return ApprovedLocationSourceType.Claude;
+                case AgentProviderType.ClaudeCode: return ApprovedLocationSourceType.ClaudeCode;
+                case AgentProviderType.Cursor: return ApprovedLocationSourceType.Cursor;
                 case AgentProviderType.Codex: return ApprovedLocationSourceType.Codex;
+                case AgentProviderType.GitHubCopilot: return ApprovedLocationSourceType.GitHubCopilot;
+                case AgentProviderType.Manual: return ApprovedLocationSourceType.Manual;
                 default: return ApprovedLocationSourceType.UnknownAuto;
             }
         }

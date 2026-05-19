@@ -16,7 +16,10 @@ namespace TokenForge.Client.Privacy
             "RefreshTokenExpiresAt",
             "ParserVersion",
             "BuildRunCount",
-            "Debug"
+            "Debug",
+            "SourceKind",
+            "SafeSourceAlias",
+            "FileCountBucket"
         };
 
         private static readonly HashSet<string> ForbiddenExactFieldNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

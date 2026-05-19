@@ -25,8 +25,11 @@ namespace TokenForge.Client.Agents
             this.sourceReader = sourceReader ?? new FileAgentLogSourceReader();
             this.parsers = (parsers ?? new IAgentLogParser[]
             {
+                new CursorAgentLogParser(),
                 new ClaudeAgentLogParser(),
                 new CodexAgentLogParser(),
+                new GitHubCopilotAgentLogParser(),
+                new ManualAgentLogParser(),
                 new UnknownAgentLogParser()
             }).ToList();
             this.privacySanitizer = privacySanitizer ?? new PrivacySanitizer();
@@ -76,6 +79,7 @@ namespace TokenForge.Client.Agents
         {
             if (providerHint != AgentProviderType.Unknown)
             {
+                providerHint = MacAgentSourceDetector.NormalizeProvider(providerHint);
                 var hinted = parsers.FirstOrDefault(parser => parser.ProviderType == providerHint);
                 if (hinted != null)
                 {
@@ -84,14 +88,25 @@ namespace TokenForge.Client.Agents
             }
 
             var sample = string.Join("\n", (entries ?? new List<AgentLogEntry>()).Take(50).Select(entry => entry.Text));
+            if (sample.IndexOf("cursor", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return parsers.First(parser => parser.ProviderType == AgentProviderType.Cursor);
+            }
+
             if (sample.IndexOf("claude", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                return parsers.First(parser => parser.ProviderType == AgentProviderType.Claude);
+                return parsers.First(parser => parser.ProviderType == AgentProviderType.ClaudeCode);
             }
 
             if (sample.IndexOf("codex", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 return parsers.First(parser => parser.ProviderType == AgentProviderType.Codex);
+            }
+
+            if (sample.IndexOf("copilot", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                sample.IndexOf("github", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return parsers.First(parser => parser.ProviderType == AgentProviderType.GitHubCopilot);
             }
 
             return parsers.First(parser => parser.ProviderType == AgentProviderType.Unknown);
@@ -103,6 +118,8 @@ namespace TokenForge.Client.Agents
             input.AnalysisWindowDays = Math.Max(1, Math.Min(input.AnalysisWindowDays, AgentAnalysisInput.MaxAnalysisWindowDays));
             input.MaxFilesToScan = Math.Max(1, Math.Min(input.MaxFilesToScan, AgentAnalysisInput.MaxFilesToScanLimit));
             input.MaxLogEntriesToScan = Math.Max(1, Math.Min(input.MaxLogEntriesToScan, AgentAnalysisInput.MaxLogEntriesToScanLimit));
+            input.ProviderHint = MacAgentSourceDetector.NormalizeProvider(input.ProviderHint);
+            input.SourceKind = input.SourceKind == AgentSourceKind.Unknown ? AgentSourceKind.ManualFolder : input.SourceKind;
             return input;
         }
     }

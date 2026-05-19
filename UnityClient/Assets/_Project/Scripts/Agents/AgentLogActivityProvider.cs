@@ -69,7 +69,7 @@ namespace TokenForge.Client.Agents
                 UserReviewed = true
             };
 
-            session.DeduplicationKey = $"{summary.SourceIdentifierHash}:{summary.DayBucket}:{summary.ProviderType}:{summary.SessionCountBucket}:{summary.InteractionCountBucket}";
+            session.DeduplicationKey = $"{summary.SourceIdentifierHash}:{summary.DayBucket}:provider{(int)summary.ProviderType}:{summary.SessionCountBucket}:{summary.InteractionCountBucket}";
             return session;
         }
 
@@ -111,8 +111,12 @@ namespace TokenForge.Client.Agents
         {
             switch (providerType)
             {
+                case AgentProviderType.Cursor: return AgentType.Cursor;
                 case AgentProviderType.Claude: return AgentType.ClaudeCode;
+                case AgentProviderType.ClaudeCode: return AgentType.ClaudeCode;
                 case AgentProviderType.Codex: return AgentType.Codex;
+                case AgentProviderType.GitHubCopilot: return AgentType.GitHubCopilot;
+                case AgentProviderType.Manual: return AgentType.ManualFallback;
                 default: return AgentType.Unknown;
             }
         }

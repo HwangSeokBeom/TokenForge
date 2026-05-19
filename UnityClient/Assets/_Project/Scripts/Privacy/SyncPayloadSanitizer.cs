@@ -29,7 +29,10 @@ namespace TokenForge.Client.Privacy
             "SafeActivitySessionDeleteResponse",
             "SafeSyncHealthResponse",
             "SafeSyncMaxLimits",
-            "SafeSyncPagination"
+            "SafeSyncPagination",
+            "ServerHealthResponse",
+            "SafeSyncUploadRequest",
+            "SafeSyncUploadResponse"
         };
 
         public SyncPayloadSanitizer(PrivacySanitizer privacySanitizer = null)

@@ -21,8 +21,11 @@ namespace TokenForge.Client.Domain
     public sealed class AgentActivitySummary
     {
         public AgentProviderType ProviderType { get; set; } = AgentProviderType.Unknown;
+        public AgentSourceKind SourceKind { get; set; } = AgentSourceKind.Unknown;
+        public string SafeSourceAlias { get; set; } = string.Empty;
         public string SourceIdentifierHash { get; set; } = string.Empty;
         public string DayBucket { get; set; } = string.Empty;
+        public CountBucket FileCountBucket { get; set; } = CountBucket.Unknown;
         public CountBucket SessionCountBucket { get; set; } = CountBucket.Unknown;
         public CountBucket InteractionCountBucket { get; set; } = CountBucket.Unknown;
         public CountBucket EstimatedCodingActivityBucket { get; set; } = CountBucket.Unknown;

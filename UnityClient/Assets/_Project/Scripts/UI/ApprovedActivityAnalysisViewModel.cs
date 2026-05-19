@@ -47,6 +47,8 @@ namespace TokenForge.Client.UI
         public CountBucket AgentSessionCountBucket { get; set; } = CountBucket.Unknown;
         public CountBucket AgentInteractionCountBucket { get; set; } = CountBucket.Unknown;
         public List<string> WarningIds { get; set; } = new List<string>();
+        public int ExpGained { get; set; }
+        public string TopStatCategory { get; set; } = string.Empty;
     }
 
     public sealed class ApprovedLocationDisplayItem
@@ -56,6 +58,91 @@ namespace TokenForge.Client.UI
         public ApprovedLocationSourceType SourceType { get; set; } = ApprovedLocationSourceType.UnknownAuto;
         public bool Enabled { get; set; } = true;
         public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+    }
+
+    public sealed class CharacterDashboardSummary
+    {
+        public string CharacterName { get; set; } = "Token";
+        public int Level { get; set; } = 1;
+        public int TotalExp { get; set; }
+        public int CurrentLevelExp { get; set; }
+        public int ExpForNextLevel { get; set; } = 1000;
+        public string RankTitle { get; set; } = "Local Apprentice";
+        public int Code { get; set; }
+        public int Focus { get; set; }
+        public int Debug { get; set; }
+        public int Design { get; set; }
+        public int Sync { get; set; }
+        public bool HasSavedRun { get; set; }
+        public CompanionState CompanionState { get; set; } = CompanionState.CreateDefault();
+        public DesktopCompanionSettings DesktopCompanionSettings { get; set; } = DesktopCompanionSettings.CreateDefault();
+        public CompanionDesktopOverlayState DesktopOverlayState { get; set; } = CompanionDesktopOverlayState.Disabled;
+        public string LatestSafeSessionSummary { get; set; } = "No saved run yet. Analyze a repository or AI agent log to generate your first XP.";
+        public string RecentGrowthSummary { get; set; } = "No growth recorded yet.";
+        public string QuestSummary { get; set; } = "Analyze repository: open | Save session: open | Sync progress: login required";
+        public string ActivityLogSummary { get; set; } = "No run saved yet.\nConnect a Git repository or AI Agent log, review the safe aggregate, then save it to gain XP.";
+    }
+
+    public enum OnboardingStep
+    {
+        Account,
+        AiAgents,
+        Git,
+        Ready
+    }
+
+    public enum ConnectedAgentSourceType
+    {
+        Cursor,
+        ClaudeCode,
+        Codex,
+        GitHubCopilot,
+        OtherManualLogFolder
+    }
+
+    public enum AgentSourceSetupState
+    {
+        NotSelected,
+        Selected,
+        DetectingLocalSource,
+        LocalSourceDetected,
+        PermissionRequired,
+        ManualImportRequired,
+        ReadyToAnalyze,
+        AnalysisComplete,
+        AnalysisFailedSafely
+    }
+
+    public sealed class ConnectedAgentSource
+    {
+        public ConnectedAgentSourceType SourceType { get; set; }
+        public string DisplayName { get; set; } = string.Empty;
+        public bool Selected { get; set; }
+        public AgentSourceSetupState State { get; set; } = AgentSourceSetupState.NotSelected;
+        public string StatusLabel { get; set; } = "Not selected";
+        public string SafeLabel { get; set; } = string.Empty;
+        public string SafeLocationHash { get; set; } = string.Empty;
+        public ConfidenceLevel Confidence { get; set; } = ConfidenceLevel.Unknown;
+        public DateTimeOffset? LastScanTimeUtc { get; set; }
+        public int WarningCount { get; set; }
+    }
+
+    public sealed class OnboardingState
+    {
+        public OnboardingStep CurrentStep { get; set; } = OnboardingStep.Account;
+        public bool OfflineModeSelected { get; set; }
+        public bool GitSkipped { get; set; }
+        public bool GitConnected { get; set; }
+        public bool GitAccountPlaceholderSelected { get; set; }
+        public string GitSafeAlias { get; set; } = string.Empty;
+        public List<ConnectedAgentSource> AgentSources { get; } = new List<ConnectedAgentSource>
+        {
+            new ConnectedAgentSource { SourceType = ConnectedAgentSourceType.Cursor, DisplayName = "Cursor" },
+            new ConnectedAgentSource { SourceType = ConnectedAgentSourceType.ClaudeCode, DisplayName = "Claude Code" },
+            new ConnectedAgentSource { SourceType = ConnectedAgentSourceType.Codex, DisplayName = "Codex" },
+            new ConnectedAgentSource { SourceType = ConnectedAgentSourceType.GitHubCopilot, DisplayName = "GitHub Copilot" },
+            new ConnectedAgentSource { SourceType = ConnectedAgentSourceType.OtherManualLogFolder, DisplayName = "Other / Manual Log Folder", State = AgentSourceSetupState.ManualImportRequired, StatusLabel = "Manual import required" }
+        };
     }
 
     public sealed class ApprovedActivityAnalysisViewModel
@@ -85,6 +172,7 @@ namespace TokenForge.Client.UI
         private int tombstoneInProgress;
         private int conflictInProgress;
         private Func<CancellationToken, Task<SafeSyncResult>> pendingSafeSyncConfirmationAction;
+        private readonly Dictionary<ConnectedAgentSourceType, AgentSourceCandidate> approvedAgentCandidates = new Dictionary<ConnectedAgentSourceType, AgentSourceCandidate>();
 
         public ApprovedActivityAnalysisViewModel(
             GitAnalysisFlowController gitFlow,
@@ -109,6 +197,7 @@ namespace TokenForge.Client.UI
         public GitAnalysisFlowController GitFlow { get; }
         public AgentAnalysisFlowController AgentFlow { get; }
         public AgentAnalysisSettings AgentSettings { get; } = new AgentAnalysisSettings();
+        public OnboardingState Onboarding { get; } = new OnboardingState();
         public AgentProviderType SelectedAgentProviderType { get; set; } = AgentProviderType.Unknown;
         public string AgentSelectionStatus { get; private set; } = "No agent log location selected";
         public string AgentPickerErrorCategory { get; private set; } = string.Empty;
@@ -116,6 +205,7 @@ namespace TokenForge.Client.UI
         public List<ApprovedLocationDisplayItem> ApprovedGitLocations { get; private set; } = new List<ApprovedLocationDisplayItem>();
         public List<ApprovedLocationDisplayItem> ApprovedAgentLocations { get; private set; } = new List<ApprovedLocationDisplayItem>();
         public List<RemoteSafeSessionSummary> RemoteSafeSessions { get; private set; } = new List<RemoteSafeSessionSummary>();
+        public CharacterDashboardSummary CharacterDashboard { get; private set; } = new CharacterDashboardSummary();
         public SafeSyncRetryQueueSummary RetryQueueSummary { get; private set; } = new SafeSyncRetryQueueSummary();
         public SafeSyncConflictSummary ConflictSummary { get; private set; } = new SafeSyncConflictSummary();
         public SafeConflictAuditSummary ConflictAuditSummary { get; private set; } = new SafeConflictAuditSummary();
@@ -128,6 +218,7 @@ namespace TokenForge.Client.UI
         public string SafeSyncMessage { get; private set; } = SafeUserMessageMapper.FromSync(SafeSyncStatus.Idle).Message;
         public int LastSyncAcceptedCount { get; private set; }
         public int LastSyncRejectedCount { get; private set; }
+        public SafeSyncConnectionViewModel SafeSyncConnection => BuildSafeSyncConnection();
         public string SafeSyncBaseUrl => safeSyncService?.BaseUrl ?? SafeSyncApiConfig.DefaultBaseUrl;
         public bool HasSafeSyncService => safeSyncService != null;
         public bool IsSafeSyncRequestInProgress => SafeSyncStatus == SafeSyncStatus.CheckingHealth ||
@@ -149,6 +240,7 @@ namespace TokenForge.Client.UI
         public AuthState AuthState => authSessionService?.State ?? AuthState.LoggedOut;
         public string AuthErrorCode { get; private set; } = string.Empty;
         public string AuthMessage { get; private set; } = SafeUserMessageMapper.FromAuth(AuthState.LoggedOut).Message;
+        public bool HasExplicitAuthMessage { get; private set; }
         public bool HasAuthSessionService => authSessionService != null;
         public bool IsAuthRequestInProgress => AuthState == AuthState.LoggingIn ||
                                                AuthState == AuthState.SigningUp ||
@@ -200,6 +292,262 @@ namespace TokenForge.Client.UI
             }
         }
 
+        public void SetOnboardingStep(OnboardingStep step)
+        {
+            Onboarding.CurrentStep = step;
+        }
+
+        public void ContinueOffline(string displayName = "")
+        {
+            Onboarding.OfflineModeSelected = true;
+            AuthErrorCode = string.Empty;
+            AuthMessage = "Local-only progress. Sync can be enabled later.";
+            HasExplicitAuthMessage = true;
+            if (!string.IsNullOrWhiteSpace(displayName))
+            {
+                CharacterDashboard.CharacterName = SafeLocalAlias(displayName, "Local Player");
+            }
+
+            Onboarding.CurrentStep = OnboardingStep.AiAgents;
+        }
+
+        public void SetLocalAuthMessage(string message)
+        {
+            AuthErrorCode = string.Empty;
+            AuthMessage = string.IsNullOrWhiteSpace(message)
+                ? SafeUserMessageMapper.FromAuth(AuthState).Message
+                : message;
+            HasExplicitAuthMessage = true;
+        }
+
+        public void SetAgentSourceSelected(ConnectedAgentSourceType sourceType, bool selected)
+        {
+            var source = Onboarding.AgentSources.FirstOrDefault(item => item.SourceType == sourceType);
+            if (source == null)
+            {
+                return;
+            }
+
+            source.Selected = selected;
+            if (!selected)
+            {
+                source.SafeLabel = string.Empty;
+                source.SafeLocationHash = string.Empty;
+                source.Confidence = ConfidenceLevel.Unknown;
+                source.WarningCount = 0;
+                approvedAgentCandidates.Remove(sourceType);
+                source.State = sourceType == ConnectedAgentSourceType.OtherManualLogFolder
+                    ? AgentSourceSetupState.ManualImportRequired
+                    : AgentSourceSetupState.NotSelected;
+                source.StatusLabel = source.State == AgentSourceSetupState.ManualImportRequired ? "Manual import required" : "Not selected";
+                if (sourceType == ConnectedAgentSourceType.OtherManualLogFolder)
+                {
+                    AgentFlow.ClearSelection();
+                    AgentSelectionStatus = "No agent log location selected";
+                    AgentPickerErrorCategory = string.Empty;
+                }
+
+                return;
+            }
+
+            if (sourceType == ConnectedAgentSourceType.OtherManualLogFolder)
+            {
+                source.State = string.IsNullOrWhiteSpace(source.SafeLabel)
+                    ? AgentSourceSetupState.ManualImportRequired
+                    : AgentSourceSetupState.ReadyToAnalyze;
+                source.StatusLabel = source.State == AgentSourceSetupState.ReadyToAnalyze
+                    ? "Ready to analyze"
+                    : "Manual import required";
+            }
+            else
+            {
+                source.State = AgentSourceSetupState.Selected;
+                source.StatusLabel = source.DisplayName + " selected";
+            }
+        }
+
+        public void ToggleAgentSourceForOnboarding(ConnectedAgentSourceType sourceType)
+        {
+            var source = Onboarding.AgentSources.FirstOrDefault(item => item.SourceType == sourceType);
+            if (source == null)
+            {
+                return;
+            }
+
+            SetAgentSourceSelected(sourceType, !source.Selected);
+        }
+
+        public async Task<Result> DetectAgentSourceForOnboardingAsync(ConnectedAgentSourceType sourceType, CancellationToken cancellationToken = default)
+        {
+            var source = Onboarding.AgentSources.FirstOrDefault(item => item.SourceType == sourceType);
+            if (source == null)
+            {
+                return Result.Failure("agent_source_unknown", "Agent source is unavailable.");
+            }
+
+            if (sourceType == ConnectedAgentSourceType.OtherManualLogFolder)
+            {
+                return await SelectManualAgentLogForOnboardingAsync(cancellationToken);
+            }
+
+            source.Selected = true;
+            source.State = AgentSourceSetupState.DetectingLocalSource;
+            source.StatusLabel = "Detecting local source";
+            var providerType = ToAgentProviderType(sourceType);
+            var result = await new MacAgentSourceDetector(providerType).DetectAsync(cancellationToken);
+            source.LastScanTimeUtc = result.ScannedAtUtc;
+            source.WarningCount = result.WarningIds?.Count ?? 0;
+
+            var candidate = result.BestCandidate();
+            if (candidate != null && result.HasUsableCandidate)
+            {
+                approvedAgentCandidates[sourceType] = candidate;
+                source.State = AgentSourceSetupState.ReadyToAnalyze;
+                source.SafeLabel = candidate.SafeAlias;
+                source.SafeLocationHash = SafeHashUtility.ComputeProjectPathHash(candidate.LocalPath, "TokenForge.AgentLogLocation.v1");
+                source.Confidence = candidate.Confidence;
+                source.WarningCount += candidate.WarningIds?.Count ?? 0;
+                SelectedAgentProviderType = providerType;
+                var selection = AgentSettings.ToInput(candidate.LocalPath, providerType);
+                selection.SourceKind = candidate.SourceKind;
+                selection.SafeSourceAlias = candidate.SafeAlias;
+                var selectResult = AgentFlow.SelectApprovedLogLocation(selection);
+                source.StatusLabel = selectResult.IsSuccess
+                    ? source.DisplayName + " local source detected | Ready to analyze | " + candidate.SafeAlias + " | confidence " + candidate.Confidence
+                    : "Analysis failed safely";
+                if (!selectResult.IsSuccess)
+                {
+                    source.State = AgentSourceSetupState.AnalysisFailedSafely;
+                    return selectResult;
+                }
+
+                return Result.Success();
+            }
+
+            if (result.AccessState == AgentSourceAccessState.PermissionRequired)
+            {
+                source.State = AgentSourceSetupState.PermissionRequired;
+                source.StatusLabel = "Permission required";
+                AgentPickerErrorCategory = "agent_source_permission_required";
+                return Result.Failure(AgentPickerErrorCategory, "Local source requires permission.");
+            }
+
+            source.State = AgentSourceSetupState.ManualImportRequired;
+            source.StatusLabel = source.DisplayName + " manual import required";
+            AgentPickerErrorCategory = "agent_source_manual_import_required";
+            return Result.Failure(AgentPickerErrorCategory, "Local source was not detected. Choose a folder to analyze safe aggregates.");
+        }
+
+        public async Task<Result<AgentAnalysisReviewModel>> AnalyzeAgentSourceForOnboardingAsync(ConnectedAgentSourceType sourceType, CancellationToken cancellationToken = default)
+        {
+            var source = Onboarding.AgentSources.FirstOrDefault(item => item.SourceType == sourceType);
+            if (source == null)
+            {
+                return Result<AgentAnalysisReviewModel>.Failure("agent_source_unknown", "Agent source is unavailable.");
+            }
+
+            if (source.State != AgentSourceSetupState.ReadyToAnalyze && !AgentFlow.HasSelectedAgentLogLocationForLocalOnlyApproval)
+            {
+                var detect = await DetectAgentSourceForOnboardingAsync(sourceType, cancellationToken);
+                if (!detect.IsSuccess && !AgentFlow.HasSelectedAgentLogLocationForLocalOnlyApproval)
+                {
+                    source.State = AgentSourceSetupState.AnalysisFailedSafely;
+                    source.StatusLabel = "Analysis failed safely";
+                    return Result<AgentAnalysisReviewModel>.Failure(detect.ErrorCode, detect.ErrorMessage);
+                }
+            }
+
+            var result = await AnalyzeSelectedAgentActivityAsync(cancellationToken);
+            if (result.IsSuccess)
+            {
+                source.State = AgentSourceSetupState.AnalysisComplete;
+                source.StatusLabel = "Analysis complete";
+            }
+            else
+            {
+                source.State = AgentSourceSetupState.AnalysisFailedSafely;
+                source.StatusLabel = "Analysis failed safely";
+            }
+
+            return result;
+        }
+
+        public async Task<Result> SelectManualAgentLogForOnboardingAsync(CancellationToken cancellationToken = default)
+        {
+            return await SelectManualAgentLogForOnboardingAsync(ConnectedAgentSourceType.OtherManualLogFolder, cancellationToken);
+        }
+
+        public async Task<Result> SelectManualAgentLogForOnboardingAsync(ConnectedAgentSourceType sourceType, CancellationToken cancellationToken = default)
+        {
+            if (sourceType != ConnectedAgentSourceType.OtherManualLogFolder)
+            {
+                SelectedAgentProviderType = ToAgentProviderType(sourceType);
+            }
+
+            var result = await SelectAgentLogLocationAsync(cancellationToken);
+            if (result.IsSuccess && AgentFlow.HasSelectedAgentLogLocationForLocalOnlyApproval)
+            {
+                var source = Onboarding.AgentSources.FirstOrDefault(item => item.SourceType == sourceType);
+                if (source != null)
+                {
+                    source.Selected = true;
+                    source.State = AgentSourceSetupState.ReadyToAnalyze;
+                    source.StatusLabel = "Ready to analyze";
+                    source.SafeLabel = sourceType == ConnectedAgentSourceType.OtherManualLogFolder
+                        ? "Manual Log Folder 1"
+                        : source.DisplayName + " manual log folder";
+                    var selectedPath = AgentFlow.GetSelectedAgentLogLocationPathForLocalOnlyApproval();
+                    source.SafeLocationHash = SafeHashUtility.ComputeProjectPathHash(selectedPath, "TokenForge.AgentLogLocation.v1");
+                    source.Confidence = ConfidenceLevel.Medium;
+                    if (sourceType == ConnectedAgentSourceType.OtherManualLogFolder)
+                    {
+                        SelectedAgentProviderType = AgentProviderType.Manual;
+                    }
+                }
+            }
+
+            return result;
+        }
+
+        public async Task<Result> SelectLocalGitRepositoryForOnboardingAsync(CancellationToken cancellationToken = default)
+        {
+            var result = await GitFlow.SelectRepositoryAsync(cancellationToken);
+            if (result.IsSuccess && GitFlow.HasSelectedRepositoryForLocalOnlyApproval)
+            {
+                Onboarding.GitConnected = true;
+                Onboarding.GitSkipped = false;
+                Onboarding.GitAccountPlaceholderSelected = false;
+                Onboarding.GitSafeAlias = "Local Repository 1";
+            }
+
+            return result;
+        }
+
+        public void SelectGitAccountPlaceholder()
+        {
+            Onboarding.GitConnected = false;
+            Onboarding.GitSkipped = false;
+            Onboarding.GitAccountPlaceholderSelected = true;
+            Onboarding.GitSafeAlias = "Git account not available in this MVP";
+        }
+
+        public void SkipGitForOnboarding()
+        {
+            Onboarding.GitConnected = false;
+            Onboarding.GitSkipped = true;
+            Onboarding.GitAccountPlaceholderSelected = false;
+            Onboarding.GitSafeAlias = "Skipped";
+        }
+
+        public void ClearGitForOnboarding()
+        {
+            Onboarding.GitConnected = false;
+            Onboarding.GitSkipped = false;
+            Onboarding.GitAccountPlaceholderSelected = false;
+            Onboarding.GitSafeAlias = string.Empty;
+            GitFlow.ClearSelection();
+        }
+
         public async Task<Result> SelectAgentLogLocationAsync(CancellationToken cancellationToken = default)
         {
             var pickResult = await agentLogLocationPicker.PickAgentLogLocationAsync(cancellationToken);
@@ -218,7 +566,11 @@ namespace TokenForge.Client.UI
             }
 
             AgentPickerErrorCategory = string.Empty;
-            var result = AgentFlow.SelectApprovedLogLocation(AgentSettings.ToInput(pickResult.AgentLogLocationPath, SelectedAgentProviderType));
+            var providerType = SelectedAgentProviderType == AgentProviderType.Unknown ? AgentProviderType.Manual : SelectedAgentProviderType;
+            var input = AgentSettings.ToInput(pickResult.AgentLogLocationPath, providerType);
+            input.SourceKind = AgentSourceKind.ManualFolder;
+            input.SafeSourceAlias = "Manual Log Folder 1";
+            var result = AgentFlow.SelectApprovedLogLocation(input);
             AgentSelectionStatus = result.IsSuccess ? "Agent log location selected" : "No agent log location selected";
             return result;
         }
@@ -293,7 +645,10 @@ namespace TokenForge.Client.UI
             }
 
             SelectedAgentProviderType = entry.SourceType.ToAgentProviderType();
-            var result = AgentFlow.SelectApprovedLogLocation(AgentSettings.ToInput(entry.LocalPath, SelectedAgentProviderType));
+            var input = AgentSettings.ToInput(entry.LocalPath, SelectedAgentProviderType);
+            input.SourceKind = AgentSourceKind.ManualFolder;
+            input.SafeSourceAlias = entry.DisplayAlias;
+            var result = AgentFlow.SelectApprovedLogLocation(input);
             AgentSelectionStatus = result.IsSuccess ? "Approved agent log location selected" : "No agent log location selected";
             return result;
         }
@@ -325,12 +680,45 @@ namespace TokenForge.Client.UI
             return await AgentFlow.AnalyzeAsync(cancellationToken);
         }
 
+        public async Task<Result<GitAnalysisReviewModel>> AnalyzeGitActivityAsync(CancellationToken cancellationToken = default)
+        {
+            return await GitFlow.AnalyzeAsync(cancellationToken);
+        }
+
+        public async Task<Result<AgentAnalysisReviewModel>> AnalyzeSelectedAgentActivityAsync(CancellationToken cancellationToken = default)
+        {
+            if (AgentFlow.HasSelectedAgentLogLocationForLocalOnlyApproval)
+            {
+                return await AgentFlow.AnalyzeAsync(cancellationToken);
+            }
+
+            var selectedAutomatic = Onboarding.AgentSources
+                .FirstOrDefault(source => source.Selected && source.SourceType != ConnectedAgentSourceType.OtherManualLogFolder);
+            if (selectedAutomatic != null)
+            {
+                AgentPickerErrorCategory = "agent_source_manual_import_required";
+                AgentSelectionStatus = selectedAutomatic.DisplayName + " requires Detect or Choose Folder before analysis.";
+                var failure = AgentFlow.MarkBlocked(
+                    AgentPickerErrorCategory,
+                    "Detect a local source or choose a manual log folder before analyzing safe aggregates.");
+                return Result<AgentAnalysisReviewModel>.Failure(failure.ErrorCode, failure.ErrorMessage);
+            }
+
+            AgentPickerErrorCategory = "missing_agent_log_location";
+            AgentSelectionStatus = "No agent log location selected";
+            var missing = AgentFlow.MarkBlocked(
+                AgentPickerErrorCategory,
+                "Select an agent log folder before analyzing.");
+            return Result<AgentAnalysisReviewModel>.Failure(missing.ErrorCode, missing.ErrorMessage);
+        }
+
         public async Task<Result<SaveData>> SaveGitSessionAsync(CancellationToken cancellationToken = default)
         {
             var result = await GitFlow.SaveSessionAsync(cancellationToken);
             if (result.IsSuccess)
             {
                 await RefreshRecentSessionsAsync(cancellationToken);
+                await RefreshSafeSyncLocalStateAsync(cancellationToken);
             }
 
             return result;
@@ -342,9 +730,34 @@ namespace TokenForge.Client.UI
             if (result.IsSuccess)
             {
                 await RefreshRecentSessionsAsync(cancellationToken);
+                await RefreshSafeSyncLocalStateAsync(cancellationToken);
             }
 
             return result;
+        }
+
+        public async Task<Result<DesktopCompanionSettings>> SetDesktopCompanionEnabledAsync(bool enabled, CancellationToken cancellationToken = default)
+        {
+            return await UpdateDesktopCompanionSettingsAsync(settings => settings.IsDesktopCompanionEnabled = enabled, cancellationToken);
+        }
+
+        public async Task<Result<DesktopCompanionSettings>> SetDesktopCompanionClickThroughAsync(bool clickThrough, CancellationToken cancellationToken = default)
+        {
+            return await UpdateDesktopCompanionSettingsAsync(settings => settings.IsClickThroughEnabled = clickThrough, cancellationToken);
+        }
+
+        public async Task<Result<DesktopCompanionSettings>> SetDesktopCompanionMotionModeAsync(CompanionDesktopMotionMode motionMode, CancellationToken cancellationToken = default)
+        {
+            return await UpdateDesktopCompanionSettingsAsync(settings => settings.MotionMode = motionMode, cancellationToken);
+        }
+
+        public async Task<Result<DesktopCompanionSettings>> ResetDesktopCompanionPositionAsync(CancellationToken cancellationToken = default)
+        {
+            return await UpdateDesktopCompanionSettingsAsync(settings =>
+            {
+                settings.LastOverlayPositionXBucket = CountBucket.Unknown;
+                settings.LastOverlayPositionYBucket = CountBucket.Unknown;
+            }, cancellationToken);
         }
 
         public Result DiscardGitReview()
@@ -359,17 +772,44 @@ namespace TokenForge.Client.UI
             return AgentFlow.DiscardPendingReview();
         }
 
+        private async Task<Result<DesktopCompanionSettings>> UpdateDesktopCompanionSettingsAsync(Action<DesktopCompanionSettings> update, CancellationToken cancellationToken)
+        {
+            var saveData = await repository.LoadAsync(cancellationToken);
+            saveData.DesktopCompanionSettings = saveData.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault();
+            update?.Invoke(saveData.DesktopCompanionSettings);
+            saveData.DesktopCompanionSettings.SchemaVersion = 1;
+            var validation = privacySanitizer.ValidateSafeSaveData(saveData);
+            if (!validation.IsSuccess)
+            {
+                return Result<DesktopCompanionSettings>.Failure(validation.ErrorCode, validation.ErrorMessage);
+            }
+
+            var saveResult = await repository.SaveAsync(saveData, cancellationToken);
+            if (!saveResult.IsSuccess)
+            {
+                return Result<DesktopCompanionSettings>.Failure(saveResult.ErrorCode, saveResult.ErrorMessage);
+            }
+
+            RefreshCharacterDashboard(saveData, RecentSessions);
+            return Result<DesktopCompanionSettings>.Success(saveData.DesktopCompanionSettings);
+        }
+
         public async Task<Result<List<RecentSafeSessionSummary>>> RefreshRecentSessionsAsync(CancellationToken cancellationToken = default)
         {
             var saveData = await repository.LoadAsync(cancellationToken);
+            var growthBySessionId = (saveData.GrowthHistory ?? new List<CharacterGrowthResult>())
+                .Where(growth => !string.IsNullOrWhiteSpace(growth.SessionId))
+                .GroupBy(growth => growth.SessionId)
+                .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
             var summaries = (saveData.WorkSessionSummaries ?? new List<AgentWorkSession>())
                 .OrderByDescending(session => session.EndedAt)
                 .Take(RecentSessionLimit)
-                .Select(ToRecentSummary)
+                .Select(session => ToRecentSummary(session, growthBySessionId))
                 .Where(summary => privacySanitizer.ValidateNoForbiddenFields(summary).IsSuccess)
                 .ToList();
 
             RecentSessions = summaries;
+            RefreshCharacterDashboard(saveData, summaries);
             return Result<List<RecentSafeSessionSummary>>.Success(summaries);
         }
 
@@ -416,6 +856,8 @@ namespace TokenForge.Client.UI
             if (authSessionService == null)
             {
                 AuthErrorCode = "AUTH_NOT_CONFIGURED";
+                AuthMessage = "Server auth is not available in this build. Continue Offline is available.";
+                HasExplicitAuthMessage = true;
                 return AuthResult.Failure(AuthState.LoggedOut, AuthErrorCode, "Authentication is not configured.");
             }
 
@@ -429,6 +871,8 @@ namespace TokenForge.Client.UI
             if (authSessionService == null)
             {
                 AuthErrorCode = "AUTH_NOT_CONFIGURED";
+                AuthMessage = "Server login is not available in this build. Continue Offline is available.";
+                HasExplicitAuthMessage = true;
                 return AuthResult.Failure(AuthState.LoggedOut, AuthErrorCode, "Authentication is not configured.");
             }
 
@@ -453,6 +897,8 @@ namespace TokenForge.Client.UI
             if (authSessionService == null)
             {
                 AuthErrorCode = "AUTH_NOT_CONFIGURED";
+                AuthMessage = "Server account creation is not available in this build. Continue Offline is available.";
+                HasExplicitAuthMessage = true;
                 return AuthResult.Failure(AuthState.LoggedOut, AuthErrorCode, "Authentication is not configured.");
             }
 
@@ -1091,6 +1537,7 @@ namespace TokenForge.Client.UI
             AuthMessage = string.IsNullOrWhiteSpace(AuthErrorCode)
                 ? SafeUserMessageMapper.FromAuth(AuthState).Message
                 : SafeUserMessageMapper.FromAuthError(AuthErrorCode);
+            HasExplicitAuthMessage = true;
             return result;
         }
 
@@ -1127,6 +1574,46 @@ namespace TokenForge.Client.UI
             return result;
         }
 
+        private SafeSyncConnectionViewModel BuildSafeSyncConnection()
+        {
+            var pendingCount = (RetryQueueSummary?.PendingCount ?? 0) + (TombstoneSummary?.PendingDeleteCount ?? 0);
+            var state = SafeSyncConnectionState.LocalOnly;
+            var label = "Local only";
+
+            if (pendingCount > 0 || SafeSyncStatus == SafeSyncStatus.RetryPending)
+            {
+                state = SafeSyncConnectionState.SyncPending;
+                label = "Sync pending";
+            }
+            else if (SafeSyncStatus == SafeSyncStatus.ServerUnavailable || SafeSyncStatus == SafeSyncStatus.Failed)
+            {
+                state = SafeSyncConnectionState.ServerUnavailable;
+                label = "Server unavailable";
+            }
+            else if (AuthState == AuthState.LoggedIn ||
+                     SafeSyncStatus == SafeSyncStatus.Ready ||
+                     SafeSyncStatus == SafeSyncStatus.ServerReady ||
+                     SafeSyncStatus == SafeSyncStatus.Synced)
+            {
+                state = SafeSyncConnectionState.Connected;
+                label = "Connected";
+            }
+            else if (!HasSafeSyncService)
+            {
+                label = "Local only";
+            }
+
+            return new SafeSyncConnectionViewModel
+            {
+                State = state,
+                StatusLabel = label,
+                LocalGameplayAvailable = true,
+                LastSyncResult = string.IsNullOrWhiteSpace(SafeSyncMessage)
+                    ? "No sync attempted."
+                    : SafeSyncMessage + " Accepted " + LastSyncAcceptedCount + ", rejected " + LastSyncRejectedCount + "."
+            };
+        }
+
         private async Task<ApprovedLocationEntry> FindApprovedLocationAsync(string localId, ApprovedLocationSourceType sourceType, CancellationToken cancellationToken)
         {
             var settings = await approvedLocationRepository.LoadAsync(cancellationToken);
@@ -1147,11 +1634,13 @@ namespace TokenForge.Client.UI
             };
         }
 
-        private static RecentSafeSessionSummary ToRecentSummary(AgentWorkSession session)
+        private static RecentSafeSessionSummary ToRecentSummary(AgentWorkSession session, Dictionary<string, CharacterGrowthResult> growthBySessionId)
         {
             session = session ?? new AgentWorkSession();
             var gitSummary = session.GitChangeSummary ?? GitChangeSummary.Empty();
             var agentSummary = session.AgentActivitySummary ?? AgentActivitySummary.Empty();
+            growthBySessionId = growthBySessionId ?? new Dictionary<string, CharacterGrowthResult>(StringComparer.Ordinal);
+            growthBySessionId.TryGetValue(session.SessionId ?? string.Empty, out var growth);
 
             return new RecentSafeSessionSummary
             {
@@ -1168,13 +1657,121 @@ namespace TokenForge.Client.UI
                 AgentProviderType = agentSummary.ProviderType,
                 AgentSessionCountBucket = agentSummary.SessionCountBucket,
                 AgentInteractionCountBucket = agentSummary.InteractionCountBucket,
-                WarningIds = (session.Warnings ?? new List<string>()).OrderBy(item => item, StringComparer.Ordinal).Take(8).ToList()
+                WarningIds = (session.Warnings ?? new List<string>()).OrderBy(item => item, StringComparer.Ordinal).Take(8).ToList(),
+                ExpGained = Math.Max(0, growth?.ExpGained ?? 0),
+                TopStatCategory = TopStatCategory(growth?.StatDeltas)
             };
+        }
+
+        private void RefreshCharacterDashboard(SaveData saveData, List<RecentSafeSessionSummary> summaries)
+        {
+            saveData = saveData ?? SaveData.CreateDefault();
+            var profile = saveData.CharacterProfile ?? new CharacterProfile();
+            var companion = CompanionProgressionRules.Normalize(saveData.CompanionState);
+            var desktopSettings = saveData.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault();
+            var stats = profile.Stats ?? CharacterStats.Zero();
+            var totalExp = Math.Max(0, profile.TotalExp);
+            const int expPerLevel = 1000;
+            var latestGrowth = (saveData.GrowthHistory ?? new List<CharacterGrowthResult>()).LastOrDefault();
+            var hasSavedRun = summaries != null && summaries.Count > 0;
+            var latestSession = hasSavedRun
+                ? BootstrapUiTextFormatter.SafeLocalSessionLabel(summaries[0])
+                : "No saved run yet. Analyze a repository or AI agent log to generate your first XP.";
+            var growthSummary = latestGrowth == null
+                ? "No growth recorded yet."
+                : "+" + latestGrowth.ExpGained + " XP | Level " + latestGrowth.LevelBefore + " -> " + latestGrowth.LevelAfter;
+
+            CharacterDashboard = new CharacterDashboardSummary
+            {
+                CharacterName = string.IsNullOrWhiteSpace(profile.DisplayName) ? "Token" : profile.DisplayName,
+                Level = Math.Max(1, profile.Level),
+                TotalExp = totalExp,
+                CurrentLevelExp = totalExp % expPerLevel,
+                ExpForNextLevel = expPerLevel,
+                RankTitle = RankFor(Math.Max(1, profile.Level), profile.CurrentEvolutionType),
+                Code = Math.Max(0, stats.Logic + stats.Architecture + stats.Velocity),
+                Focus = Math.Max(0, stats.Efficiency + stats.Stability),
+                Debug = Math.Max(0, stats.Debug),
+                Design = Math.Max(0, stats.Design + stats.Creativity),
+                Sync = Math.Max(0, (saveData.SyncState?.PendingQueueCount ?? 0) + (RemoteSafeSessions?.Count ?? 0)),
+                HasSavedRun = hasSavedRun,
+                CompanionState = companion,
+                DesktopCompanionSettings = desktopSettings,
+                DesktopOverlayState = desktopSettings.IsDesktopCompanionEnabled ? CompanionDesktopOverlayState.Fallback : CompanionDesktopOverlayState.Disabled,
+                LatestSafeSessionSummary = latestSession,
+                RecentGrowthSummary = growthSummary,
+                QuestSummary = BuildQuestSummary(hasSavedRun),
+                ActivityLogSummary = hasSavedRun
+                    ? string.Join("\n", summaries.Select(BootstrapUiTextFormatter.SafeLocalSessionLabel))
+                    : "No run saved yet.\nConnect a Git repository or AI Agent log, review the safe aggregate, then save it to gain XP."
+            };
+        }
+
+        private static string TopStatCategory(CharacterStats stats)
+        {
+            if (stats == null)
+            {
+                return string.Empty;
+            }
+
+            var pairs = new[]
+            {
+                new { Name = "Code", Value = stats.Logic + stats.Architecture + stats.Velocity },
+                new { Name = "Focus", Value = stats.Efficiency + stats.Stability },
+                new { Name = "Debug", Value = stats.Debug },
+                new { Name = "Design", Value = stats.Design + stats.Creativity },
+                new { Name = "Stress", Value = stats.Stress }
+            };
+            var top = pairs.OrderByDescending(item => item.Value).FirstOrDefault();
+            return top != null && top.Value > 0 ? top.Name : string.Empty;
+        }
+
+        private string BuildQuestSummary(bool hasSavedRun)
+        {
+            return "Analyze repository: open | Save session: "
+                   + (GitFlow.HasPendingReview || AgentFlow.HasPendingReview ? "ready" : "needs review")
+                   + " | Sync progress: "
+                   + (CanUseAuthenticatedSafeSync ? "ready" : "login required")
+                   + " | History: "
+                   + (hasSavedRun ? "available" : "empty");
+        }
+
+        private static string RankFor(int level, EvolutionType evolutionType)
+        {
+            if (level >= 20)
+            {
+                return "Forge Architect";
+            }
+
+            if (level >= 10)
+            {
+                return "Senior Smith";
+            }
+
+            if (evolutionType != EvolutionType.Unknown)
+            {
+                return evolutionType + " Adept";
+            }
+
+            return level >= 5 ? "Code Smith" : "Local Apprentice";
         }
 
         private static string SafeLocalAlias(string displayAlias, string fallback)
         {
             return string.IsNullOrWhiteSpace(displayAlias) ? fallback : displayAlias.Trim();
+        }
+
+        private static AgentProviderType ToAgentProviderType(ConnectedAgentSourceType sourceType)
+        {
+            switch (sourceType)
+            {
+                case ConnectedAgentSourceType.Cursor: return AgentProviderType.Cursor;
+                case ConnectedAgentSourceType.ClaudeCode: return AgentProviderType.ClaudeCode;
+                case ConnectedAgentSourceType.Codex: return AgentProviderType.Codex;
+                case ConnectedAgentSourceType.GitHubCopilot: return AgentProviderType.GitHubCopilot;
+                case ConnectedAgentSourceType.OtherManualLogFolder: return AgentProviderType.Manual;
+                default: return AgentProviderType.Unknown;
+            }
         }
     }
 }

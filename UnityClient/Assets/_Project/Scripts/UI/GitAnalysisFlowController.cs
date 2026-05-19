@@ -73,14 +73,26 @@ namespace TokenForge.Client.UI
 
         public Result DiscardPendingReview()
         {
+            pendingSession = null;
+            Review = null;
+            State = string.IsNullOrWhiteSpace(selectedRepositoryRootPath) ? GitAnalysisFlowState.Idle : GitAnalysisFlowState.Selected;
+            ErrorCategory = string.Empty;
+            SelectionStatus = string.IsNullOrWhiteSpace(selectedRepositoryRootPath) ? "No repository selected" : "Repository selected";
+            UserMessage = "Pending Git analysis discarded.";
+            logger?.Info("Git analysis pending review discarded");
+            return Result.Success();
+        }
+
+        public Result ClearSelection()
+        {
             selectedRepositoryRootPath = string.Empty;
             pendingSession = null;
             Review = null;
             State = GitAnalysisFlowState.Idle;
             ErrorCategory = string.Empty;
             SelectionStatus = "No repository selected";
-            UserMessage = "Pending Git analysis discarded.";
-            logger?.Info("Git analysis pending review discarded");
+            UserMessage = "Repository selection cleared.";
+            logger?.Info("Git repository selection cleared");
             return Result.Success();
         }
 
@@ -155,53 +167,43 @@ namespace TokenForge.Client.UI
             logger?.Info("Git analysis flow analysis started");
 
             var input = Settings.ToInput(selectedRepositoryRootPath);
-            try
+            var analysisResult = await analyzer.AnalyzeAsync(input, cancellationToken);
+            if (!analysisResult.IsSuccess)
             {
-                var analysisResult = await analyzer.AnalyzeAsync(input, cancellationToken);
-                if (!analysisResult.IsSuccess)
-                {
-                    selectedRepositoryRootPath = string.Empty;
-                    var failure = Fail(analysisResult.ErrorCode, "Analysis failed with a safe error category.");
-                    return Result<GitAnalysisReviewModel>.Failure(failure.ErrorCode, failure.ErrorMessage);
-                }
-
-                var session = GitAnalysisSessionProvider.CreateSession(analysisResult.Value);
-                var sessionValidation = privacySanitizer.ValidateSafeSession(session);
-                if (!sessionValidation.IsSuccess)
-                {
-                    selectedRepositoryRootPath = string.Empty;
-                    var failure = Fail(sessionValidation.ErrorCode, "Analysis result failed privacy validation.");
-                    return Result<GitAnalysisReviewModel>.Failure(failure.ErrorCode, failure.ErrorMessage);
-                }
-
-                var saveData = await repository.LoadAsync(cancellationToken);
-                var growthResult = growthCalculator.Calculate(
-                    session,
-                    saveData.CharacterProfile,
-                    saveData.DailyProgress?.ExpGainedToday ?? 0,
-                    0f);
-
-                var review = GitAnalysisReviewModel.From(session, growthResult);
-                var reviewValidation = privacySanitizer.ValidateNoForbiddenFields(review);
-                if (!reviewValidation.IsSuccess)
-                {
-                    selectedRepositoryRootPath = string.Empty;
-                    var failure = Fail(reviewValidation.ErrorCode, "Review failed privacy validation.");
-                    return Result<GitAnalysisReviewModel>.Failure(failure.ErrorCode, failure.ErrorMessage);
-                }
-
-                pendingSession = session;
-                Review = review;
-                State = GitAnalysisFlowState.ReviewReady;
-                SelectionStatus = "Repository analyzed";
-                UserMessage = "Review the safe aggregate summary before saving.";
-                logger?.Info("Git analysis flow review ready");
-                return Result<GitAnalysisReviewModel>.Success(review);
+                var failure = Fail(analysisResult.ErrorCode, "Analysis failed with a safe error category.");
+                return Result<GitAnalysisReviewModel>.Failure(failure.ErrorCode, failure.ErrorMessage);
             }
-            finally
+
+            var session = GitAnalysisSessionProvider.CreateSession(analysisResult.Value);
+            var sessionValidation = privacySanitizer.ValidateSafeSession(session);
+            if (!sessionValidation.IsSuccess)
             {
-                selectedRepositoryRootPath = string.Empty;
+                var failure = Fail(sessionValidation.ErrorCode, "Analysis result failed privacy validation.");
+                return Result<GitAnalysisReviewModel>.Failure(failure.ErrorCode, failure.ErrorMessage);
             }
+
+            var saveData = await repository.LoadAsync(cancellationToken);
+            var growthResult = growthCalculator.Calculate(
+                session,
+                saveData.CharacterProfile,
+                saveData.DailyProgress?.ExpGainedToday ?? 0,
+                0f);
+
+            var review = GitAnalysisReviewModel.From(session, growthResult);
+            var reviewValidation = privacySanitizer.ValidateNoForbiddenFields(review);
+            if (!reviewValidation.IsSuccess)
+            {
+                var failure = Fail(reviewValidation.ErrorCode, "Review failed privacy validation.");
+                return Result<GitAnalysisReviewModel>.Failure(failure.ErrorCode, failure.ErrorMessage);
+            }
+
+            pendingSession = session;
+            Review = review;
+            State = GitAnalysisFlowState.ReviewReady;
+            SelectionStatus = "Repository analyzed";
+            UserMessage = "Review the safe aggregate summary before saving.";
+            logger?.Info("Git analysis flow review ready");
+            return Result<GitAnalysisReviewModel>.Success(review);
         }
 
         public async Task<Result<SaveData>> SaveSessionAsync(CancellationToken cancellationToken = default)
@@ -225,7 +227,10 @@ namespace TokenForge.Client.UI
 
             var saveData = await repository.LoadAsync(cancellationToken);
             saveData.CharacterProfile = saveData.CharacterProfile ?? new CharacterProfile();
+            saveData.CompanionState = CompanionProgressionRules.Normalize(saveData.CompanionState);
             saveData.DailyProgress = saveData.DailyProgress ?? new DailyProgress();
+            saveData.WorkSessionSummaries = saveData.WorkSessionSummaries ?? new System.Collections.Generic.List<AgentWorkSession>();
+            saveData.GrowthHistory = saveData.GrowthHistory ?? new System.Collections.Generic.List<CharacterGrowthResult>();
             var growthResult = growthCalculator.Calculate(
                 pendingSession,
                 saveData.CharacterProfile,
@@ -235,6 +240,7 @@ namespace TokenForge.Client.UI
             ApplyGrowth(saveData.CharacterProfile, growthResult);
             saveData.WorkSessionSummaries.Add(pendingSession);
             saveData.GrowthHistory.Add(growthResult);
+            saveData.CompanionState = CompanionProgressionRules.CalculateState(saveData.WorkSessionSummaries, saveData.GrowthHistory);
             saveData.DailyProgress.ExpGainedToday += growthResult.ExpGained;
             saveData.DailyProgress.SessionsConfirmedToday += 1;
 

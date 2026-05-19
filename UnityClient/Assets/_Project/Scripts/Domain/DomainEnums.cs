@@ -22,9 +22,21 @@ namespace TokenForge.Client.Domain
 
     public enum AgentProviderType
     {
+        Unknown = 0,
+        Claude = 1,
+        Codex = 2,
+        Cursor = 3,
+        ClaudeCode = 4,
+        GitHubCopilot = 5,
+        Manual = 6
+    }
+
+    public enum AgentSourceKind
+    {
         Unknown,
-        Claude,
-        Codex
+        DetectedLocal,
+        ManualFolder,
+        ExportFile
     }
 
     public enum AgentToolUsageCategory

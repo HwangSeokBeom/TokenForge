@@ -291,7 +291,7 @@ namespace TokenForge.Client.Sync
                 },
                 AgentActivitySummary = new AgentActivitySummary
                 {
-                    ProviderType = AgentProviderType.Claude,
+                    ProviderType = AgentProviderType.ClaudeCode,
                     SourceIdentifierHash = "aaaabbbb11112222",
                     DayBucket = "2026-05-14",
                     SessionCountBucket = CountBucket.One,

@@ -25,7 +25,7 @@ namespace TokenForge.Client.UI
         public void Render()
         {
             SetText(localRecentSessionsLabel, BootstrapUiTextFormatter.RecentSessions(viewModel));
-            SetText(localDeleteStatusLabel, "Deleting a synced local session creates a local tombstone so remote delete can be synced explicitly.");
+            SetText(localDeleteStatusLabel, "Danger area: deleting a synced local session creates a local tombstone for explicit remote delete sync.");
             SetText(remoteSessionsLabel, BootstrapUiTextFormatter.RemoteSessions(viewModel));
             FillLocalDropdown();
             var hasLocal = viewModel != null && viewModel.RecentSessions.Count > 0;

@@ -109,7 +109,7 @@ namespace TokenForge.Client.UI
 
         public void Render()
         {
-            SetText(noticeLabel, "Only privacy-safe aggregate sessions are synced.\nApproved locations and raw local data are never synced.");
+            SetText(noticeLabel, "Only saved aggregate summaries can sync. Raw paths and source data stay local.");
             SetText(statusLabel, BootstrapUiTextFormatter.SafeSyncStatus(viewModel));
             SetText(retryQueueLabel, BootstrapUiTextFormatter.RetryQueueStatus(viewModel));
             SetText(conflictLabel, BootstrapUiTextFormatter.ConflictStatus(viewModel) + "\n" + BootstrapUiTextFormatter.ConflictAuditHistory(viewModel));

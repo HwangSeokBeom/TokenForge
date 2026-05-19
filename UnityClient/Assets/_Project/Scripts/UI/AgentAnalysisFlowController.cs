@@ -66,14 +66,32 @@ namespace TokenForge.Client.UI
 
         public Result DiscardPendingReview()
         {
+            pendingSession = null;
+            Review = null;
+            State = pendingInput == null || string.IsNullOrWhiteSpace(pendingInput.SelectedLocationPath)
+                ? AgentAnalysisFlowState.Idle
+                : AgentAnalysisFlowState.Selected;
+            ErrorCategory = string.Empty;
+            UserMessage = "Pending agent log analysis discarded.";
+            logger?.Info("Agent analysis pending review discarded");
+            return Result.Success();
+        }
+
+        public Result ClearSelection()
+        {
             pendingInput = null;
             pendingSession = null;
             Review = null;
             State = AgentAnalysisFlowState.Idle;
             ErrorCategory = string.Empty;
-            UserMessage = "Pending agent log analysis discarded.";
-            logger?.Info("Agent analysis pending review discarded");
+            UserMessage = "Agent log selection cleared.";
+            logger?.Info("Agent analysis location cleared");
             return Result.Success();
+        }
+
+        public Result MarkBlocked(string category, string message)
+        {
+            return Fail(category, message);
         }
 
         public Result SelectApprovedLogLocation(AgentAnalysisInput input)
@@ -83,6 +101,8 @@ namespace TokenForge.Client.UI
                 return Fail("missing_agent_log_location", "Agent log location is required.");
             }
 
+            input.ProviderHint = MacAgentSourceDetector.NormalizeProvider(input.ProviderHint);
+            input.SourceKind = input.SourceKind == AgentSourceKind.Unknown ? AgentSourceKind.ManualFolder : input.SourceKind;
             pendingInput = input;
             pendingSession = null;
             Review = null;
@@ -105,51 +125,44 @@ namespace TokenForge.Client.UI
             ErrorCategory = string.Empty;
             UserMessage = "Analyzing safe aggregate agent activity.";
 
-            try
+            var result = await provider.AnalyzeSessionAsync(pendingInput, cancellationToken);
+            if (!result.IsSuccess)
             {
-                var result = await provider.AnalyzeSessionAsync(pendingInput, cancellationToken);
-                if (!result.IsSuccess)
-                {
-                    var failure = Fail(result.ErrorCode, "Agent analysis failed with a safe error category.");
-                    return Result<AgentAnalysisReviewModel>.Failure(failure.ErrorCode, failure.ErrorMessage);
-                }
-
-                var sessionValidation = privacySanitizer.ValidateSafeSession(result.Value);
-                if (!sessionValidation.IsSuccess)
-                {
-                    var failure = Fail(sessionValidation.ErrorCode, "Agent analysis result failed privacy validation.");
-                    return Result<AgentAnalysisReviewModel>.Failure(failure.ErrorCode, failure.ErrorMessage);
-                }
-
-                var saveData = await repository.LoadAsync(cancellationToken);
-                var growthResult = growthCalculator.Calculate(
-                    result.Value,
-                    saveData.CharacterProfile,
-                    saveData.DailyProgress?.ExpGainedToday ?? 0,
-                    0f);
-
-                var saveEligible = result.Value.AgentActivitySummary.ConfidenceLevel != ConfidenceLevel.Low ||
-                    !(result.Value.AgentActivitySummary.WarningIds ?? new System.Collections.Generic.List<string>()).Contains("agent_log_unsupported_format");
-                var review = AgentAnalysisReviewModel.From(result.Value, growthResult, saveEligible);
-                var reviewValidation = privacySanitizer.ValidateNoForbiddenFields(review);
-                if (!reviewValidation.IsSuccess)
-                {
-                    var failure = Fail(reviewValidation.ErrorCode, "Agent review failed privacy validation.");
-                    return Result<AgentAnalysisReviewModel>.Failure(failure.ErrorCode, failure.ErrorMessage);
-                }
-
-                pendingSession = result.Value;
-                Review = review;
-                State = AgentAnalysisFlowState.ReviewReady;
-                ErrorCategory = string.Empty;
-                UserMessage = "Review the safe aggregate agent summary before saving.";
-                logger?.Info("Agent analysis review ready");
-                return Result<AgentAnalysisReviewModel>.Success(review);
+                var failure = Fail(result.ErrorCode, "Agent analysis failed with a safe error category. " + result.ErrorMessage);
+                return Result<AgentAnalysisReviewModel>.Failure(failure.ErrorCode, failure.ErrorMessage);
             }
-            finally
+
+            var sessionValidation = privacySanitizer.ValidateSafeSession(result.Value);
+            if (!sessionValidation.IsSuccess)
             {
-                pendingInput = null;
+                var failure = Fail(sessionValidation.ErrorCode, "Agent analysis result failed privacy validation.");
+                return Result<AgentAnalysisReviewModel>.Failure(failure.ErrorCode, failure.ErrorMessage);
             }
+
+            var saveData = await repository.LoadAsync(cancellationToken);
+            var growthResult = growthCalculator.Calculate(
+                result.Value,
+                saveData.CharacterProfile,
+                saveData.DailyProgress?.ExpGainedToday ?? 0,
+                0f);
+
+            var saveEligible = result.Value.AgentActivitySummary.ConfidenceLevel != ConfidenceLevel.Low ||
+                !(result.Value.AgentActivitySummary.WarningIds ?? new System.Collections.Generic.List<string>()).Contains("agent_log_unsupported_format");
+            var review = AgentAnalysisReviewModel.From(result.Value, growthResult, saveEligible);
+            var reviewValidation = privacySanitizer.ValidateNoForbiddenFields(review);
+            if (!reviewValidation.IsSuccess)
+            {
+                var failure = Fail(reviewValidation.ErrorCode, "Agent review failed privacy validation.");
+                return Result<AgentAnalysisReviewModel>.Failure(failure.ErrorCode, failure.ErrorMessage);
+            }
+
+            pendingSession = result.Value;
+            Review = review;
+            State = AgentAnalysisFlowState.ReviewReady;
+            ErrorCategory = string.Empty;
+            UserMessage = "Review the safe aggregate agent summary before saving.";
+            logger?.Info("Agent analysis review ready");
+            return Result<AgentAnalysisReviewModel>.Success(review);
         }
 
         public async Task<Result<SaveData>> SaveSessionAsync(CancellationToken cancellationToken = default)
@@ -179,7 +192,10 @@ namespace TokenForge.Client.UI
 
             var saveData = await repository.LoadAsync(cancellationToken);
             saveData.CharacterProfile = saveData.CharacterProfile ?? new CharacterProfile();
+            saveData.CompanionState = CompanionProgressionRules.Normalize(saveData.CompanionState);
             saveData.DailyProgress = saveData.DailyProgress ?? new DailyProgress();
+            saveData.WorkSessionSummaries = saveData.WorkSessionSummaries ?? new System.Collections.Generic.List<AgentWorkSession>();
+            saveData.GrowthHistory = saveData.GrowthHistory ?? new System.Collections.Generic.List<CharacterGrowthResult>();
             var growthResult = growthCalculator.Calculate(
                 pendingSession,
                 saveData.CharacterProfile,
@@ -189,6 +205,7 @@ namespace TokenForge.Client.UI
             ApplyGrowth(saveData.CharacterProfile, growthResult);
             saveData.WorkSessionSummaries.Add(pendingSession);
             saveData.GrowthHistory.Add(growthResult);
+            saveData.CompanionState = CompanionProgressionRules.CalculateState(saveData.WorkSessionSummaries, saveData.GrowthHistory);
             saveData.DailyProgress.ExpGainedToday += growthResult.ExpGained;
             saveData.DailyProgress.SessionsConfirmedToday += 1;
 

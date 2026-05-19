@@ -45,11 +45,13 @@ namespace TokenForge.Client.Tests
             Assert.IsNotNull(bootstrapper.ApprovedActivityAnalysis);
             Assert.IsNotNull(bootstrapper.GitAnalysisFlow);
             Assert.IsNotNull(bootstrapper.AgentAnalysisFlow);
+            Assert.IsTrue(root.startScreenRoot.activeInHierarchy);
+            Assert.IsFalse(root.settingsAdvancedRoot.activeInHierarchy);
 
             Assert.IsTrue(root.activityAnalysisPanel.selectGitButton.interactable);
             Assert.IsTrue(root.activityAnalysisPanel.selectAgentButton.interactable);
-            Assert.IsFalse(root.activityAnalysisPanel.analyzeGitButton.interactable);
-            Assert.IsFalse(root.activityAnalysisPanel.analyzeAgentButton.interactable);
+            Assert.IsTrue(root.activityAnalysisPanel.analyzeGitButton.interactable);
+            Assert.IsTrue(root.activityAnalysisPanel.analyzeAgentButton.interactable);
             Assert.IsTrue(root.safeSyncPanel.healthButton.interactable);
             Assert.IsFalse(root.safeSyncPanel.syncButton.interactable);
             Assert.IsFalse(root.safeSyncPanel.fetchButton.interactable);
@@ -57,12 +59,13 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(SafeSyncStatus.Idle, bootstrapper.ApprovedActivityAnalysis.SafeSyncStatus);
 
             var visibleText = string.Join("\n", UiVisibleTextScanner.Collect(root.gameObject));
-            Assert.That(visibleText, Does.Contain("Privacy-safe developer activity companion"));
-            Assert.That(visibleText, Does.Contain("Local analysis works without login"));
-            Assert.That(visibleText, Does.Contain("Approved locations"));
-            Assert.That(visibleText, Does.Contain("never synced"));
+            Assert.That(visibleText, Does.Contain("Turn local development activity into RPG growth."));
+            Assert.That(visibleText, Does.Contain("Start Game"));
+            Assert.That(visibleText, Does.Contain("Run Analysis"));
+            Assert.That(visibleText, Does.Contain("Safe Sync"));
+            Assert.That(visibleText, Does.Contain("No saved run yet."));
             Assert.IsEmpty(UiVisibleTextScanner.FindForbiddenRuntimeText(root.gameObject));
-            Assert.IsNotNull(root.GetComponentInChildren<ScrollRect>());
+            Assert.IsNotNull(root.GetComponentInChildren<ScrollRect>(true));
         }
     }
 }

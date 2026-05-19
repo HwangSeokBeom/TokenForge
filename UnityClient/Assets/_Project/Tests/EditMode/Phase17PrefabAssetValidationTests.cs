@@ -42,7 +42,7 @@ namespace TokenForge.Client.Tests
             Assert.IsNotNull(prefab);
             var text = string.Join("\n", prefab.GetComponentsInChildren<Text>(true).Select(label => label.text));
 
-            Assert.That(text, Does.Contain("aggregate-only"));
+            Assert.That(text, Does.Contain("Privacy-safe aggregate"));
             Assert.That(text, Does.Contain("Approved locations"));
             Assert.That(text, Does.Contain("never synced"));
             Assert.That(text, Does.Not.Contain("/Users/"));

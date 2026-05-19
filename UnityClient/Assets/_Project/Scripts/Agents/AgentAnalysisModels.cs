@@ -19,13 +19,21 @@ namespace TokenForge.Client.Agents
         public int AnalysisWindowDays { get; set; } = DefaultAnalysisWindowDays;
         public int MaxFilesToScan { get; set; } = DefaultMaxFilesToScan;
         public int MaxLogEntriesToScan { get; set; } = DefaultMaxLogEntriesToScan;
+        public AgentSourceKind SourceKind { get; set; } = AgentSourceKind.Unknown;
+        public string SafeSourceAlias { get; set; } = string.Empty;
+        public bool LocalOnly { get; set; } = true;
+        public List<string> IncludeRules { get; set; } = new List<string>();
+        public List<string> ExcludeRules { get; set; } = new List<string>();
     }
 
     public sealed class AgentAnalysisReviewModel
     {
         public string SourceProvider { get; set; } = AgentLogActivityProvider.SourceProviderId;
         public AgentProviderType ProviderType { get; set; } = AgentProviderType.Unknown;
+        public AgentSourceKind SourceKind { get; set; } = AgentSourceKind.Unknown;
+        public string SafeSourceAlias { get; set; } = string.Empty;
         public string DayBucket { get; set; } = string.Empty;
+        public CountBucket FileCountBucket { get; set; } = CountBucket.Unknown;
         public CountBucket SessionCountBucket { get; set; } = CountBucket.Unknown;
         public CountBucket InteractionCountBucket { get; set; } = CountBucket.Unknown;
         public CountBucket EstimatedCodingActivityBucket { get; set; } = CountBucket.Unknown;
@@ -46,7 +54,10 @@ namespace TokenForge.Client.Agents
             {
                 SourceProvider = AgentLogActivityProvider.SourceProviderId,
                 ProviderType = summary.ProviderType,
+                SourceKind = summary.SourceKind,
+                SafeSourceAlias = summary.SafeSourceAlias,
                 DayBucket = summary.DayBucket,
+                FileCountBucket = summary.FileCountBucket,
                 SessionCountBucket = summary.SessionCountBucket,
                 InteractionCountBucket = summary.InteractionCountBucket,
                 EstimatedCodingActivityBucket = summary.EstimatedCodingActivityBucket,

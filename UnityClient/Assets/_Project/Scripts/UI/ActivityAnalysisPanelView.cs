@@ -30,11 +30,11 @@ namespace TokenForge.Client.UI
             this.viewModel = viewModel;
             ConfigureProviderDropdown();
 
-            ReplaceClick(selectGitButton, () => RunViewModelAction(() => this.viewModel.GitFlow.SelectRepositoryAsync()));
+            ReplaceClick(selectGitButton, () => RunViewModelAction(() => this.viewModel.SelectLocalGitRepositoryForOnboardingAsync()));
             ReplaceClick(analyzeGitButton, () =>
             {
                 ApplyGitSettings();
-                RunViewModelAction(() => this.viewModel.GitFlow.AnalyzeAsync());
+                RunViewModelAction(() => this.viewModel.AnalyzeGitActivityAsync());
             });
             ReplaceClick(selectAgentButton, () =>
             {
@@ -44,7 +44,7 @@ namespace TokenForge.Client.UI
             ReplaceClick(analyzeAgentButton, () =>
             {
                 ApplyAgentSettings();
-                RunViewModelAction(() => this.viewModel.AnalyzeAgentActivityAsync());
+                RunViewModelAction(() => this.viewModel.AnalyzeSelectedAgentActivityAsync());
             });
 
             Render();
@@ -52,8 +52,8 @@ namespace TokenForge.Client.UI
 
         public void Render()
         {
-            SetText(gitStatusLabel, BootstrapUiTextFormatter.GitStatus(viewModel));
-            SetText(agentStatusLabel, BootstrapUiTextFormatter.AgentStatus(viewModel));
+            SetText(gitStatusLabel, BootstrapUiTextFormatter.FriendlyGitStatus(viewModel));
+            SetText(agentStatusLabel, BootstrapUiTextFormatter.FriendlyAgentStatus(viewModel));
 
             if (viewModel != null)
             {
@@ -82,9 +82,9 @@ namespace TokenForge.Client.UI
             var gitBusy = viewModel != null && viewModel.GitFlow.State == GitAnalysisFlowState.Analyzing;
             var agentBusy = viewModel != null && viewModel.AgentFlow.State == AgentAnalysisFlowState.Analyzing;
             SetButton(selectGitButton, viewModel != null && !gitBusy);
-            SetButton(analyzeGitButton, viewModel != null && CanAnalyzeGit() && !gitBusy);
+            SetButton(analyzeGitButton, viewModel != null && !gitBusy);
             SetButton(selectAgentButton, viewModel != null && !agentBusy);
-            SetButton(analyzeAgentButton, viewModel != null && CanAnalyzeAgent() && !agentBusy);
+            SetButton(analyzeAgentButton, viewModel != null && !agentBusy);
         }
 
         private void ApplyGitSettings()
@@ -139,18 +139,6 @@ namespace TokenForge.Client.UI
             }
         }
 
-        private bool CanAnalyzeGit()
-        {
-            var state = viewModel.GitFlow.State;
-            return state == GitAnalysisFlowState.Selected || state == GitAnalysisFlowState.Failed;
-        }
-
-        private bool CanAnalyzeAgent()
-        {
-            var state = viewModel.AgentFlow.State;
-            return state == AgentAnalysisFlowState.Selected || state == AgentAnalysisFlowState.Failed;
-        }
-
         private void ConfigureProviderDropdown()
         {
             if (agentProviderDropdown == null)
@@ -160,9 +148,11 @@ namespace TokenForge.Client.UI
 
             agentProviderDropdown.options = new System.Collections.Generic.List<Dropdown.OptionData>
             {
-                new Dropdown.OptionData("Unknown/Auto"),
-                new Dropdown.OptionData("Claude"),
-                new Dropdown.OptionData("Codex")
+                new Dropdown.OptionData("Cursor"),
+                new Dropdown.OptionData("Claude Code"),
+                new Dropdown.OptionData("Codex"),
+                new Dropdown.OptionData("GitHub Copilot"),
+                new Dropdown.OptionData("Other / Manual Log Folder")
             };
             agentProviderDropdown.value = viewModel != null ? ProviderToDropdownIndex(viewModel.SelectedAgentProviderType) : 0;
             agentProviderDropdown.onValueChanged.RemoveAllListeners();
@@ -180,8 +170,12 @@ namespace TokenForge.Client.UI
         {
             switch (providerType)
             {
-                case AgentProviderType.Claude: return 1;
+                case AgentProviderType.Cursor: return 0;
+                case AgentProviderType.Claude:
+                case AgentProviderType.ClaudeCode: return 1;
                 case AgentProviderType.Codex: return 2;
+                case AgentProviderType.GitHubCopilot: return 3;
+                case AgentProviderType.Manual: return 4;
                 default: return 0;
             }
         }
@@ -190,9 +184,12 @@ namespace TokenForge.Client.UI
         {
             switch (value)
             {
-                case 1: return AgentProviderType.Claude;
+                case 0: return AgentProviderType.Cursor;
+                case 1: return AgentProviderType.ClaudeCode;
                 case 2: return AgentProviderType.Codex;
-                default: return AgentProviderType.Unknown;
+                case 3: return AgentProviderType.GitHubCopilot;
+                case 4: return AgentProviderType.Manual;
+                default: return AgentProviderType.Cursor;
             }
         }
 

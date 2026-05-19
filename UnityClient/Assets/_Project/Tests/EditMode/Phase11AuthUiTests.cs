@@ -12,6 +12,8 @@ using TokenForge.Client.Persistence;
 using TokenForge.Client.Platform;
 using TokenForge.Client.Sync;
 using TokenForge.Client.UI;
+using UnityEditor;
+using UnityEngine;
 
 namespace TokenForge.Client.Tests
 {
@@ -174,6 +176,130 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(AuthState.LoggedOut, viewModel.AuthState);
         }
 
+        [Test]
+        public void OnboardingCreateAccountButtonCallsAuthAndAdvancesToAgents()
+        {
+            var auth = new FakeAuthSessionService();
+            var viewModel = CreateViewModel(new FakeSafeSyncService(), auth);
+            var root = LoadBoundBootstrapRoot(viewModel);
+            try
+            {
+                root.onboardingEmailInput.text = "new@example.com";
+                root.onboardingDisplayNameInput.text = "New Player";
+                root.onboardingPasswordInput.text = "password123";
+
+                root.onboardingCreateAccountButton.onClick.Invoke();
+
+                Assert.AreEqual(1, auth.SignupCount);
+                Assert.AreEqual(AuthState.LoggedIn, viewModel.AuthState);
+                Assert.AreEqual(OnboardingStep.AiAgents, viewModel.Onboarding.CurrentStep);
+                Assert.IsTrue(root.startScreenRoot.activeSelf, "Signup should not leave the first screen or start sync automatically.");
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root.gameObject);
+            }
+        }
+
+        [Test]
+        public void OnboardingLoginButtonCallsAuthAndAdvancesToAgents()
+        {
+            var auth = new FakeAuthSessionService();
+            var viewModel = CreateViewModel(new FakeSafeSyncService(), auth);
+            var root = LoadBoundBootstrapRoot(viewModel);
+            try
+            {
+                root.onboardingEmailInput.text = "player@example.com";
+                root.onboardingPasswordInput.text = "password123";
+
+                root.onboardingLoginButton.onClick.Invoke();
+
+                Assert.AreEqual(1, auth.LoginCount);
+                Assert.AreEqual(AuthState.LoggedIn, viewModel.AuthState);
+                Assert.AreEqual(OnboardingStep.AiAgents, viewModel.Onboarding.CurrentStep);
+                Assert.IsTrue(root.startScreenRoot.activeSelf, "Login should not leave the first screen or start sync automatically.");
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root.gameObject);
+            }
+        }
+
+        [Test]
+        public void OnboardingContinueOfflineAdvancesWithoutAuthOrSync()
+        {
+            var auth = new FakeAuthSessionService();
+            var sync = new FakeSafeSyncService();
+            var viewModel = CreateViewModel(sync, auth);
+            var root = LoadBoundBootstrapRoot(viewModel);
+            try
+            {
+                root.onboardingDisplayNameInput.text = "Local Player";
+
+                root.onboardingContinueOfflineButton.onClick.Invoke();
+
+                Assert.AreEqual(0, auth.LoginCount);
+                Assert.AreEqual(0, auth.SignupCount);
+                Assert.AreEqual(0, sync.SyncCount);
+                Assert.IsTrue(viewModel.Onboarding.OfflineModeSelected);
+                Assert.AreEqual(OnboardingStep.AiAgents, viewModel.Onboarding.CurrentStep);
+                Assert.That(root.startGrowthLabel.text, Does.Contain("Saving a reviewed aggregate"));
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root.gameObject);
+            }
+        }
+
+        [Test]
+        public void OnboardingStepButtonsUpdateSummaryAndReachDashboard()
+        {
+            var viewModel = CreateViewModel(new FakeSafeSyncService(), new FakeAuthSessionService());
+            var root = LoadBoundBootstrapRoot(viewModel);
+            try
+            {
+                root.onboardingContinueOfflineButton.onClick.Invoke();
+                root.ShowDashboard();
+                root.ShowStart();
+                root.cursorAgentConnectButton.onClick.Invoke();
+
+                Assert.That(BootstrapUiTextFormatter.SelectedAgentSummary(viewModel), Does.Contain("Cursor"));
+
+                root.onboardingSkipGitButton.onClick.Invoke();
+                Assert.AreEqual(OnboardingStep.Ready, viewModel.Onboarding.CurrentStep);
+                Assert.That(root.onboardingReadySummaryLabel.text, Does.Contain("Start Game opens the dashboard"));
+
+                root.startGameButton.onClick.Invoke();
+                Assert.IsTrue(root.gameDashboardRoot.activeSelf, "Dashboard should be visible after Start Game.");
+                Assert.IsFalse(root.startScreenRoot.activeSelf, "Onboarding should be hidden after Start Game.");
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root.gameObject);
+            }
+        }
+
+        [Test]
+        public void OnboardingDefaultUiDoesNotExposeRawLocalDetails()
+        {
+            var viewModel = CreateViewModel(new FakeSafeSyncService(), new FakeAuthSessionService());
+            var root = LoadBoundBootstrapRoot(viewModel);
+            try
+            {
+                var visibleText = string.Join("\n", UiVisibleTextScanner.Collect(root.gameObject));
+
+                Assert.That(visibleText, Does.Not.Contain("/Users/"));
+                Assert.That(visibleText, Does.Not.Contain("\\Users\\"));
+                Assert.That(visibleText, Does.Not.Contain("commit hash"));
+                Assert.That(visibleText, Does.Not.Contain("raw prompt"));
+                Assert.That(visibleText, Does.Not.Contain("raw log"));
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root.gameObject);
+            }
+        }
+
         private static ApprovedActivityAnalysisViewModel CreateViewModel(ISafeSyncService syncService, IAuthSessionService authService)
         {
             var repository = new FakeRepository();
@@ -186,6 +312,16 @@ namespace TokenForge.Client.Tests
                 new ApprovedLocationSettingsRepository(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "TokenForgeTests", System.IO.Path.GetRandomFileName())),
                 syncService,
                 authService);
+        }
+
+        private static BootstrapRootView LoadBoundBootstrapRoot(ApprovedActivityAnalysisViewModel viewModel)
+        {
+            var rootObject = PrefabUtility.LoadPrefabContents("Assets/_Project/Prefabs/UI/BootstrapRoot.prefab");
+            var root = rootObject.GetComponent<BootstrapRootView>();
+            Assert.IsNotNull(root, "BootstrapRootView is missing from prefab.");
+            root.Bind(LocalClientStatus.CreateInitialized(), viewModel);
+            root.Render();
+            return root;
         }
 
         private static T RunAsync<T>(Func<Task<T>> taskFactory)

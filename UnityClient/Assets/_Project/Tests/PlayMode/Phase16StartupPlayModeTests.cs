@@ -40,15 +40,15 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(SafeSyncStatus.Idle, bootstrapper.ApprovedActivityAnalysis.SafeSyncStatus);
             Assert.IsFalse(bootstrapper.ApprovedActivityAnalysis.IsAuthRequestInProgress);
             Assert.IsFalse(bootstrapper.ApprovedActivityAnalysis.IsSafeSyncRequestInProgress);
-            Assert.IsFalse(root.activityAnalysisPanel.analyzeGitButton.interactable);
-            Assert.IsFalse(root.activityAnalysisPanel.analyzeAgentButton.interactable);
+            Assert.IsTrue(root.activityAnalysisPanel.analyzeGitButton.interactable);
+            Assert.IsTrue(root.activityAnalysisPanel.analyzeAgentButton.interactable);
             Assert.IsTrue(root.safeSyncPanel.healthButton.interactable);
             Assert.IsFalse(root.safeSyncPanel.syncButton.interactable);
             Assert.IsFalse(root.safeSyncPanel.fetchButton.interactable);
 
             var visibleText = string.Join("\n", UiVisibleTextScanner.Collect(root.gameObject));
-            Assert.That(visibleText, Does.Contain("Safe Sync sends aggregate-only"));
-            Assert.That(visibleText, Does.Contain("Approved locations are stored only on this device"));
+            Assert.That(visibleText, Does.Contain("Start Game"));
+            Assert.That(visibleText, Does.Contain("Raw paths, prompts, logs, source code, diffs, and file names stay local."));
             Assert.That(visibleText, Does.Not.Contain("access-token"));
             Assert.That(visibleText, Does.Not.Contain("refresh-token"));
             Assert.IsEmpty(UiVisibleTextScanner.FindForbiddenRuntimeText(root.gameObject));

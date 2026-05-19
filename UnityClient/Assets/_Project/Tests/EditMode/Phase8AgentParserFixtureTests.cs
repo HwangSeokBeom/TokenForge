@@ -23,7 +23,7 @@ namespace TokenForge.Client.Tests
         [Test]
         public void ClaudeJsonlFixture_ProducesSafeAggregateOnly()
         {
-            var result = new ClaudeAgentLogParser().Parse(Input(AgentProviderType.Claude), new List<AgentLogEntry>
+            var result = new ClaudeAgentLogParser().Parse(Input(AgentProviderType.ClaudeCode), new List<AgentLogEntry>
             {
                 Entry("{\"provider\":\"claude\",\"timestamp\":\"2026-05-14T01:00:00Z\",\"session_id\":\"claude-session-a\",\"type\":\"message\",\"role\":\"user\",\"prompt\":\"" + RawPrompt + "\"}"),
                 Entry("{\"provider\":\"claude\",\"timestamp\":\"2026-05-14T01:02:00Z\",\"tool_name\":\"Read\",\"file_path\":\"" + RawPath + "\"}"),
@@ -32,7 +32,7 @@ namespace TokenForge.Client.Tests
             });
 
             Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
-            Assert.AreEqual(AgentProviderType.Claude, result.Value.ProviderType);
+            Assert.AreEqual(AgentProviderType.ClaudeCode, result.Value.ProviderType);
             Assert.AreEqual("2026-05-14", result.Value.DayBucket);
             Assert.AreEqual(CountBucket.One, result.Value.SessionCountBucket);
             AssertHasTool(result.Value, AgentToolUsageCategory.CodeEditing);

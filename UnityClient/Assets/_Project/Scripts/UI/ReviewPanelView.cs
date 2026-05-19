@@ -37,7 +37,7 @@ namespace TokenForge.Client.UI
 
         public void Render()
         {
-            SetText(noticeLabel, ApprovedActivityAnalysisViewModel.SafeAggregateNotice + "\n" + ApprovedActivityAnalysisViewModel.RawDataNotice);
+            SetText(noticeLabel, "Only safe aggregate data can be saved. Raw paths and source content stay local.");
             SetText(reviewLabel, BootstrapUiTextFormatter.ReviewSummary(viewModel));
             var gitReady = viewModel != null && viewModel.GitFlow.State == GitAnalysisFlowState.ReviewReady;
             var agentReady = viewModel != null && viewModel.AgentFlow.State == AgentAnalysisFlowState.ReviewReady;

@@ -38,6 +38,11 @@ namespace TokenForge.Client.Tests
             Assert.IsNotNull(fixture.Root.activityAnalysisPanel.analyzeGitButton);
             Assert.IsNotNull(fixture.Root.safeSyncPanel.syncButton);
             Assert.IsNotNull(fixture.Root.privacyNoticePanel.bodyLabel);
+            Assert.IsNotNull(fixture.Root.companionView);
+            Assert.IsNotNull(fixture.Root.companionStatusPanel);
+            Assert.IsNotNull(fixture.Root.dashboardDesktopCompanionLabel);
+            Assert.IsNotNull(fixture.Root.dashboardEnableDesktopCompanionButton);
+            Assert.IsNotNull(fixture.Root.settingsDesktopCompanionEnabledToggle);
 
             fixture.Destroy();
         }
@@ -55,6 +60,374 @@ namespace TokenForge.Client.Tests
             Assert.IsTrue(fixture.Root.validationStatusLabel.text.Contains("UI prefab reference error"));
 
             fixture.Destroy();
+        }
+    }
+
+    public sealed class MvpGameFlowPlayModeTests
+    {
+        [UnityTest]
+        public IEnumerator StartScreenRoutesToDashboardAndAnalysisWithoutLoginOrSync()
+        {
+            Screen.SetResolution(1280, 720, false);
+            var fixture = Phase14UiFixture.Create(loggedIn: false);
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(fixture.Root.GetComponent<RectTransform>());
+
+            Assert.IsTrue(fixture.Root.startScreenRoot.activeInHierarchy);
+            Assert.IsTrue(fixture.Root.startGameButton.interactable);
+            Assert.IsTrue(fixture.Root.startAnalyzeRepositoryButton.interactable);
+            Assert.That(fixture.Root.onboardingReadySummaryLabel.text, Does.Contain("Start Game opens the dashboard"));
+            Assert.That(fixture.Root.onboardingReadySummaryLabel.text, Does.Contain("Saving the review is the only step"));
+            Assert.IsFalse(fixture.Root.startSaveRunButton.interactable);
+            Assert.IsFalse(fixture.Root.accountPanel.gameObject.activeInHierarchy);
+            Assert.IsFalse(fixture.Root.safeSyncPanel.gameObject.activeInHierarchy);
+            Assert.IsFalse(fixture.Root.privacyNoticePanel.gameObject.activeInHierarchy);
+            AssertStartScreenCoreLayout(fixture.Root, "1280x720");
+
+            fixture.Root.startGameButton.onClick.Invoke();
+            yield return null;
+            Canvas.ForceUpdateCanvases();
+            LayoutRebuilder.ForceRebuildLayoutImmediate(fixture.Root.GetComponent<RectTransform>());
+
+            Assert.IsFalse(fixture.Root.startScreenRoot.activeInHierarchy);
+            Assert.IsTrue(fixture.Root.gameDashboardRoot.activeInHierarchy);
+            Assert.IsTrue(fixture.Root.companionView.gameObject.activeInHierarchy);
+            Assert.That(fixture.Root.companionStatusPanel.statusLabel.text, Does.Contain("Stage: Egg"));
+            Assert.That(fixture.Root.companionStatusPanel.statusLabel.text, Does.Contain("No approved growth yet."));
+            Assert.That(fixture.Root.dashboardDesktopCompanionLabel.text, Does.Contain("Desktop Companion"));
+            Assert.That(fixture.Root.dashboardDesktopCompanionLabel.text, Does.Contain("State: disabled"));
+            Assert.That(fixture.Root.dashboardActivityLogLabel.text, Does.Contain("Select a repository or agent source."));
+            Assert.IsFalse(fixture.Root.dashboardSyncButton.interactable);
+            Assert.That(fixture.Root.dashboardSyncReasonLabel.text, Does.Contain("Create an account only if you want Safe Sync."));
+            AssertDashboardCoreLayout(fixture.Root, "1280x720");
+
+            fixture.Root.dashboardAnalyzeRepositoryButton.onClick.Invoke();
+            yield return null;
+            Assert.IsTrue(fixture.Root.runAnalysisRoot.activeInHierarchy);
+
+            fixture.Destroy();
+        }
+
+        [UnityTest]
+        public IEnumerator StartDashboardAndSettingsLayoutsRemainVisibleAcrossSupportedWindowSizes()
+        {
+            foreach (var size in new[] { new Vector2Int(1280, 720), new Vector2Int(1440, 900), new Vector2Int(1600, 1000) })
+            {
+                Screen.SetResolution(size.x, size.y, false);
+                var fixture = Phase14UiFixture.Create(loggedIn: false);
+                yield return null;
+                Canvas.ForceUpdateCanvases();
+                LayoutRebuilder.ForceRebuildLayoutImmediate(fixture.Root.GetComponent<RectTransform>());
+                AssertStartScreenCoreLayout(fixture.Root, size.x + "x" + size.y);
+
+                fixture.Root.ShowDashboard();
+                yield return null;
+                Canvas.ForceUpdateCanvases();
+                LayoutRebuilder.ForceRebuildLayoutImmediate(fixture.Root.GetComponent<RectTransform>());
+                AssertDashboardCoreLayout(fixture.Root, size.x + "x" + size.y);
+
+                fixture.Root.dashboardSettingsButton.onClick.Invoke();
+                yield return null;
+                Canvas.ForceUpdateCanvases();
+                LayoutRebuilder.ForceRebuildLayoutImmediate(fixture.Root.GetComponent<RectTransform>());
+                AssertSettingsCoreLayout(fixture.Root, size.x + "x" + size.y);
+
+                fixture.Root.settingsBackButton.onClick.Invoke();
+                yield return null;
+                Assert.IsTrue(fixture.Root.gameDashboardRoot.activeInHierarchy, "Back to Game failed at " + size.x + "x" + size.y);
+                fixture.Destroy();
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator OnboardingAgentSelectionUsesHonestStatesAndSafeManualAlias()
+        {
+            var fixture = Phase14UiFixture.Create(loggedIn: false);
+            yield return null;
+
+            fixture.Root.cursorAgentConnectButton.onClick.Invoke();
+            yield return null;
+            Assert.IsTrue(fixture.ViewModel.Onboarding.AgentSources.First(source => source.SourceType == ConnectedAgentSourceType.Cursor).Selected);
+            Assert.AreEqual(AgentSourceSetupState.Selected, fixture.ViewModel.Onboarding.AgentSources.First(source => source.SourceType == ConnectedAgentSourceType.Cursor).State);
+            Assert.That(fixture.Root.cursorAgentStatusLabel.text, Does.Contain("Cursor selected"));
+            Assert.That(fixture.Root.cursorAgentStatusLabel.text, Does.Contain("selected"));
+            Assert.That(fixture.Root.cursorAgentStatusLabel.text, Does.Not.Contain("connected"));
+            Assert.That(fixture.Root.cursorAgentConnectButton.GetComponentInChildren<Text>().text, Is.EqualTo("Detect"));
+            Assert.That(BootstrapUiTextFormatter.SelectedAgentSummary(fixture.ViewModel), Does.Contain("Cursor selected"));
+
+            fixture.Root.otherAgentSelectLogFolderButton.onClick.Invoke();
+            yield return fixture.WaitUntil(() => fixture.ViewModel.Onboarding.AgentSources.First(source => source.SourceType == ConnectedAgentSourceType.OtherManualLogFolder).State == AgentSourceSetupState.ReadyToAnalyze);
+            yield return null;
+
+            var manual = fixture.ViewModel.Onboarding.AgentSources.First(source => source.SourceType == ConnectedAgentSourceType.OtherManualLogFolder);
+            Assert.IsTrue(manual.Selected);
+            Assert.AreEqual("Manual Log Folder 1", manual.SafeLabel);
+            Assert.IsNotEmpty(manual.SafeLocationHash);
+            Assert.That(fixture.Root.otherAgentStatusLabel.text, Does.Contain("Ready to analyze"));
+            Assert.That(fixture.Root.otherAgentSelectLogFolderButton.GetComponentInChildren<Text>().text, Is.EqualTo("Analyze"));
+            Assert.That(BootstrapUiTextFormatter.SelectedAgentSummary(fixture.ViewModel), Does.Contain("Manual Log Folder 1"));
+            Assert.IsFalse(UiTextScanner.VisibleTextContains(fixture.Root.gameObject, fixture.RawAgentLogPath));
+            Assert.IsFalse(UiTextScanner.VisibleTextContains(fixture.Root.gameObject, "claude-private.jsonl"));
+
+            fixture.Destroy();
+        }
+
+        [UnityTest]
+        public IEnumerator OnboardingGitSelectionUsesSafeAliasSkipClearAndHonestAccountPlaceholder()
+        {
+            var fixture = Phase14UiFixture.Create(loggedIn: false);
+            yield return null;
+
+            fixture.Root.onboardingSelectLocalRepositoryButton.onClick.Invoke();
+            yield return fixture.WaitUntil(() => fixture.ViewModel.Onboarding.GitConnected);
+            yield return null;
+            Assert.AreEqual("Local Repository 1", fixture.ViewModel.Onboarding.GitSafeAlias);
+            Assert.That(fixture.Root.onboardingGitStatusLabel.text, Does.Contain("Local repository selected"));
+            Assert.That(fixture.Root.onboardingGitStatusLabel.text, Does.Not.Contain(fixture.RawRepositoryPath));
+            Assert.IsFalse(UiTextScanner.VisibleTextContains(fixture.Root.gameObject, fixture.RawRepositoryPath));
+            Assert.IsFalse(UiTextScanner.VisibleTextContains(fixture.Root.gameObject, "SecretRepo"));
+
+            fixture.Root.onboardingClearLocalRepositoryButton.onClick.Invoke();
+            yield return null;
+            Assert.IsFalse(fixture.ViewModel.Onboarding.GitConnected);
+            Assert.That(fixture.Root.onboardingGitStatusLabel.text, Does.Contain("No Git source selected"));
+
+            fixture.Root.onboardingConnectGitAccountButton.onClick.Invoke();
+            yield return null;
+            Assert.IsTrue(fixture.ViewModel.Onboarding.GitAccountPlaceholderSelected);
+            Assert.That(fixture.Root.onboardingGitStatusLabel.text, Does.Contain("not available in this MVP"));
+            Assert.That(fixture.Root.onboardingGitStatusLabel.text, Does.Not.Contain("connected"));
+
+            fixture.Root.onboardingSkipGitButton.onClick.Invoke();
+            yield return null;
+            Assert.IsTrue(fixture.ViewModel.Onboarding.GitSkipped);
+            Assert.That(fixture.Root.onboardingGitStatusLabel.text, Does.Contain("skipped"));
+
+            fixture.Destroy();
+        }
+
+        [UnityTest]
+        public IEnumerator SettingsAdvancedExposesAuthSyncPrivacyPanelsFromGame()
+        {
+            var fixture = Phase14UiFixture.Create(loggedIn: false);
+            fixture.Root.ShowDashboard();
+            yield return null;
+
+            fixture.Root.dashboardSettingsButton.onClick.Invoke();
+            yield return null;
+
+            Assert.IsTrue(fixture.Root.settingsAdvancedRoot.activeInHierarchy);
+            Assert.IsTrue(fixture.Root.accountPanel.gameObject.activeInHierarchy);
+            Assert.IsTrue(fixture.Root.privacyNoticePanel.gameObject.activeInHierarchy);
+            Assert.IsFalse(fixture.Root.safeSyncPanel.gameObject.activeInHierarchy);
+            Assert.IsFalse(fixture.Root.recentSessionsPanel.gameObject.activeInHierarchy);
+            Assert.IsTrue(fixture.Root.settingsDeveloperDiagnosticsButton.interactable);
+            Assert.IsTrue(fixture.Root.settingsDesktopCompanionStatusLabel.text.Contains("Desktop Companion"));
+            Assert.IsFalse(fixture.Root.settingsDesktopCompanionEnabledToggle.isOn);
+
+            fixture.Destroy();
+        }
+
+        [UnityTest]
+        public IEnumerator DesktopCompanionControlsEnableDisableAndShowFallbackInEditor()
+        {
+            var fixture = Phase14UiFixture.Create(loggedIn: false);
+            fixture.Root.ShowDashboard();
+            yield return null;
+
+            fixture.Root.dashboardEnableDesktopCompanionButton.onClick.Invoke();
+            yield return fixture.WaitUntil(() => fixture.ViewModel.CharacterDashboard.DesktopCompanionSettings.IsDesktopCompanionEnabled);
+            yield return null;
+
+            Assert.IsTrue(fixture.ViewModel.CharacterDashboard.DesktopCompanionSettings.IsDesktopCompanionEnabled);
+            Assert.IsTrue(
+                fixture.Root.dashboardDesktopCompanionLabel.text.Contains("State: fallback") ||
+                fixture.Root.dashboardDesktopCompanionLabel.text.Contains("State: unavailable"),
+                fixture.Root.dashboardDesktopCompanionLabel.text);
+
+            fixture.Root.dashboardDisableDesktopCompanionButton.onClick.Invoke();
+            yield return fixture.WaitUntil(() => !fixture.ViewModel.CharacterDashboard.DesktopCompanionSettings.IsDesktopCompanionEnabled);
+            yield return null;
+
+            Assert.IsFalse(fixture.ViewModel.CharacterDashboard.DesktopCompanionSettings.IsDesktopCompanionEnabled);
+            Assert.That(fixture.Root.dashboardDesktopCompanionLabel.text, Does.Contain("State: disabled"));
+
+            fixture.Destroy();
+        }
+
+        [UnityTest]
+        public IEnumerator DashboardConflictBannerUsesCompactSafeSummary()
+        {
+            var fixture = Phase14UiFixture.Create(loggedIn: true);
+            fixture.Sync.ConflictSummary = new SafeSyncConflictSummary
+            {
+                UnresolvedCount = 1,
+                SafeConflicts = new List<SafeSyncConflict>
+                {
+                    new SafeSyncConflict
+                    {
+                        ConflictId = "conflict-1",
+                        ConflictType = SafeSyncConflictType.RemoteDifferent,
+                        SafeErrorCode = SafeSyncApiError.ConflictDetected,
+                        SafeLocalSummary = new SafeSyncSessionSafeSummary { ClientSessionId = "client-session-1234", SourceProvider = "CODEX", DayBucket = "2026-05-18", Confidence = "HIGH" },
+                        SafeRemoteSummary = new SafeSyncSessionSafeSummary { ServerSessionId = "server-session-1234", SourceProvider = "CODEX", DayBucket = "2026-05-17", Confidence = "MEDIUM" },
+                        SafeDiffSummary = new SafeSessionDiffSummary { ChangedSafeFieldNames = new List<string> { "dayBucket", "confidence", "category" } }
+                    }
+                }
+            };
+            yield return fixture.RefreshDashboard();
+            fixture.Root.ShowDashboard();
+            yield return null;
+
+            Assert.IsTrue(fixture.Root.conflictBanner.activeInHierarchy);
+            Assert.AreEqual("1 unresolved sync conflict detected. Review in Settings.", fixture.Root.conflictBannerLabel.text);
+            Assert.That(fixture.Root.conflictBannerLabel.text, Does.Not.Contain("Local:"));
+            Assert.That(fixture.Root.conflictBannerLabel.text, Does.Not.Contain("Remote:"));
+            Assert.That(fixture.Root.conflictBannerLabel.text, Does.Not.Contain("server-session"));
+            Assert.That(fixture.Root.conflictBannerLabel.text.Split('\n').Length, Is.EqualTo(1));
+
+            fixture.Root.dashboardSettingsButton.onClick.Invoke();
+            yield return null;
+            fixture.Root.settingsDeveloperDiagnosticsButton.onClick.Invoke();
+            yield return null;
+            Assert.That(fixture.Root.safeSyncPanel.conflictLabel.text, Does.Contain("Local:"));
+            Assert.That(fixture.Root.safeSyncPanel.conflictLabel.text, Does.Contain("Remote:"));
+
+            fixture.Destroy();
+        }
+
+        [UnityTest]
+        public IEnumerator SavedSafeSessionFeedsCharacterAndContinueState()
+        {
+            var fixture = Phase14UiFixture.Create(loggedIn: true);
+            fixture.Repository.Current.CharacterProfile.Level = 3;
+            fixture.Repository.Current.CharacterProfile.TotalExp = 2250;
+            fixture.Repository.Current.CharacterProfile.Stats.Logic = 2;
+            fixture.Repository.Current.CharacterProfile.Stats.Debug = 4;
+            fixture.Repository.Current.WorkSessionSummaries.Add(new AgentWorkSession
+            {
+                SessionId = "safe-session-1",
+                SourceProvider = "GIT",
+                WorkType = WorkType.Feature,
+                StartedAt = DateTimeOffset.UtcNow.AddHours(-2),
+                EndedAt = DateTimeOffset.UtcNow.AddHours(-1),
+                Confidence = ProviderConfidence.High,
+                GitChangeSummary = new GitChangeSummary
+                {
+                    AnalysisTimeBucket = "2026-05-18",
+                    ChangedFileCountBucket = CountBucket.Small,
+                    AddedLineBucket = LineChangeBucket.Small,
+                    DeletedLineBucket = LineChangeBucket.None
+                }
+            });
+            fixture.Repository.Current.GrowthHistory.Add(new CharacterGrowthResult
+            {
+                SessionId = "safe-session-1",
+                ExpGained = 180,
+                LevelBefore = 2,
+                LevelAfter = 3
+            });
+            yield return fixture.RefreshDashboard();
+
+            Assert.IsTrue(fixture.Root.continueButton.interactable);
+            fixture.Root.ShowDashboard();
+            Assert.That(fixture.Root.dashboardCharacterStatusLabel.text, Does.Contain("Level 3"));
+            Assert.That(fixture.Root.dashboardCharacterStatusLabel.text, Does.Contain("+180 XP"));
+            Assert.IsTrue(fixture.Root.companionView.gameObject.activeInHierarchy);
+            Assert.That(fixture.Root.companionStatusPanel.statusLabel.text, Does.Contain("Companion Status"));
+            Assert.IsFalse(UiTextScanner.VisibleTextContains(fixture.Root.gameObject, "/Users/"));
+            Assert.IsFalse(UiTextScanner.VisibleTextContains(fixture.Root.gameObject, "src/"));
+
+            fixture.Destroy();
+        }
+
+        private static void AssertStartScreenCoreLayout(BootstrapRootView root, string label)
+        {
+            var title = root.startScreenRoot.transform.Find("Start Header/Title Stack/TokenForge Title").GetComponent<Text>();
+            var subtitle = root.startScreenRoot.transform.Find("Start Header/Title Stack/TokenForge Subtitle").GetComponent<Text>();
+            Assert.AreEqual(HorizontalWrapMode.Overflow, title.horizontalOverflow, label + " title must not wrap.");
+            AssertVisible(title.rectTransform, label + " TokenForge title");
+            AssertVisible(subtitle.rectTransform, label + " subtitle");
+            AssertVisible(root.startAnalyzeRepositoryButton.GetComponent<RectTransform>(), label + " Run Analysis CTA");
+            AssertNoOverlap(title.rectTransform, subtitle.rectTransform, label + " title/subtitle");
+        }
+
+        private static void AssertDashboardCoreLayout(BootstrapRootView root, string label)
+        {
+            AssertVisible(root.dashboardCharacterStatusLabel.GetComponentInParent<RectTransform>(), label + " Character Status");
+            AssertVisible(root.dashboardActivityLogLabel.GetComponentInParent<RectTransform>(), label + " Activity Log");
+            AssertVisible(root.dashboardSettingsButton.GetComponent<RectTransform>(), label + " Settings button");
+        }
+
+        private static void AssertSettingsCoreLayout(BootstrapRootView root, string label)
+        {
+            AssertVisible(root.settingsBackButton.GetComponent<RectTransform>(), label + " Back to Game");
+            AssertVisible(root.accountPanel.GetComponent<RectTransform>(), label + " Account / Safe Sync card");
+            Assert.IsTrue(root.settingsSummaryLabel.text.Contains("Selected Providers"), label + " Local Sources summary should be populated.");
+            Assert.IsTrue(root.settingsSyncConflictLabel.text.Contains("Sync State"), label + " Sync / Conflict summary should be populated.");
+        }
+
+        private static void AssertVisible(RectTransform rect, string label)
+        {
+            var bounds = ScreenRect(rect);
+            Assert.Greater(bounds.width, 8f, label + " width is collapsed.");
+            Assert.Greater(bounds.height, 8f, label + " height is collapsed.");
+            Assert.Greater(bounds.xMax, 0f, label + " is left of the viewport.");
+            Assert.Greater(bounds.yMax, 0f, label + " is below the viewport.");
+            Assert.Less(bounds.xMin, Screen.width, label + " is right of the viewport.");
+            Assert.Less(bounds.yMin, Screen.height, label + " is above the viewport.");
+        }
+
+        private static void AssertNoOverlap(RectTransform first, RectTransform second, string label)
+        {
+            Assert.IsFalse(ScreenRect(first).Overlaps(ScreenRect(second)), label + " overlaps.");
+        }
+
+        private static Rect ScreenRect(RectTransform rect)
+        {
+            var corners = new Vector3[4];
+            rect.GetWorldCorners(corners);
+            var minX = corners.Min(corner => corner.x);
+            var maxX = corners.Max(corner => corner.x);
+            var minY = corners.Min(corner => corner.y);
+            var maxY = corners.Max(corner => corner.y);
+            return Rect.MinMaxRect(minX, minY, maxX, maxY);
+        }
+    }
+
+    public sealed class CompanionDashboardPlayModeTests
+    {
+        [UnityTest]
+        public IEnumerator CompanionMovementStaysWithinBounds()
+        {
+            var areaObject = new GameObject("Movement Area", typeof(RectTransform));
+            var area = areaObject.GetComponent<RectTransform>();
+            area.sizeDelta = new Vector2(300f, 180f);
+            var actorObject = new GameObject("Actor", typeof(RectTransform), typeof(Image));
+            actorObject.transform.SetParent(areaObject.transform, false);
+            var actor = actorObject.GetComponent<RectTransform>();
+            actor.sizeDelta = new Vector2(60f, 60f);
+            actor.anchoredPosition = new Vector2(400f, 200f);
+            var controller = areaObject.AddComponent<CompanionMovementController>();
+            controller.Configure(area, actor, actorObject.GetComponent<Image>());
+            controller.SetVelocityForTest(new Vector2(900f, 0f));
+
+            for (var i = 0; i < 8; i++)
+            {
+                controller.Tick(0.2f);
+                yield return null;
+            }
+
+            var bounds = area.rect;
+            var halfWidth = actor.rect.width * 0.5f;
+            var halfHeight = actor.rect.height * 0.5f;
+            Assert.GreaterOrEqual(actor.anchoredPosition.x, bounds.xMin + halfWidth - 0.01f);
+            Assert.LessOrEqual(actor.anchoredPosition.x, bounds.xMax - halfWidth + 0.01f);
+            Assert.GreaterOrEqual(actor.anchoredPosition.y, bounds.yMin + halfHeight - 0.01f);
+            Assert.LessOrEqual(actor.anchoredPosition.y, bounds.yMax - halfHeight + 0.01f);
+
+            UnityEngine.Object.Destroy(areaObject);
         }
     }
 
@@ -515,13 +888,57 @@ namespace TokenForge.Client.Tests
     public sealed class Phase14ActivityAnalysisPanelPlayModeTests
     {
         [UnityTest]
+        public IEnumerator RunAnalysisButtonsReviewDashboardAndScrollWorkAtSupportedSizes()
+        {
+            foreach (var size in new[] { new Vector2Int(1280, 720), new Vector2Int(1440, 900) })
+            {
+                Screen.SetResolution(size.x, size.y, false);
+                var fixture = Phase14UiFixture.Create();
+                fixture.Root.ShowRunAnalysis();
+                yield return null;
+                Canvas.ForceUpdateCanvases();
+                LayoutRebuilder.ForceRebuildLayoutImmediate(fixture.Root.rootScrollRect.content);
+
+                Assert.IsTrue(fixture.Root.rootScrollRect.content.rect.height > fixture.Root.rootScrollRect.viewport.rect.height, size + " scroll content should exceed viewport when needed.");
+                Assert.IsTrue(fixture.Root.activityAnalysisPanel.selectGitButton.interactable, size + " select git");
+                Assert.IsTrue(fixture.Root.activityAnalysisPanel.analyzeGitButton.interactable, size + " analyze git");
+                Assert.IsTrue(fixture.Root.activityAnalysisPanel.selectAgentButton.interactable, size + " select agent");
+                Assert.IsTrue(fixture.Root.activityAnalysisPanel.analyzeAgentButton.interactable, size + " analyze agent");
+                Assert.IsFalse(TopLevelNonInteractiveGraphicsBlockRaycasts(fixture.Root), size + " topmost graphics should not block controls.");
+
+                fixture.Root.activityAnalysisPanel.analyzeGitButton.onClick.Invoke();
+                yield return null;
+                Assert.That(fixture.Root.activityAnalysisPanel.gitStatusLabel.text, Does.Contain("Select a repository"));
+
+                fixture.Root.activityAnalysisPanel.selectGitButton.onClick.Invoke();
+                yield return null;
+                fixture.Root.activityAnalysisPanel.analyzeGitButton.onClick.Invoke();
+                yield return null;
+                yield return null;
+                Assert.That(fixture.Root.reviewPanel.reviewLabel.text, Does.Contain("Git:"));
+                Assert.IsTrue(fixture.Root.reviewPanel.saveGitButton.interactable);
+
+                fixture.Root.reviewPanel.saveGitButton.onClick.Invoke();
+                yield return null;
+                yield return null;
+                fixture.Root.ShowDashboard();
+                yield return null;
+                Assert.IsTrue(fixture.Root.gameDashboardRoot.activeInHierarchy);
+                Assert.That(fixture.Root.dashboardActivityLogLabel.text, Does.Contain("Recent Run"));
+                Assert.That(fixture.Root.dashboardCharacterStatusLabel.text, Does.Contain("XP"));
+
+                fixture.Destroy();
+            }
+        }
+
+        [UnityTest]
         public IEnumerator ActivityButtonsApprovedLocationsAndReviewFlow()
         {
             var fixture = Phase14UiFixture.Create();
             yield return null;
 
-            Assert.IsFalse(fixture.Root.activityAnalysisPanel.analyzeGitButton.interactable);
-            Assert.IsFalse(fixture.Root.activityAnalysisPanel.analyzeAgentButton.interactable);
+            Assert.IsTrue(fixture.Root.activityAnalysisPanel.analyzeGitButton.interactable);
+            Assert.IsTrue(fixture.Root.activityAnalysisPanel.analyzeAgentButton.interactable);
 
             fixture.Root.activityAnalysisPanel.selectGitButton.onClick.Invoke();
             yield return null;
@@ -558,6 +975,19 @@ namespace TokenForge.Client.Tests
             Assert.IsFalse(fixture.Root.approvedLocationsPanel.agentLocationsDropdown.options[0].text.Contains(fixture.RawAgentLogPath));
 
             fixture.Destroy();
+        }
+
+        private static bool TopLevelNonInteractiveGraphicsBlockRaycasts(BootstrapRootView root)
+        {
+            var background = root.transform.Find("Background")?.GetComponent<Graphic>();
+            var viewport = root.rootScrollRect.viewport.GetComponent<Graphic>();
+            var panels = root.GetComponentsInChildren<Image>(true)
+                .Where(image => image.gameObject.name.EndsWith("Panel") || image.gameObject.name.Contains(" Root"))
+                .ToList();
+
+            return (background != null && background.raycastTarget)
+                   || (viewport != null && viewport.raycastTarget)
+                   || panels.Any(image => image.raycastTarget && image.GetComponent<Button>() == null && image.GetComponent<InputField>() == null);
         }
     }
 
@@ -608,9 +1038,9 @@ namespace TokenForge.Client.Tests
             yield return null;
 
             var privacy = fixture.Root.privacyNoticePanel.bodyLabel.text;
-            Assert.IsTrue(privacy.Contains("aggregate-only"));
-            Assert.IsTrue(privacy.Contains("Approved locations are stored only on this device"));
-            Assert.IsTrue(privacy.Contains("Raw local data is never synced"));
+            Assert.IsTrue(privacy.Contains("saved aggregate summaries"));
+            Assert.IsTrue(privacy.Contains("Raw paths and source data stay local"));
+            Assert.IsTrue(privacy.Contains("does not render prompts"));
 
             UiTextScanner.AssertNoForbiddenVisibleText(fixture.Root.gameObject, new[]
             {
@@ -683,6 +1113,11 @@ namespace TokenForge.Client.Tests
             fixture.Status = LocalClientStatus.CreateInitialized();
             fixture.canvasObject = new GameObject("Phase14 Test Canvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             fixture.canvasObject.GetComponent<Canvas>().renderMode = RenderMode.ScreenSpaceOverlay;
+            var scaler = fixture.canvasObject.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1280f, 720f);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
             Assert.IsNotNull(prefab, "BootstrapRoot prefab missing at " + PrefabPath);
             var instance = UnityEngine.Object.Instantiate(prefab, fixture.canvasObject.transform, false);
