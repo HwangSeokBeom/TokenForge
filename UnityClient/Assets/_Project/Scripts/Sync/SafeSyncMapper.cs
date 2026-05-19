@@ -466,7 +466,10 @@ namespace TokenForge.Client.Sync
             if (string.Equals(provider, "MANUAL", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(provider, "GIT", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(provider, "CLAUDE", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(provider, "CLAUDE_CODE", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(provider, "CODEX", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(provider, "CURSOR", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(provider, "GITHUB_COPILOT", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(provider, "UNKNOWN_AGENT", StringComparison.OrdinalIgnoreCase))
             {
                 return provider.ToUpperInvariant();

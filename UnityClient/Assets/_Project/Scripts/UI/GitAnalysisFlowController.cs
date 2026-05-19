@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using TokenForge.Client.Common;
@@ -121,9 +122,15 @@ namespace TokenForge.Client.UI
             selectedRepositoryRootPath = result.RepositoryRootPath;
             Review = null;
             pendingSession = null;
+            var profileResult = await PersistSelectedRepositoryProfileAsync(selectedRepositoryRootPath, cancellationToken);
+            if (!profileResult.IsSuccess)
+            {
+                return Fail(profileResult.ErrorCode, profileResult.ErrorMessage);
+            }
+
             State = GitAnalysisFlowState.Selected;
             ErrorCategory = string.Empty;
-            SelectionStatus = "Repository selected";
+            SelectionStatus = profileResult.Value.SafeRepositoryAlias + " selected";
             UserMessage = "Repository selected. Run analysis to review safe aggregate data.";
             logger?.Info("Git repository selected=true");
             return Result.Success();
@@ -142,15 +149,7 @@ namespace TokenForge.Client.UI
                 return Fail("missing_repository_path", "Repository folder is required.");
             }
 
-            selectedRepositoryRootPath = repositoryRootPath;
-            Review = null;
-            pendingSession = null;
-            State = GitAnalysisFlowState.Selected;
-            ErrorCategory = string.Empty;
-            SelectionStatus = "Repository selected";
-            UserMessage = "Repository selected. Run analysis to review safe aggregate data.";
-            logger?.Info("Git repository selected=true");
-            return Result.Success();
+            return SelectLocalOnlyApprovedRepositoryPathAsync(repositoryRootPath, CancellationToken.None).GetAwaiter().GetResult();
         }
 
         public async Task<Result<GitAnalysisReviewModel>> AnalyzeAsync(CancellationToken cancellationToken = default)
@@ -231,6 +230,16 @@ namespace TokenForge.Client.UI
             saveData.DailyProgress = saveData.DailyProgress ?? new DailyProgress();
             saveData.WorkSessionSummaries = saveData.WorkSessionSummaries ?? new System.Collections.Generic.List<AgentWorkSession>();
             saveData.GrowthHistory = saveData.GrowthHistory ?? new System.Collections.Generic.List<CharacterGrowthResult>();
+            var selectedRepositoryHash = RepositoryCompanionProfileService.SafeRepositoryHashForSession(pendingSession);
+            if (string.IsNullOrWhiteSpace(selectedRepositoryHash))
+            {
+                selectedRepositoryHash = RepositoryCompanionProfileService.HashRepositoryPath(selectedRepositoryRootPath);
+                pendingSession.GitChangeSummary = pendingSession.GitChangeSummary ?? GitChangeSummary.Empty();
+                pendingSession.GitChangeSummary.ProjectPathHash = selectedRepositoryHash;
+            }
+
+            RepositoryCompanionProfileService.Normalize(saveData);
+            saveData.SelectedRepositoryHash = selectedRepositoryHash;
             var growthResult = growthCalculator.Calculate(
                 pendingSession,
                 saveData.CharacterProfile,
@@ -240,7 +249,17 @@ namespace TokenForge.Client.UI
             ApplyGrowth(saveData.CharacterProfile, growthResult);
             saveData.WorkSessionSummaries.Add(pendingSession);
             saveData.GrowthHistory.Add(growthResult);
-            saveData.CompanionState = CompanionProgressionRules.CalculateState(saveData.WorkSessionSummaries, saveData.GrowthHistory);
+            var repositorySessionIds = saveData.WorkSessionSummaries
+                .Where(session => string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), selectedRepositoryHash, StringComparison.Ordinal))
+                .Select(session => session.SessionId)
+                .ToList();
+            var repositorySessions = saveData.WorkSessionSummaries
+                .Where(session => repositorySessionIds.Contains(session.SessionId))
+                .ToList();
+            var repositoryGrowth = saveData.GrowthHistory
+                .Where(growth => repositorySessionIds.Contains(growth.SessionId))
+                .ToList();
+            RepositoryCompanionProfileService.ApplyApprovedGrowth(saveData, pendingSession, repositorySessions, repositoryGrowth);
             saveData.DailyProgress.ExpGainedToday += growthResult.ExpGained;
             saveData.DailyProgress.SessionsConfirmedToday += 1;
 
@@ -304,6 +323,52 @@ namespace TokenForge.Client.UI
             UserMessage = message;
             logger?.Warning("Git analysis flow failed category=" + ErrorCategory);
             return Result.Failure(ErrorCategory, message);
+        }
+
+        private async Task<Result<RepositoryCompanionProfile>> PersistSelectedRepositoryProfileAsync(string repositoryRootPath, CancellationToken cancellationToken)
+        {
+            var saveData = await repository.LoadAsync(cancellationToken);
+            var profileResult = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repositoryRootPath);
+            if (!profileResult.IsSuccess)
+            {
+                return profileResult;
+            }
+
+            var validation = privacySanitizer.ValidateSafeSaveData(saveData);
+            if (!validation.IsSuccess)
+            {
+                return Result<RepositoryCompanionProfile>.Failure(validation.ErrorCode, validation.ErrorMessage);
+            }
+
+            var saveResult = await repository.SaveAsync(saveData, cancellationToken);
+            return saveResult.IsSuccess
+                ? profileResult
+                : Result<RepositoryCompanionProfile>.Failure(saveResult.ErrorCode, saveResult.ErrorMessage);
+        }
+
+        private async Task<Result> SelectLocalOnlyApprovedRepositoryPathAsync(string repositoryRootPath, CancellationToken cancellationToken)
+        {
+            logger?.Info("Git repository selection started");
+            if (string.IsNullOrWhiteSpace(repositoryRootPath))
+            {
+                return Fail("missing_repository_path", "Repository folder is required.");
+            }
+
+            var profileResult = await PersistSelectedRepositoryProfileAsync(repositoryRootPath, cancellationToken);
+            if (!profileResult.IsSuccess)
+            {
+                return Fail(profileResult.ErrorCode, profileResult.ErrorMessage);
+            }
+
+            selectedRepositoryRootPath = repositoryRootPath;
+            Review = null;
+            pendingSession = null;
+            State = GitAnalysisFlowState.Selected;
+            ErrorCategory = string.Empty;
+            SelectionStatus = profileResult.Value.SafeRepositoryAlias + " selected";
+            UserMessage = "Repository selected. Run analysis to review safe aggregate data.";
+            logger?.Info("Git repository selected=true");
+            return Result.Success();
         }
 
         private static void ApplyGrowth(CharacterProfile profile, CharacterGrowthResult growthResult)

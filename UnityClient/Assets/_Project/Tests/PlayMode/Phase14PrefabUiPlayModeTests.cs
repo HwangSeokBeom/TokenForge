@@ -93,13 +93,27 @@ namespace TokenForge.Client.Tests
             Assert.IsFalse(fixture.Root.startScreenRoot.activeInHierarchy);
             Assert.IsTrue(fixture.Root.gameDashboardRoot.activeInHierarchy);
             Assert.IsTrue(fixture.Root.companionView.gameObject.activeInHierarchy);
-            Assert.That(fixture.Root.companionStatusPanel.statusLabel.text, Does.Contain("Stage: Egg"));
-            Assert.That(fixture.Root.companionStatusPanel.statusLabel.text, Does.Contain("No approved growth yet."));
+            Assert.IsFalse(fixture.Root.companionStatusPanel.gameObject.activeInHierarchy);
+            Assert.That(fixture.Root.dashboardCharacterStatusLabel.text, Does.Contain("Egg is waiting for your first approved coding activity."));
             Assert.That(fixture.Root.dashboardDesktopCompanionLabel.text, Does.Contain("Desktop Companion"));
-            Assert.That(fixture.Root.dashboardDesktopCompanionLabel.text, Does.Contain("State: disabled"));
+            Assert.That(fixture.Root.dashboardDesktopCompanionLabel.text, Does.Contain("[fallback]"));
+            Assert.That(fixture.Root.dashboardQuestLabel.text, Does.Contain("Companion Hero"));
+            Assert.That(fixture.Root.dashboardActivityLogLabel.text, Does.Contain("Growth Loop"));
+            Assert.That(fixture.Root.dashboardActivityLogLabel.text, Does.Contain("No repository connected"));
+            Assert.That(fixture.Root.dashboardActivityLogLabel.text, Does.Contain("AI Agent:"));
+            Assert.That(fixture.Root.dashboardActivityLogLabel.text, Does.Contain("Codex"));
+            Assert.That(fixture.Root.dashboardActivityLogLabel.text, Does.Not.Contain("Chat" + "GPT"));
+            Assert.That(fixture.Root.dashboardActivityLogLabel.text, Does.Contain("Pending Growth Review"));
+            Assert.That(fixture.Root.dashboardActivityLogLabel.text, Does.Contain("Save Review: locked"));
+            Assert.That(fixture.Root.dashboardActivityLogLabel.text, Does.Contain("Run Analysis & Approve Growth"));
             Assert.That(fixture.Root.dashboardActivityLogLabel.text, Does.Contain("Select a repository or agent source."));
+            Assert.IsFalse(UiTextScanner.VisibleTextContains(fixture.Root.gameObject, "no_approved_growth_yet"));
             Assert.IsFalse(fixture.Root.dashboardSyncButton.interactable);
-            Assert.That(fixture.Root.dashboardSyncReasonLabel.text, Does.Contain("Create an account only if you want Safe Sync."));
+            Assert.That(fixture.Root.dashboardSyncReasonLabel.text, Does.Contain("Sync Now: disabled"));
+            Assert.IsNotNull(fixture.Root.gameDashboardRoot.transform.Find("Companion Hero"));
+            Assert.IsNotNull(fixture.Root.gameDashboardRoot.transform.Find("Dashboard Product Cards/Dashboard Source Cards/Growth Loop Sources"));
+            Assert.IsNotNull(fixture.Root.gameDashboardRoot.transform.Find("Dashboard Product Cards/Dashboard Companion Sync Cards/Desktop Companion Card"));
+            Assert.IsNotNull(fixture.Root.gameDashboardRoot.transform.Find("Dashboard Product Cards/Dashboard Companion Sync Cards/Safe Sync Panel"));
             AssertDashboardCoreLayout(fixture.Root, "1280x720");
 
             fixture.Root.dashboardAnalyzeRepositoryButton.onClick.Invoke();
@@ -182,7 +196,7 @@ namespace TokenForge.Client.Tests
             fixture.Root.onboardingSelectLocalRepositoryButton.onClick.Invoke();
             yield return fixture.WaitUntil(() => fixture.ViewModel.Onboarding.GitConnected);
             yield return null;
-            Assert.AreEqual("Local Repository 1", fixture.ViewModel.Onboarding.GitSafeAlias);
+            Assert.AreEqual("Local Repository", fixture.ViewModel.Onboarding.GitSafeAlias);
             Assert.That(fixture.Root.onboardingGitStatusLabel.text, Does.Contain("Local repository selected"));
             Assert.That(fixture.Root.onboardingGitStatusLabel.text, Does.Not.Contain(fixture.RawRepositoryPath));
             Assert.IsFalse(UiTextScanner.VisibleTextContains(fixture.Root.gameObject, fixture.RawRepositoryPath));
@@ -224,7 +238,7 @@ namespace TokenForge.Client.Tests
             Assert.IsFalse(fixture.Root.recentSessionsPanel.gameObject.activeInHierarchy);
             Assert.IsTrue(fixture.Root.settingsDeveloperDiagnosticsButton.interactable);
             Assert.IsTrue(fixture.Root.settingsDesktopCompanionStatusLabel.text.Contains("Desktop Companion"));
-            Assert.IsFalse(fixture.Root.settingsDesktopCompanionEnabledToggle.isOn);
+            Assert.IsTrue(fixture.Root.settingsDesktopCompanionEnabledToggle.isOn);
 
             fixture.Destroy();
         }
@@ -242,16 +256,18 @@ namespace TokenForge.Client.Tests
 
             Assert.IsTrue(fixture.ViewModel.CharacterDashboard.DesktopCompanionSettings.IsDesktopCompanionEnabled);
             Assert.IsTrue(
-                fixture.Root.dashboardDesktopCompanionLabel.text.Contains("State: fallback") ||
-                fixture.Root.dashboardDesktopCompanionLabel.text.Contains("State: unavailable"),
+                fixture.Root.dashboardDesktopCompanionLabel.text.Contains("[fallback]") ||
+                fixture.Root.dashboardDesktopCompanionLabel.text.Contains("[unsupported]"),
                 fixture.Root.dashboardDesktopCompanionLabel.text);
+            Assert.That(fixture.Root.dashboardDesktopCompanionLabel.text, Does.Contain("Tap for a reaction"));
+            Assert.That(fixture.Root.dashboardDesktopCompanionLabel.text, Does.Contain("Double-click opens the dashboard"));
 
             fixture.Root.dashboardDisableDesktopCompanionButton.onClick.Invoke();
             yield return fixture.WaitUntil(() => !fixture.ViewModel.CharacterDashboard.DesktopCompanionSettings.IsDesktopCompanionEnabled);
             yield return null;
 
             Assert.IsFalse(fixture.ViewModel.CharacterDashboard.DesktopCompanionSettings.IsDesktopCompanionEnabled);
-            Assert.That(fixture.Root.dashboardDesktopCompanionLabel.text, Does.Contain("State: disabled"));
+            Assert.That(fixture.Root.dashboardDesktopCompanionLabel.text, Does.Contain("[disabled]"));
 
             fixture.Destroy();
         }
@@ -333,9 +349,9 @@ namespace TokenForge.Client.Tests
             Assert.IsTrue(fixture.Root.continueButton.interactable);
             fixture.Root.ShowDashboard();
             Assert.That(fixture.Root.dashboardCharacterStatusLabel.text, Does.Contain("Level 3"));
-            Assert.That(fixture.Root.dashboardCharacterStatusLabel.text, Does.Contain("+180 XP"));
+            Assert.That(fixture.Root.dashboardCharacterStatusLabel.text, Does.Contain("XP:"));
             Assert.IsTrue(fixture.Root.companionView.gameObject.activeInHierarchy);
-            Assert.That(fixture.Root.companionStatusPanel.statusLabel.text, Does.Contain("Companion Status"));
+            Assert.IsFalse(fixture.Root.companionStatusPanel.gameObject.activeInHierarchy);
             Assert.IsFalse(UiTextScanner.VisibleTextContains(fixture.Root.gameObject, "/Users/"));
             Assert.IsFalse(UiTextScanner.VisibleTextContains(fixture.Root.gameObject, "src/"));
 

@@ -1,4 +1,3 @@
-using System.Linq;
 using TokenForge.Client.Domain;
 using UnityEngine;
 using UnityEngine.UI;
@@ -32,17 +31,12 @@ namespace TokenForge.Client.UI
             var explanation = state.TotalXp <= 0
                 ? "No approved growth yet."
                 : "Grew from approved aggregate Git + agent activity.";
-            var reasons = state.LastGrowthReasonIds == null || state.LastGrowthReasonIds.Count == 0
-                ? "none"
-                : string.Join(", ", state.LastGrowthReasonIds.Take(4).ToArray());
-
-            return "Companion Status"
+            return "Companion Details"
                    + "\nStage: " + state.Stage
                    + "\nArchetype: " + archetype
                    + "\nLevel: " + state.Level
                    + "\nXP / next: " + next
-                   + "\n" + explanation
-                   + "\nSignals: " + reasons;
+                   + "\n" + explanation;
         }
 
         protected override bool ValidateRequiredReferencesInternal(ref string error)

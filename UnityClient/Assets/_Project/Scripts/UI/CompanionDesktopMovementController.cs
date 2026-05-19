@@ -17,6 +17,8 @@ namespace TokenForge.Client.UI
         private float frameTimer;
         private bool facingLeft;
         private bool walkFrame;
+        private bool tickStartedLogged;
+        private float positionLogTimer;
 
         public CompanionDesktopMovementController(IDesktopCompanionOverlayService overlayService)
         {
@@ -24,6 +26,13 @@ namespace TokenForge.Client.UI
         }
 
         public Vector2 Position => position;
+
+        public void SetPosition(Vector2 value)
+        {
+            position = value;
+            ClampToVisibleBounds();
+            overlayService.SetPosition(position);
+        }
 
         public void ResetPosition()
         {
@@ -34,12 +43,33 @@ namespace TokenForge.Client.UI
 
         public void Tick(float deltaSeconds, CompanionState companionState, DesktopCompanionSettings settings)
         {
-            if (deltaSeconds <= 0f || settings == null || !settings.IsDesktopCompanionEnabled || overlayService.State != CompanionDesktopOverlayState.Active)
+            if (deltaSeconds <= 0f || settings == null || !settings.IsDesktopCompanionEnabled ||
+                (overlayService.State != CompanionDesktopOverlayState.Active && overlayService.State != CompanionDesktopOverlayState.Fallback))
             {
                 return;
             }
 
             companionState = CompanionProgressionRules.Normalize(companionState);
+            if (!tickStartedLogged)
+            {
+                tickStartedLogged = true;
+                Debug.Log("INFO [DesktopCompanion] idle/wander tick started");
+            }
+
+            if (overlayService.IsNativeOverlay)
+            {
+                var profile = CompanionVisualProfileResolver.Resolve(companionState, settings.MotionMode);
+                overlayService.SetClickThrough(settings.IsClickThroughEnabled);
+                overlayService.SetMotionProfile(profile);
+                overlayService.SetVisualState(companionState.Stage, companionState.Archetype, profile.IdleAnimation, false);
+                return;
+            }
+
+            if (overlayService.IsDragging)
+            {
+                return;
+            }
+
             var motionScale = MotionScale(settings.MotionMode);
             decisionTimer -= deltaSeconds;
             frameTimer -= deltaSeconds;
@@ -71,6 +101,12 @@ namespace TokenForge.Client.UI
                 companionState.Archetype,
                 walkFrame ? CompanionAnimationState.Wander : CompanionAnimationState.Idle,
                 facingLeft);
+            positionLogTimer -= deltaSeconds;
+            if (positionLogTimer <= 0f)
+            {
+                positionLogTimer = 2.0f;
+                Debug.Log("INFO [DesktopCompanion] idle/wander position updated " + visualPosition.x.ToString("0.##") + "," + visualPosition.y.ToString("0.##"));
+            }
         }
 
         private void ChooseNextMotion(CompanionDesktopMotionMode mode)

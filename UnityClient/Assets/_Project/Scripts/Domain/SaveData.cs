@@ -100,6 +100,8 @@ namespace TokenForge.Client.Domain
         public int SaveVersion { get; set; } = CurrentSaveVersion;
         public CharacterProfile CharacterProfile { get; set; } = new CharacterProfile();
         public CompanionState CompanionState { get; set; } = CompanionState.CreateDefault();
+        public List<RepositoryCompanionProfile> RepositoryCompanionProfiles { get; set; } = new List<RepositoryCompanionProfile>();
+        public string SelectedRepositoryHash { get; set; } = string.Empty;
         public DesktopCompanionSettings DesktopCompanionSettings { get; set; } = DesktopCompanionSettings.CreateDefault();
         public List<AgentWorkSession> WorkSessionSummaries { get; set; } = new List<AgentWorkSession>();
         public List<CharacterGrowthResult> GrowthHistory { get; set; } = new List<CharacterGrowthResult>();

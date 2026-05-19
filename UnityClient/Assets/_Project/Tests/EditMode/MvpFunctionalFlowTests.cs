@@ -54,7 +54,7 @@ namespace TokenForge.Client.Tests
             var selected = RunAsync(() => fixture.ViewModel.SelectLocalGitRepositoryForOnboardingAsync());
             Assert.IsTrue(selected.IsSuccess, selected.ErrorMessage);
             Assert.IsTrue(fixture.ViewModel.Onboarding.GitConnected);
-            Assert.AreEqual("Local Repository 1", fixture.ViewModel.Onboarding.GitSafeAlias);
+            Assert.AreEqual("Local Repository", fixture.ViewModel.Onboarding.GitSafeAlias);
             Assert.IsFalse(ObjectContainsString(fixture.ViewModel.Onboarding, fixture.RawRepositoryPath));
             Assert.IsFalse(ObjectContainsString(fixture.ViewModel.Onboarding, RawRepoName));
 
@@ -105,7 +105,7 @@ namespace TokenForge.Client.Tests
 
             Assert.IsTrue(save.IsSuccess, save.ErrorMessage);
             Assert.AreEqual(1, fixture.Repository.Current.WorkSessionSummaries.Count);
-            Assert.AreEqual(1, fixture.Repository.SaveCount);
+            Assert.AreEqual(2, fixture.Repository.SaveCount);
             Assert.IsTrue(new PrivacySanitizer().ValidateSafeSaveData(fixture.Repository.Current).IsSuccess);
             AssertNoForbiddenText(fixture.Repository.Current);
         }
@@ -121,7 +121,7 @@ namespace TokenForge.Client.Tests
             fixture.ViewModel.DiscardGitReview();
 
             Assert.AreEqual(1, fixture.Repository.Current.WorkSessionSummaries.Count);
-            Assert.AreEqual(0, fixture.Repository.SaveCount);
+            Assert.AreEqual(1, fixture.Repository.SaveCount);
             Assert.IsFalse(fixture.ViewModel.GitFlow.HasPendingReview);
         }
 

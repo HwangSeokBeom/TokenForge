@@ -28,6 +28,7 @@ namespace TokenForge.Client.Domain
             state.SchemaVersion = SchemaVersion;
             state.Level = Math.Max(1, state.Level);
             state.TotalXp = Math.Max(0, state.TotalXp);
+            state.Stats = state.Stats ?? CompanionStatProfile.Empty();
             state.GrowthProfile = state.GrowthProfile ?? new CompanionGrowthProfile();
             state.GrowthProfile.SchemaVersion = SchemaVersion;
             state.GrowthProfile.TokenUsageProfile = state.GrowthProfile.TokenUsageProfile ?? new CompanionTokenUsageProfile();
@@ -59,6 +60,7 @@ namespace TokenForge.Client.Domain
             var archetype = totalXp <= 0
                 ? CompanionArchetype.Unknown
                 : CompanionArchetypeResolver.Resolve(profile);
+            var stats = BuildStatProfile(growthBySessionId.Values);
 
             return Normalize(new CompanionState
             {
@@ -68,6 +70,7 @@ namespace TokenForge.Client.Domain
                 Level = Math.Max(1, totalXp / XpPerCompanionLevel + 1),
                 TotalXp = totalXp,
                 XpToNextStage = XpToNextStage(totalXp),
+                Stats = stats,
                 GrowthProfile = profile,
                 LastGrowthReasonIds = BuildReasonIds(profile, archetype, totalXp)
             });
@@ -131,6 +134,26 @@ namespace TokenForge.Client.Domain
             ApplyHistoricalConsistency(profile);
             profile.DominantStats = DominantStats(profile);
             return profile;
+        }
+
+        private static CompanionStatProfile BuildStatProfile(IEnumerable<CharacterGrowthResult> growthHistory)
+        {
+            var stats = CompanionStatProfile.Empty();
+            foreach (var growth in growthHistory ?? new List<CharacterGrowthResult>())
+            {
+                var delta = growth?.StatDeltas;
+                if (delta == null)
+                {
+                    continue;
+                }
+
+                stats.CodeStat += Math.Max(0, delta.Logic + delta.Architecture + delta.Velocity);
+                stats.FocusStat += Math.Max(0, delta.Efficiency + delta.Stability);
+                stats.DebugStat += Math.Max(0, delta.Debug);
+                stats.DesignStat += Math.Max(0, delta.Design + delta.Creativity);
+            }
+
+            return stats;
         }
 
         private static void AddProviderSignals(HashSet<string> providers, AgentWorkSession session)

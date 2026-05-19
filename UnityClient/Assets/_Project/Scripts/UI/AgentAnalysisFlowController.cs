@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using TokenForge.Client.Agents;
@@ -35,6 +36,7 @@ namespace TokenForge.Client.UI
 
         private AgentAnalysisInput pendingInput;
         private AgentWorkSession pendingSession;
+        private string selectedRepositoryHash = string.Empty;
 
         public AgentAnalysisFlowController(
             AgentLogActivityProvider provider,
@@ -58,6 +60,11 @@ namespace TokenForge.Client.UI
         public string UserMessage { get; private set; } = "Select an approved agent log location to begin.";
         public bool HasPendingReview => pendingSession != null && Review != null;
         public bool HasSelectedAgentLogLocationForLocalOnlyApproval => pendingInput != null && !string.IsNullOrWhiteSpace(pendingInput.SelectedLocationPath);
+
+        public void SetSelectedRepositoryHash(string repositoryHash)
+        {
+            selectedRepositoryHash = repositoryHash ?? string.Empty;
+        }
 
         public string GetSelectedAgentLogLocationPathForLocalOnlyApproval()
         {
@@ -193,9 +200,20 @@ namespace TokenForge.Client.UI
             var saveData = await repository.LoadAsync(cancellationToken);
             saveData.CharacterProfile = saveData.CharacterProfile ?? new CharacterProfile();
             saveData.CompanionState = CompanionProgressionRules.Normalize(saveData.CompanionState);
+            RepositoryCompanionProfileService.Normalize(saveData);
             saveData.DailyProgress = saveData.DailyProgress ?? new DailyProgress();
             saveData.WorkSessionSummaries = saveData.WorkSessionSummaries ?? new System.Collections.Generic.List<AgentWorkSession>();
             saveData.GrowthHistory = saveData.GrowthHistory ?? new System.Collections.Generic.List<CharacterGrowthResult>();
+            var repositoryHash = string.IsNullOrWhiteSpace(selectedRepositoryHash)
+                ? saveData.SelectedRepositoryHash
+                : selectedRepositoryHash;
+            if (!string.IsNullOrWhiteSpace(repositoryHash))
+            {
+                pendingSession.GitChangeSummary = pendingSession.GitChangeSummary ?? GitChangeSummary.Empty();
+                pendingSession.GitChangeSummary.ProjectPathHash = repositoryHash;
+                saveData.SelectedRepositoryHash = repositoryHash;
+            }
+
             var growthResult = growthCalculator.Calculate(
                 pendingSession,
                 saveData.CharacterProfile,
@@ -205,7 +223,17 @@ namespace TokenForge.Client.UI
             ApplyGrowth(saveData.CharacterProfile, growthResult);
             saveData.WorkSessionSummaries.Add(pendingSession);
             saveData.GrowthHistory.Add(growthResult);
-            saveData.CompanionState = CompanionProgressionRules.CalculateState(saveData.WorkSessionSummaries, saveData.GrowthHistory);
+            var repositorySessionIds = saveData.WorkSessionSummaries
+                .Where(session => string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), repositoryHash, StringComparison.Ordinal))
+                .Select(session => session.SessionId)
+                .ToList();
+            var repositorySessions = saveData.WorkSessionSummaries
+                .Where(session => repositorySessionIds.Contains(session.SessionId))
+                .ToList();
+            var repositoryGrowth = saveData.GrowthHistory
+                .Where(growth => repositorySessionIds.Contains(growth.SessionId))
+                .ToList();
+            RepositoryCompanionProfileService.ApplyApprovedGrowth(saveData, pendingSession, repositorySessions, repositoryGrowth);
             saveData.DailyProgress.ExpGainedToday += growthResult.ExpGained;
             saveData.DailyProgress.SessionsConfirmedToday += 1;
 

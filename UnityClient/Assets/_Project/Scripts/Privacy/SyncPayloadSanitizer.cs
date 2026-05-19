@@ -32,7 +32,9 @@ namespace TokenForge.Client.Privacy
             "SafeSyncPagination",
             "ServerHealthResponse",
             "SafeSyncUploadRequest",
-            "SafeSyncUploadResponse"
+            "SafeSyncUploadResponse",
+            "RepositoryCompanionSyncDto",
+            "RepositoryCompanionListResponse"
         };
 
         public SyncPayloadSanitizer(PrivacySanitizer privacySanitizer = null)

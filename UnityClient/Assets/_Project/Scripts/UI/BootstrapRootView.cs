@@ -1,6 +1,7 @@
 using System;
 using TokenForge.Client.Auth;
 using TokenForge.Client.Domain;
+using TokenForge.Client.Platform;
 using TokenForge.Client.Sync;
 using UnityEngine;
 using UnityEngine.UI;
@@ -113,6 +114,7 @@ namespace TokenForge.Client.UI
 
         private LocalClientStatus status;
         private ApprovedActivityAnalysisViewModel viewModel;
+        private IApplicationLifecycleService lifecycleService;
         private ScreenMode currentScreen = ScreenMode.Start;
         private const string PrivacySummaryText = "Raw paths, prompts, logs, source code, diffs, and file names stay local.";
 
@@ -129,6 +131,9 @@ namespace TokenForge.Client.UI
         {
             this.status = status;
             this.viewModel = viewModel;
+            lifecycleService = lifecycleService ?? new MacApplicationLifecycleService();
+            lifecycleService.MenuActionRequested -= HandleApplicationMenuAction;
+            lifecycleService.MenuActionRequested += HandleApplicationMenuAction;
             EnsureDesktopCompanionRuntimeControls();
             if (!ValidateReferences(out var error))
             {
@@ -155,8 +160,26 @@ namespace TokenForge.Client.UI
             }
 
             desktopCompanionOverlayController.Initialize();
+            desktopCompanionOverlayController.PositionChanged -= HandleDesktopCompanionPositionChanged;
+            desktopCompanionOverlayController.PositionChanged += HandleDesktopCompanionPositionChanged;
+            desktopCompanionOverlayController.DashboardRestoreRequested -= HandleDesktopCompanionDashboardRestoreRequested;
+            desktopCompanionOverlayController.DashboardRestoreRequested += HandleDesktopCompanionDashboardRestoreRequested;
             WireNavigation();
             Render();
+        }
+
+        private void OnDestroy()
+        {
+            if (lifecycleService != null)
+            {
+                lifecycleService.MenuActionRequested -= HandleApplicationMenuAction;
+            }
+
+            if (desktopCompanionOverlayController != null)
+            {
+                desktopCompanionOverlayController.PositionChanged -= HandleDesktopCompanionPositionChanged;
+                desktopCompanionOverlayController.DashboardRestoreRequested -= HandleDesktopCompanionDashboardRestoreRequested;
+            }
         }
 
         public void Render()
@@ -350,7 +373,7 @@ namespace TokenForge.Client.UI
                 settingsDesktopCompanionStatusLabel = settingsDesktopCompanionStatusLabel ?? RuntimeStatusText("Settings Desktop Companion Runtime Status", panel.transform, "Overlay state: disabled", 86f);
                 var toggles = RuntimeRow("Settings Desktop Companion Runtime Toggles", panel.transform, 44f);
                 settingsDesktopCompanionEnabledToggle = settingsDesktopCompanionEnabledToggle ?? RuntimeToggle("Enable desktop overlay", toggles.transform, false, 230f);
-                settingsDesktopCompanionClickThroughToggle = settingsDesktopCompanionClickThroughToggle ?? RuntimeToggle("Click-through mode", toggles.transform, true, 220f);
+                settingsDesktopCompanionClickThroughToggle = settingsDesktopCompanionClickThroughToggle ?? RuntimeToggle("Click-through mode", toggles.transform, false, 220f);
                 var options = RuntimeRow("Settings Desktop Companion Runtime Options", panel.transform, 48f);
                 settingsDesktopCompanionMotionModeDropdown = settingsDesktopCompanionMotionModeDropdown ?? RuntimeDropdown("Motion Mode", options.transform, 180f);
                 settingsResetOverlayPositionButton = settingsResetOverlayPositionButton ?? RuntimeButton("Reset Overlay Position", options.transform, 210f);
@@ -746,25 +769,23 @@ namespace TokenForge.Client.UI
             SetText(dashboardCharacterStatusLabel, BuildDashboardCharacterText(dashboard));
             companionView?.Render(dashboard.CompanionState, currentScreen != ScreenMode.Dashboard || hasPendingReview);
             companionStatusPanel?.Render();
-            SetText(dashboardQuestLabel, BuildDashboardStatsText(dashboard));
-            SetText(dashboardActivityLogLabel, BuildDashboardSourcesAndActionText(dashboard, hasPendingReview));
-            var syncReason = viewModel != null && viewModel.CanUseAuthenticatedSafeSync
-                ? BootstrapUiTextFormatter.SafeSyncStatus(viewModel)
-                : "Connection: " + (viewModel == null ? "Local only" : viewModel.SafeSyncConnection.StatusLabel)
-                  + "\nLocal gameplay works without login or server."
-                  + "\nSafe Sync is optional.";
-            SetText(dashboardSyncReasonLabel, syncReason);
+            SetActive(companionStatusPanel != null ? companionStatusPanel.gameObject : null, false);
+            SetText(dashboardQuestLabel, BuildDashboardHomeCardsText(dashboard, hasPendingReview));
+            SetText(dashboardActivityLogLabel, BuildDashboardWorkflowCardsText(dashboard, hasPendingReview));
+            SetText(dashboardSyncReasonLabel, BuildDashboardSafeSyncCard(dashboard));
             RenderDesktopCompanionControls(dashboard);
+            UpdateNativeStatusItem(dashboard);
             var unresolved = viewModel?.ConflictSummary?.UnresolvedCount ?? 0;
             SetActive(conflictBanner, unresolved > 0 && currentScreen == ScreenMode.Dashboard);
             SetText(conflictBannerLabel, unresolved > 0 ? BootstrapUiTextFormatter.CompactConflictBanner(viewModel) : string.Empty);
-            SetButtonLabel(dashboardAnalyzeRepositoryButton, hasSavedRun ? "Analyze Now" : "Analyze Local Sources");
-            SetButtonLabel(dashboardSaveSessionButton, hasPendingReview ? "Save Review" : "Save Review");
-            SetButtonLabel(dashboardSyncButton, "Sync Later");
+            var repositoryConnected = viewModel != null && viewModel.Onboarding.GitConnected;
+            SetButtonLabel(dashboardAnalyzeRepositoryButton, repositoryConnected ? "Run Analysis" : "Add Repository");
+            SetButtonLabel(dashboardSaveSessionButton, "Save Review");
+            SetButtonLabel(dashboardSyncButton, "Sync Now");
             SetButton(dashboardAnalyzeRepositoryButton, viewModel != null);
             SetButton(dashboardSaveSessionButton, viewModel != null && hasPendingReview);
             SetButton(dashboardSyncButton, viewModel != null && CanSyncLater(dashboard));
-            SetButtonLabel(dashboardHistoryButton, "Run Analysis");
+            SetButtonLabel(dashboardHistoryButton, "Connect AI Agent");
             SetButtonLabel(dashboardSettingsButton, "Settings");
             SetButton(dashboardHistoryButton, true);
             SetButton(dashboardSettingsButton, true);
@@ -783,6 +804,7 @@ namespace TokenForge.Client.UI
         {
             var settings = dashboard?.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault();
             var actualState = desktopCompanionOverlayController?.OverlayState ?? dashboard?.DesktopOverlayState ?? CompanionDesktopOverlayState.Unavailable;
+            var statusMessage = desktopCompanionOverlayController?.OverlayStatusMessage ?? "Desktop companion service unavailable.";
             if (!settings.IsDesktopCompanionEnabled && actualState != CompanionDesktopOverlayState.Unavailable)
             {
                 actualState = CompanionDesktopOverlayState.Disabled;
@@ -790,21 +812,22 @@ namespace TokenForge.Client.UI
 
             SetText(dashboardDesktopCompanionLabel,
                 "Desktop Companion"
-                + "\nState: " + actualState.ToString().ToLowerInvariant()
-                + "\nMode: " + settings.MotionMode
-                + "\nInteraction: " + (settings.IsClickThroughEnabled ? "Click-through" : "Interactive")
-                + "\nPreview remains in-app; the desktop pet uses the native overlay when available.");
+                + "\n[" + FriendlyDesktopState(settings, actualState) + "]  " + (settings.IsClickThroughEnabled ? "Click-through" : "Interactive")
+                + "\n" + DesktopCompanionStatusCopy(settings, actualState, statusMessage)
+                + "\n" + (settings.IsClickThroughEnabled ? "Clicks pass to apps behind the companion." : "Drag to reposition. Tap for a reaction. Double-click opens the dashboard.")
+                + "\nPosition: " + (settings.HasSavedOverlayPosition ? "saved" : "default"));
             SetButton(dashboardEnableDesktopCompanionButton, viewModel != null && !settings.IsDesktopCompanionEnabled);
             SetButton(dashboardDisableDesktopCompanionButton, viewModel != null && settings.IsDesktopCompanionEnabled);
-            SetButtonLabel(dashboardEnableDesktopCompanionButton, "Enable Desktop Companion");
+            SetButtonLabel(dashboardEnableDesktopCompanionButton, actualState == CompanionDesktopOverlayState.Unavailable && settings.IsDesktopCompanionEnabled ? "Retry" : "Enable Desktop Companion");
             SetButtonLabel(dashboardDisableDesktopCompanionButton, "Disable Desktop Companion");
 
             SetText(settingsDesktopCompanionStatusLabel,
                 "Desktop Companion"
-                + "\nOverlay state: " + actualState.ToString().ToLowerInvariant()
+                + "\nOverlay state: " + FriendlyDesktopState(settings, actualState)
                 + "\nMotion mode: " + settings.MotionMode
-                + "\nClick-through: " + (settings.IsClickThroughEnabled ? "enabled" : "disabled")
-                + "\nIf unsupported, TokenForge keeps the in-app preview and status controls available.");
+                + "\nInteraction: " + (settings.IsClickThroughEnabled ? "Click-through: ignore mouse clicks" : "Interactive: tap, double-click, and drag enabled")
+                + "\nPosition: " + (settings.HasSavedOverlayPosition ? "saved" : "default")
+                + "\nStatus: " + DesktopCompanionStatusCopy(settings, actualState, statusMessage));
             if (settingsDesktopCompanionEnabledToggle != null)
             {
                 settingsDesktopCompanionEnabledToggle.SetIsOnWithoutNotify(settings.IsDesktopCompanionEnabled);
@@ -822,6 +845,181 @@ namespace TokenForge.Client.UI
             }
 
             SetButton(settingsResetOverlayPositionButton, viewModel != null);
+        }
+
+        private void UpdateNativeStatusItem(CharacterDashboardSummary dashboard)
+        {
+            if (lifecycleService == null || dashboard == null)
+            {
+                return;
+            }
+
+            var agentStatus = BootstrapUiTextFormatter.SelectedAgentCount(viewModel) > 0
+                ? BootstrapUiTextFormatter.SelectedAgentSummary(viewModel)
+                : "No agent connected";
+            var syncStatus = viewModel == null ? "Local only" : viewModel.SafeSyncConnection.StatusLabel;
+            var hasPendingReview = viewModel != null && (viewModel.GitFlow.HasPendingReview || viewModel.AgentFlow.HasPendingReview);
+            var canAnalyze = viewModel != null && (viewModel.Onboarding.GitConnected || BootstrapUiTextFormatter.SelectedAgentCount(viewModel) > 0 || BootstrapUiTextFormatter.ReadyToAnalyzeCount(viewModel) > 0);
+            var canSync = CanSyncLater(dashboard);
+            lifecycleService.UpdateStatusItem(
+                string.IsNullOrWhiteSpace(dashboard.CharacterName) ? "Token" : dashboard.CharacterName,
+                dashboard.CompanionState.Stage,
+                dashboard.CompanionState.Archetype,
+                dashboard.CompanionState.Level,
+                dashboard.CurrentRepositoryAlias,
+                agentStatus,
+                syncStatus,
+                dashboard.DesktopCompanionSettings != null && dashboard.DesktopCompanionSettings.IsDesktopCompanionEnabled,
+                dashboard.DesktopCompanionSettings != null && dashboard.DesktopCompanionSettings.IsClickThroughEnabled,
+                canAnalyze || hasPendingReview,
+                canSync);
+        }
+
+        private void HandleApplicationMenuAction(ApplicationMenuAction action)
+        {
+            switch (action)
+            {
+                case ApplicationMenuAction.ShowDashboard:
+                    ShowDashboard();
+                    lifecycleService?.ShowMainWindow();
+                    break;
+                case ApplicationMenuAction.HideDashboard:
+                    lifecycleService?.HideMainWindow();
+                    break;
+                case ApplicationMenuAction.EnableDesktopCompanion:
+                    if (viewModel != null)
+                    {
+                        RunViewModelAction(() => viewModel.SetDesktopCompanionEnabledAsync(true));
+                    }
+                    break;
+                case ApplicationMenuAction.DisableDesktopCompanion:
+                    if (viewModel != null)
+                    {
+                        RunViewModelAction(() => viewModel.SetDesktopCompanionEnabledAsync(false));
+                    }
+                    break;
+                case ApplicationMenuAction.ToggleCompanionClickThrough:
+                    if (viewModel != null)
+                    {
+                        var next = !(viewModel.CharacterDashboard?.DesktopCompanionSettings?.IsClickThroughEnabled ?? false);
+                        RunViewModelAction(() => viewModel.SetDesktopCompanionClickThroughAsync(next));
+                    }
+                    break;
+                case ApplicationMenuAction.ResetCompanionPosition:
+                    desktopCompanionOverlayController?.ResetPosition();
+                    if (viewModel != null)
+                    {
+                        RunViewModelAction(() => viewModel.ResetDesktopCompanionPositionAsync());
+                    }
+                    break;
+                case ApplicationMenuAction.AddRepository:
+                    if (viewModel != null)
+                    {
+                        RunViewModelAction(() => viewModel.SelectLocalGitRepositoryForOnboardingAsync());
+                    }
+                    lifecycleService?.ShowMainWindow();
+                    break;
+                case ApplicationMenuAction.ConnectAiAgent:
+                    ShowRunAnalysis();
+                    lifecycleService?.ShowMainWindow();
+                    break;
+                case ApplicationMenuAction.AnalyzeCurrentRepository:
+                    ShowRunAnalysis();
+                    lifecycleService?.ShowMainWindow();
+                    break;
+                case ApplicationMenuAction.SyncNow:
+                    if (viewModel != null && CanSyncLater(viewModel.CharacterDashboard))
+                    {
+                        RunViewModelAction(() => viewModel.SyncSafeSessionsAsync());
+                    }
+                    else
+                    {
+                        ShowSettings();
+                    }
+
+                    lifecycleService?.ShowMainWindow();
+                    break;
+                case ApplicationMenuAction.Settings:
+                    ShowSettings();
+                    lifecycleService?.ShowMainWindow();
+                    break;
+                case ApplicationMenuAction.Quit:
+                    lifecycleService?.Quit();
+                    break;
+            }
+        }
+
+        private void HandleDesktopCompanionPositionChanged(Vector2 position)
+        {
+            if (viewModel == null)
+            {
+                return;
+            }
+
+            RunViewModelAction(() => viewModel.SaveDesktopCompanionPositionAsync(position.x, position.y));
+        }
+
+        private void HandleDesktopCompanionDashboardRestoreRequested()
+        {
+            ShowDashboard();
+            lifecycleService?.ShowMainWindow();
+        }
+
+        private static string FriendlyDesktopState(DesktopCompanionSettings settings, CompanionDesktopOverlayState state)
+        {
+            if (settings == null || !settings.IsDesktopCompanionEnabled)
+            {
+                return "disabled";
+            }
+
+            switch (state)
+            {
+                case CompanionDesktopOverlayState.Active:
+                    return "native active";
+                case CompanionDesktopOverlayState.Fallback:
+                    return "fallback";
+                case CompanionDesktopOverlayState.Disabled:
+                    return "off";
+                default:
+                    return "unsupported";
+            }
+        }
+
+        private static string DesktopCompanionActionLabel(DesktopCompanionSettings settings, CompanionDesktopOverlayState state)
+        {
+            if (settings == null || !settings.IsDesktopCompanionEnabled)
+            {
+                return "Enable";
+            }
+
+            if (state == CompanionDesktopOverlayState.Unavailable)
+            {
+                return "Retry or Open Settings";
+            }
+
+            return "Disable";
+        }
+
+        private static string DesktopCompanionStatusCopy(DesktopCompanionSettings settings, CompanionDesktopOverlayState state, string statusMessage)
+        {
+            if (settings == null || !settings.IsDesktopCompanionEnabled)
+            {
+                return "Disabled. Turn it on to show the desktop companion.";
+            }
+
+            switch (state)
+            {
+                case CompanionDesktopOverlayState.Active:
+                    return "Native macOS overlay is active.";
+                case CompanionDesktopOverlayState.Fallback:
+                    return "Fallback preview is active because native overlay is not available here.";
+                case CompanionDesktopOverlayState.Disabled:
+                    return "Ready, but currently hidden.";
+                default:
+                    return string.IsNullOrWhiteSpace(statusMessage)
+                        ? "Native overlay is unsupported in this runtime."
+                        : statusMessage;
+            }
         }
 
         private void RenderOnboarding(CharacterDashboardSummary dashboard)
@@ -1093,9 +1291,11 @@ namespace TokenForge.Client.UI
                 player = "Local Player";
             }
 
-            return player + "\nLevel " + dashboard.Level + " | " + dashboard.RankTitle
-                   + "\nXP " + dashboard.CurrentLevelExp + " / " + dashboard.ExpForNextLevel
-                   + "\nToday's Growth: " + dashboard.RecentGrowthSummary;
+            return player
+                   + "\nStage: " + dashboard.CompanionState.Stage + "  Level " + dashboard.Level
+                   + "\nXP: " + dashboard.CurrentLevelExp + " / " + dashboard.ExpForNextLevel
+                   + "\n" + CompanionMoodLine(dashboard)
+                   + "\nRecent: " + dashboard.RecentGrowthSummary;
         }
 
         private static string BuildDashboardStatsText(CharacterDashboardSummary dashboard)
@@ -1108,6 +1308,18 @@ namespace TokenForge.Client.UI
                    + "\nSync " + dashboard.Sync;
         }
 
+        private string BuildDashboardHomeCardsText(CharacterDashboardSummary dashboard, bool hasPendingReview)
+        {
+            return "Companion Hero"
+                   + "\nToken is ready"
+                   + "\n" + CompanionMoodLine(dashboard)
+                   + "\nStage " + dashboard.CompanionState.Stage + " · Level " + dashboard.CompanionState.Level
+                   + "\nXP  [" + ProgressBar(dashboard.CurrentLevelExp, dashboard.ExpForNextLevel) + "]  "
+                   + dashboard.CurrentLevelExp + " / " + dashboard.ExpForNextLevel
+                   + "\nCode " + dashboard.Code + "   Focus " + dashboard.Focus + "   Debug " + dashboard.Debug + "   Design " + dashboard.Design + "   Sync " + dashboard.Sync
+                   + "\nNext: " + BuildNextAction(hasPendingReview);
+        }
+
         private string BuildDashboardSourcesAndActionText(CharacterDashboardSummary dashboard, bool hasPendingReview)
         {
             var git = viewModel != null && viewModel.Onboarding.GitConnected
@@ -1117,7 +1329,10 @@ namespace TokenForge.Client.UI
 
             if (dashboard != null && dashboard.HasSavedRun)
             {
-                return "Recent Run"
+                return "Current Repository"
+                       + "\n" + dashboard.CurrentRepositoryAlias
+                       + "\nProfiles: " + ((dashboard.RepositoryCompanions?.Count ?? 0) <= 0 ? 1 : dashboard.RepositoryCompanions.Count)
+                       + "\n\nRecent Run"
                        + "\n" + dashboard.LatestSafeSessionSummary
                        + "\n\nSaved Activity"
                        + "\n" + dashboard.ActivityLogSummary
@@ -1126,6 +1341,8 @@ namespace TokenForge.Client.UI
             }
 
             return "Selected Providers"
+                   + "\nCurrent Repository: " + (dashboard?.CurrentRepositoryAlias ?? "Local Repository")
+                   + "\nRepository Profiles: " + ((dashboard?.RepositoryCompanions?.Count ?? 0) <= 0 ? 1 : dashboard.RepositoryCompanions.Count)
                    + "\nAI Agents: " + BootstrapUiTextFormatter.SelectedAgentCount(viewModel)
                    + "\nDetected Local Sources: " + BootstrapUiTextFormatter.DetectedLocalSourceCount(viewModel)
                    + "\nReady to Analyze: " + BootstrapUiTextFormatter.ReadyToAnalyzeCount(viewModel)
@@ -1135,6 +1352,47 @@ namespace TokenForge.Client.UI
                    + "\nGit: " + git
                    + "\n\nNext Action"
                    + "\n" + action;
+        }
+
+        private string BuildDashboardWorkflowCardsText(CharacterDashboardSummary dashboard, bool hasPendingReview)
+        {
+            var git = viewModel != null && viewModel.Onboarding.GitConnected
+                ? BootstrapUiTextFormatter.GitSafeAlias(viewModel)
+                : "No repository connected";
+            var repoStatus = viewModel != null && viewModel.Onboarding.GitConnected
+                ? "Connected · Last analyzed " + LastAnalyzedBucket(dashboard) + " · " + ApprovedGrowthStatus(dashboard)
+                : "Add Repository to create repository-specific companion growth.";
+            var reviewStatus = hasPendingReview
+                ? "Pending safe summary ready. Save Review applies XP and growth."
+                : "No growth waiting yet. Run analysis to create one.";
+            var saveState = hasPendingReview ? "ready" : "locked until a review exists";
+            return "Growth Loop"
+                   + "\n" + ChecklistLine(viewModel != null && viewModel.Onboarding.GitConnected, "1. Add Repository")
+                   + "\n" + ChecklistLine(BootstrapUiTextFormatter.SelectedAgentCount(viewModel) > 0, "2. Connect AI Agent")
+                   + "\n" + ChecklistLine(hasPendingReview || dashboard.HasSavedRun, "3. Run Analysis & Approve Growth")
+                   + "\n\nConnected Sources"
+                   + "\nRepository: " + git
+                   + "\n" + repoStatus
+                   + "\nRecent Run: " + (dashboard.HasSavedRun ? dashboard.LatestSafeSessionSummary : "No saved run yet")
+                   + "\nAI Agent: " + AiAgentCardStatus()
+                   + "\nConnect Codex, Cursor, Claude Code, Copilot, or a manual log folder."
+                   + "\n\nPending Growth Review"
+                   + "\n" + reviewStatus
+                   + "\nSave Review: " + saveState
+                   + "\nRun analysis, review the safe summary, then save growth."
+                   + "\n\nNext Action"
+                   + "\n" + BuildNextAction(hasPendingReview);
+        }
+
+        private string BuildDashboardSafeSyncCard(CharacterDashboardSummary dashboard)
+        {
+            var statusLabel = viewModel == null ? "Local only" : viewModel.SafeSyncConnection.StatusLabel;
+            var canSync = CanSyncLater(dashboard);
+            return "Safe Sync"
+                   + "\n[" + statusLabel + "]"
+                   + "\nLocal play works without an account. Safe Sync is optional."
+                   + "\nSync Now: " + (canSync ? "enabled" : "disabled until sign-in and saved growth are available")
+                   + "\nOnly approved aggregate summaries can sync.";
         }
 
         private string BuildNextAction(bool hasPendingReview)
@@ -1166,6 +1424,61 @@ namespace TokenForge.Client.UI
             }
 
             return "Run local analysis.";
+        }
+
+        private static string CompanionMoodLine(CharacterDashboardSummary dashboard)
+        {
+            if (dashboard == null || dashboard.CompanionState == null || dashboard.CompanionState.TotalXp <= 0)
+            {
+                return "Egg is waiting for your first approved coding activity.";
+            }
+
+            return dashboard.CompanionState.Stage + " is growing from approved local activity.";
+        }
+
+        private static string ProgressBar(int current, int total)
+        {
+            total = Math.Max(1, total);
+            var filled = Math.Max(0, Math.Min(10, (int)Math.Round((double)Math.Max(0, current) / total * 10.0)));
+            return new string('#', filled) + new string('-', 10 - filled);
+        }
+
+        private static string LastAnalyzedBucket(CharacterDashboardSummary dashboard)
+        {
+            if (dashboard?.RepositoryCompanions != null)
+            {
+                for (var i = 0; i < dashboard.RepositoryCompanions.Count; i++)
+                {
+                    var item = dashboard.RepositoryCompanions[i];
+                    if (item != null && item.Selected && !string.IsNullOrWhiteSpace(item.LastApprovedActivityBucket))
+                    {
+                        return item.LastApprovedActivityBucket;
+                    }
+                }
+            }
+
+            return dashboard != null && dashboard.HasSavedRun ? "saved run available" : "not yet";
+        }
+
+        private static string ApprovedGrowthStatus(CharacterDashboardSummary dashboard)
+        {
+            return dashboard != null && dashboard.HasSavedRun ? "approved growth saved" : "no approved growth yet";
+        }
+
+        private string AiAgentCardStatus()
+        {
+            var selectedCount = BootstrapUiTextFormatter.SelectedAgentCount(viewModel);
+            if (selectedCount <= 0)
+            {
+                return "No AI agent connected";
+            }
+
+            return BootstrapUiTextFormatter.SelectedAgentSummary(viewModel);
+        }
+
+        private static string ChecklistLine(bool done, string label)
+        {
+            return (done ? "[done] " : "[todo] ") + label;
         }
 
         private bool CanSyncLater(CharacterDashboardSummary dashboard)

@@ -51,8 +51,8 @@ namespace TokenForge.Client.Tests
 
             Assert.AreEqual(GitAnalysisFlowState.Selected, fixture.Controller.State);
             Assert.IsNull(fixture.Controller.Review);
-            Assert.AreEqual(0, fixture.Repository.LoadCount);
-            Assert.AreEqual(0, fixture.Repository.SaveCount);
+            Assert.AreEqual(1, fixture.Repository.LoadCount);
+            Assert.AreEqual(1, fixture.Repository.SaveCount);
             AssertLogsAreSafe(fixture.Logger.Messages, fixture.RepositoryPath);
         }
 
@@ -110,7 +110,7 @@ namespace TokenForge.Client.Tests
             var saveResult = RunAsync(() => fixture.Controller.SaveSessionAsync(CancellationToken.None));
 
             Assert.IsTrue(saveResult.IsSuccess, saveResult.ErrorMessage);
-            Assert.AreEqual(1, fixture.Repository.SaveCount);
+            Assert.AreEqual(2, fixture.Repository.SaveCount);
             Assert.IsTrue(fixture.Repository.LastSaveWasPrivacySafe);
         }
 
@@ -127,7 +127,7 @@ namespace TokenForge.Client.Tests
             Assert.IsFalse(result.IsSuccess);
             Assert.AreEqual(123, fixture.Repository.Current.CharacterProfile.TotalExp);
             Assert.AreEqual(1, fixture.Repository.Current.WorkSessionSummaries.Count);
-            Assert.AreEqual(0, fixture.Repository.SaveCount);
+            Assert.AreEqual(1, fixture.Repository.SaveCount);
         }
 
         [Test]

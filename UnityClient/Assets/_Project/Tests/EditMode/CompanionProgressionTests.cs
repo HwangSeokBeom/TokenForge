@@ -69,7 +69,7 @@ namespace TokenForge.Client.Tests
             Assert.IsTrue(fixture.Flow.HasPendingReview);
             Assert.AreEqual(0, fixture.Repository.Current.CompanionState.TotalXp);
             Assert.AreEqual(CompanionStage.Egg, fixture.Repository.Current.CompanionState.Stage);
-            Assert.AreEqual(0, fixture.Repository.SaveCount);
+            Assert.AreEqual(1, fixture.Repository.SaveCount);
         }
 
         [Test]
@@ -82,7 +82,7 @@ namespace TokenForge.Client.Tests
             var saved = RunAsync(() => fixture.Flow.SaveSessionAsync());
 
             Assert.IsTrue(saved.IsSuccess, saved.ErrorMessage);
-            Assert.AreEqual(1, fixture.Repository.SaveCount);
+            Assert.AreEqual(2, fixture.Repository.SaveCount);
             Assert.Greater(fixture.Repository.Current.CompanionState.TotalXp, 0);
             Assert.AreNotEqual(CompanionArchetype.Unknown, fixture.Repository.Current.CompanionState.Archetype);
             Assert.That(fixture.Repository.Current.CompanionState.LastGrowthReasonIds, Does.Contain("approved_aggregate_growth"));
@@ -186,7 +186,7 @@ namespace TokenForge.Client.Tests
             Assert.IsTrue(discarded.IsSuccess, discarded.ErrorMessage);
             Assert.IsFalse(fixture.Flow.HasPendingReview);
             Assert.AreEqual(0, fixture.Repository.Current.CompanionState.TotalXp);
-            Assert.AreEqual(0, fixture.Repository.SaveCount);
+            Assert.AreEqual(1, fixture.Repository.SaveCount);
         }
 
         private static CompanionGrowthProfile ProfileFor(CompanionArchetype archetype)

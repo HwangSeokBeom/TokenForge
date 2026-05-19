@@ -38,6 +38,7 @@ namespace TokenForge.Editor
 
         public static BuildReport Build(string outputPath, bool developmentBuild = false, bool cleanBuild = true)
         {
+            TokenForge.Client.Editor.TokenForgeBootstrapSceneBuilder.BuildMainScene();
             ValidateProjectState();
             if (string.IsNullOrWhiteSpace(outputPath))
             {

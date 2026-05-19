@@ -1,6 +1,8 @@
 using System.IO;
 using System.Linq;
 using NUnit.Framework;
+using TokenForge.Client.Domain;
+using TokenForge.Client.UI;
 
 namespace TokenForge.Client.Tests
 {
@@ -26,6 +28,22 @@ namespace TokenForge.Client.Tests
                 .ToList();
 
             Assert.IsEmpty(matches);
+        }
+
+        [Test]
+        public void SelectingAgentProviderDoesNotGrantCompanionXp()
+        {
+            var onboarding = new OnboardingState();
+            var saveData = SaveData.CreateDefault();
+            var codex = onboarding.AgentSources.First(source => source.SourceType == ConnectedAgentSourceType.Codex);
+
+            codex.Selected = true;
+            codex.State = AgentSourceSetupState.Selected;
+            codex.StatusLabel = "Codex selected";
+
+            Assert.AreEqual("Codex", codex.DisplayName);
+            Assert.AreEqual(0, saveData.CompanionState.TotalXp);
+            Assert.AreEqual(0, saveData.GrowthHistory.Count);
         }
     }
 }

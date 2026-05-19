@@ -87,7 +87,7 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual("missing_agent_review_session", agentSave.ErrorCode);
             Assert.IsNull(fixture.Dashboard.GitFlow.Review);
             Assert.IsNull(fixture.Dashboard.AgentFlow.Review);
-            Assert.AreEqual(0, fixture.Repository.SaveCount);
+            Assert.AreEqual(1, fixture.Repository.SaveCount);
             AssertNoRawData(fixture.Dashboard, fixture.RepositoryPath);
         }
 

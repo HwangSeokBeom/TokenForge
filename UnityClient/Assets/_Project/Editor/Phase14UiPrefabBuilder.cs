@@ -293,8 +293,8 @@ namespace TokenForge.Client.Editor
         {
             var screen = new GameObject("Game Dashboard Root", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(LayoutElement));
             screen.transform.SetParent(parent, false);
-            screen.GetComponent<LayoutElement>().minHeight = 920f;
-            screen.GetComponent<LayoutElement>().preferredHeight = 980f;
+            screen.GetComponent<LayoutElement>().minHeight = 980f;
+            screen.GetComponent<LayoutElement>().preferredHeight = 1060f;
             var layout = screen.GetComponent<VerticalLayoutGroup>();
             layout.spacing = 16f;
             layout.childControlWidth = true;
@@ -313,48 +313,84 @@ namespace TokenForge.Client.Editor
             topLayout.childForceExpandWidth = false;
             topLayout.childForceExpandHeight = false;
             topLayout.childAlignment = TextAnchor.MiddleLeft;
-            var dashboardTitle = Text("Dashboard Title", top.transform, "Game Dashboard", 30, FontStyle.Bold, Accent(), 52f);
+            var dashboardTitle = Text("Dashboard Title", top.transform, "TokenForge", 30, FontStyle.Bold, Accent(), 52f);
             dashboardTitle.GetComponent<LayoutElement>().flexibleWidth = 1f;
             rootView.dashboardBackButton = Button("Run Analysis", top.transform, 146f, ButtonStyle.Secondary);
 
             rootView.conflictBanner = StatusText("Conflict Banner", screen.transform, "Conflicts: none unresolved.", new Color(1f, 0.62f, 0.34f, 1f), 42f).transform.parent.gameObject;
             rootView.conflictBannerLabel = rootView.conflictBanner.GetComponentInChildren<Text>();
 
-            var grid = new GameObject("Dashboard Grid", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
-            grid.transform.SetParent(screen.transform, false);
-            grid.GetComponent<LayoutElement>().flexibleHeight = 1f;
-            grid.GetComponent<LayoutElement>().minHeight = 760f;
-            var gridLayout = grid.GetComponent<HorizontalLayoutGroup>();
-            gridLayout.spacing = 16f;
-            gridLayout.childControlWidth = true;
-            gridLayout.childControlHeight = true;
-            gridLayout.childForceExpandWidth = true;
-            var status = Panel("Character Status", grid.transform, 760f);
-            status.GetComponent<LayoutElement>().flexibleWidth = 1f;
-            status.GetComponent<LayoutElement>().minWidth = 430f;
-            Text("Character Status Title", status.transform, "Companion", 20, FontStyle.Bold, Accent(), 30f);
-            rootView.dashboardCharacterStatusLabel = StatusText("Dashboard Character Text", status.transform, "Local Player\nLevel 1 | Local Apprentice\nXP 0 / 1000\nToday's Growth: No growth recorded yet.", Primary(), 104f);
-            rootView.companionView = CreateCompanionView(status.transform);
-            rootView.companionStatusPanel = CreateCompanionStatus(status.transform);
-            rootView.dashboardDesktopCompanionLabel = StatusText("Dashboard Desktop Companion", status.transform, "Desktop Companion\nState: disabled\nMode: Normal\nInteraction: Click-through", Secondary(), 108f);
-            var desktopActions = Row("Dashboard Desktop Companion Actions", status.transform, 48f);
-            rootView.dashboardEnableDesktopCompanionButton = Button("Enable Desktop Companion", desktopActions.transform, 230f, ButtonStyle.Primary);
-            rootView.dashboardDisableDesktopCompanionButton = Button("Disable Desktop Companion", desktopActions.transform, 230f, ButtonStyle.Secondary);
-            rootView.dashboardQuestLabel = StatusText("Dashboard Stats", status.transform, "Stats\nCode 0\nFocus 0\nDebug 0\nDesign 0\nSync 0", Secondary(), 112f);
-            var actions = Row("Dashboard Action Buttons", status.transform, 92f);
-            rootView.dashboardAnalyzeRepositoryButton = Button("Analyze Local Sources", actions.transform, 226f, ButtonStyle.Primary);
-            rootView.dashboardSaveSessionButton = Button("Save Review", actions.transform, 140f, ButtonStyle.Secondary);
-            rootView.dashboardSyncButton = Button("Sync Later", actions.transform, 128f, ButtonStyle.Secondary);
+            var hero = Panel("Companion Hero", screen.transform, 310f);
+            var heroRow = new GameObject("Companion Hero Row", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
+            heroRow.transform.SetParent(hero.transform, false);
+            heroRow.GetComponent<LayoutElement>().preferredHeight = 220f;
+            var heroLayout = heroRow.GetComponent<HorizontalLayoutGroup>();
+            heroLayout.spacing = 18f;
+            heroLayout.childControlWidth = true;
+            heroLayout.childControlHeight = true;
+            heroLayout.childForceExpandWidth = true;
+            heroLayout.childForceExpandHeight = false;
+            var companionCard = SubPanel("Large Companion Dot Card", heroRow.transform, 220f);
+            companionCard.GetComponent<LayoutElement>().minWidth = 300f;
+            companionCard.GetComponent<LayoutElement>().flexibleWidth = 0.75f;
+            Text("Large Companion Card Title", companionCard.transform, "Companion", 18, FontStyle.Bold, Accent(), 28f);
+            rootView.companionView = CreateCompanionView(companionCard.transform);
+            rootView.companionStatusPanel = CreateCompanionStatus(companionCard.transform);
+            rootView.companionStatusPanel.gameObject.SetActive(false);
 
-            var log = Panel("Activity Log", grid.transform, 760f);
-            log.GetComponent<LayoutElement>().flexibleWidth = 1f;
-            log.GetComponent<LayoutElement>().minWidth = 430f;
-            Text("Activity Log Title", log.transform, "Today's Growth", 20, FontStyle.Bold, Accent(), 30f);
-            rootView.dashboardActivityLogLabel = StatusText("Activity Log Summary", log.transform, "Local Sources\nAI Agents: 0\nGit: No source selected\n\nNext Action\nReady for your first run.", Secondary(), 150f);
-            rootView.dashboardSyncReasonLabel = StatusText("Dashboard Sync Reason", log.transform, "Create an account only if you want Safe Sync. Local gameplay works offline.", Secondary(), 72f);
-            var logActions = Row("Dashboard Secondary Actions", log.transform, 48f);
-            rootView.dashboardHistoryButton = Button("Run Analysis", logActions.transform, 140f, ButtonStyle.Secondary);
-            rootView.dashboardSettingsButton = Button("Settings", logActions.transform, 110f, ButtonStyle.Secondary);
+            var heroDetails = SubPanel("Companion Hero Details", heroRow.transform, 220f);
+            heroDetails.GetComponent<LayoutElement>().flexibleWidth = 1.25f;
+            rootView.dashboardCharacterStatusLabel = StatusText("Companion Hero Summary", heroDetails.transform, "Token\nStage: Egg  Level: 1\nXP: 0 / 1000\nEgg is waiting for your first approved coding activity.", Primary(), 106f);
+            rootView.dashboardQuestLabel = StatusText("Companion Hero Card", heroDetails.transform, "Companion Hero\nEgg is waiting for your first approved coding activity.\nStage Egg · Level 1\nXP [----------] 0 / 1000\nCTA  Add Repository | Connect AI Agent | Run Analysis | Enable Desktop Companion", Secondary(), 100f);
+            var primaryActions = Row("Dashboard Primary CTA Row", hero.transform, 48f);
+            rootView.dashboardAnalyzeRepositoryButton = Button("Add Repository", primaryActions.transform, 160f, ButtonStyle.Primary);
+            rootView.dashboardHistoryButton = Button("Connect AI Agent", primaryActions.transform, 176f, ButtonStyle.Secondary);
+            rootView.dashboardEnableDesktopCompanionButton = Button("Enable Desktop Companion", primaryActions.transform, 230f, ButtonStyle.Secondary);
+
+            var cards = new GameObject("Dashboard Product Cards", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
+            cards.transform.SetParent(screen.transform, false);
+            cards.GetComponent<LayoutElement>().minHeight = 560f;
+            cards.GetComponent<LayoutElement>().preferredHeight = 590f;
+            var cardsLayout = cards.GetComponent<HorizontalLayoutGroup>();
+            cardsLayout.spacing = 16f;
+            cardsLayout.childControlWidth = true;
+            cardsLayout.childControlHeight = true;
+            cardsLayout.childForceExpandWidth = true;
+
+            var leftColumn = new GameObject("Dashboard Source Cards", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(LayoutElement));
+            leftColumn.transform.SetParent(cards.transform, false);
+            leftColumn.GetComponent<LayoutElement>().flexibleWidth = 1f;
+            leftColumn.GetComponent<LayoutElement>().minWidth = 430f;
+            var leftLayout = leftColumn.GetComponent<VerticalLayoutGroup>();
+            leftLayout.spacing = 14f;
+            leftLayout.childControlWidth = true;
+            leftLayout.childControlHeight = true;
+            leftLayout.childForceExpandWidth = true;
+            leftLayout.childForceExpandHeight = false;
+            var workflowCard = SubPanel("Growth Loop Sources", leftColumn.transform, 340f);
+            rootView.dashboardActivityLogLabel = StatusText("Growth Loop Sources Summary", workflowCard.transform, "Growth Loop\n[todo] 1. Add Repository\n[todo] 2. Connect AI Agent\n[todo] 3. Run Analysis & Approve Growth\n\nConnected Sources\nRepository: No repository connected\nRecent Run: No saved run yet\nAI Agent: No AI agent connected\nConnect Codex, Cursor, Claude Code, Copilot, or a manual log folder.\n\nPending Growth Review\nNo growth waiting yet. Run analysis to create one.\nSave Review: locked until a review exists", Secondary(), 282f);
+            var reviewActions = Row("Growth Review Actions", leftColumn.transform, 48f);
+            rootView.dashboardSaveSessionButton = Button("Save Review", reviewActions.transform, 140f, ButtonStyle.Primary);
+
+            var rightColumn = new GameObject("Dashboard Companion Sync Cards", typeof(RectTransform), typeof(VerticalLayoutGroup), typeof(LayoutElement));
+            rightColumn.transform.SetParent(cards.transform, false);
+            rightColumn.GetComponent<LayoutElement>().flexibleWidth = 1f;
+            rightColumn.GetComponent<LayoutElement>().minWidth = 430f;
+            var rightLayout = rightColumn.GetComponent<VerticalLayoutGroup>();
+            rightLayout.spacing = 14f;
+            rightLayout.childControlWidth = true;
+            rightLayout.childControlHeight = true;
+            rightLayout.childForceExpandWidth = true;
+            rightLayout.childForceExpandHeight = false;
+            var desktopCard = SubPanel("Desktop Companion Card", rightColumn.transform, 150f);
+            rootView.dashboardDesktopCompanionLabel = StatusText("Dashboard Desktop Companion", desktopCard.transform, "Desktop Companion\n[disabled]\nDisabled. Turn it on to show the desktop companion.\nInteraction: Interactive mode opens the dashboard on click.", Secondary(), 110f);
+            var desktopActions = Row("Dashboard Desktop Companion Actions", rightColumn.transform, 48f);
+            rootView.dashboardDisableDesktopCompanionButton = Button("Disable Desktop Companion", desktopActions.transform, 230f, ButtonStyle.Secondary);
+            var syncCard = SubPanel("Safe Sync Panel", rightColumn.transform, 136f);
+            rootView.dashboardSyncReasonLabel = StatusText("Dashboard Safe Sync", syncCard.transform, "Safe Sync\n[Local only]\nLocal play works without an account. Safe Sync is optional.\nSync Now: disabled until sign-in and saved growth are available", Secondary(), 96f);
+            var syncActions = Row("Safe Sync Actions", rightColumn.transform, 48f);
+            rootView.dashboardSyncButton = Button("Sync Now", syncActions.transform, 128f, ButtonStyle.Secondary);
+            rootView.dashboardSettingsButton = Button("Settings", syncActions.transform, 110f, ButtonStyle.Secondary);
         }
 
         private static CompanionView CreateCompanionView(Transform parent)
@@ -413,7 +449,7 @@ namespace TokenForge.Client.Editor
 
         private static CompanionStatusPanelView CreateCompanionStatus(Transform parent)
         {
-            var label = StatusText("Companion Status", parent, "Companion Status\nStage: Egg\nArchetype: Not assigned\nLevel: 1\nXP / next: 0 / 250\nNo approved growth yet.", Primary(), 124f);
+            var label = StatusText("Companion Details", parent, "Companion Details\nStage: Egg\nArchetype: Not assigned\nLevel: 1\nXP / next: 0 / 250\nNo approved growth yet.", Primary(), 124f);
             var panel = label.GetComponentInParent<Image>().gameObject;
             var view = panel.AddComponent<CompanionStatusPanelView>();
             view.statusLabel = label;
@@ -455,7 +491,7 @@ namespace TokenForge.Client.Editor
             rootView.privacyNoticePanel.transform.SetParent(settings.transform, false);
             var desktopCompanion = CompactPanel("Settings Desktop Companion", settings.transform, 260f);
             Text("Settings Desktop Companion Title", desktopCompanion.transform, "Desktop Companion", 22, FontStyle.Bold, Accent(), 32f);
-            rootView.settingsDesktopCompanionStatusLabel = StatusText("Settings Desktop Companion Status", desktopCompanion.transform, "Overlay state: disabled\nMotion mode: Normal\nClick-through: enabled", Primary(), 86f);
+            rootView.settingsDesktopCompanionStatusLabel = StatusText("Settings Desktop Companion Status", desktopCompanion.transform, "Overlay state: disabled\nMotion mode: Normal\nInteraction: Interactive: Click to open dashboard", Primary(), 96f);
             var desktopToggles = Row("Settings Desktop Companion Toggles", desktopCompanion.transform, 44f);
             rootView.settingsDesktopCompanionEnabledToggle = Toggle("Enable desktop overlay", desktopToggles.transform, false, 230f);
             rootView.settingsDesktopCompanionClickThroughToggle = Toggle("Click-through mode", desktopToggles.transform, true, 220f);

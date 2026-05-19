@@ -118,7 +118,7 @@ namespace TokenForge.Client.Tests
             Assert.IsTrue(selectGit.IsSuccess, selectGit.ErrorMessage);
             Assert.AreEqual(GitAnalysisFlowState.Selected, fixture.Dashboard.GitFlow.State);
             Assert.IsNull(fixture.Dashboard.GitFlow.Review);
-            Assert.AreEqual(0, fixture.SaveRepository.SaveCount);
+            Assert.AreEqual(2, fixture.SaveRepository.SaveCount);
 
             Assert.IsTrue(addAgent.IsSuccess, addAgent.ErrorMessage);
             Assert.IsTrue(selectAgent.IsSuccess, selectAgent.ErrorMessage);

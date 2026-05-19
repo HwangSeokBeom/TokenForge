@@ -59,7 +59,8 @@ namespace TokenForge.Client.Sync
                 }
 
                 if (!string.IsNullOrEmpty(request.BodyJson) &&
-                    string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase))
+                    (string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(request.Method, "PUT", StringComparison.OrdinalIgnoreCase)))
                 {
                     message.Content = new StringContent(request.BodyJson, Encoding.UTF8, "application/json");
                 }
@@ -120,6 +121,15 @@ namespace TokenForge.Client.Sync
             CancellationToken cancellationToken)
         {
             return SendAsync<TResponse>("POST", endpoint, endpointName, request, cancellationToken);
+        }
+
+        public Task<TokenForgeHttpResult<TResponse>> PutJsonAsync<TRequest, TResponse>(
+            string endpoint,
+            string endpointName,
+            TRequest request,
+            CancellationToken cancellationToken)
+        {
+            return SendAsync<TResponse>("PUT", endpoint, endpointName, request, cancellationToken);
         }
 
         private async Task<TokenForgeHttpResult<TResponse>> SendAsync<TResponse>(

@@ -176,6 +176,8 @@ namespace TokenForge.Client.Persistence
             saveData.SaveVersion = SaveData.CurrentSaveVersion;
             saveData.CharacterProfile = saveData.CharacterProfile ?? new CharacterProfile();
             saveData.CompanionState = CompanionProgressionRules.Normalize(saveData.CompanionState);
+            saveData.RepositoryCompanionProfiles = saveData.RepositoryCompanionProfiles ?? new System.Collections.Generic.List<RepositoryCompanionProfile>();
+            saveData = RepositoryCompanionProfileService.Normalize(saveData);
             saveData.DesktopCompanionSettings = NormalizeDesktopCompanionSettings(saveData.DesktopCompanionSettings);
             saveData.WorkSessionSummaries = saveData.WorkSessionSummaries ?? new System.Collections.Generic.List<AgentWorkSession>();
             foreach (var session in saveData.WorkSessionSummaries)
@@ -201,7 +203,14 @@ namespace TokenForge.Client.Persistence
         private static DesktopCompanionSettings NormalizeDesktopCompanionSettings(DesktopCompanionSettings settings)
         {
             settings = settings ?? DesktopCompanionSettings.CreateDefault();
-            settings.SchemaVersion = 1;
+            var schemaVersion = settings.SchemaVersion;
+            settings.SchemaVersion = 2;
+            if (schemaVersion < 2)
+            {
+                settings.IsDesktopCompanionEnabled = true;
+                settings.IsClickThroughEnabled = false;
+            }
+
             if (!Enum.IsDefined(typeof(CompanionDesktopMotionMode), settings.MotionMode))
             {
                 settings.MotionMode = CompanionDesktopMotionMode.Normal;
@@ -210,6 +219,13 @@ namespace TokenForge.Client.Persistence
             settings.VisualThemeId = string.IsNullOrWhiteSpace(settings.VisualThemeId)
                 ? "pixel-default"
                 : settings.VisualThemeId.Trim();
+            if (settings.LastOverlayPositionX < 0f || settings.LastOverlayPositionY < 0f)
+            {
+                settings.HasSavedOverlayPosition = false;
+                settings.LastOverlayPositionX = -1f;
+                settings.LastOverlayPositionY = -1f;
+            }
+
             return settings;
         }
 
