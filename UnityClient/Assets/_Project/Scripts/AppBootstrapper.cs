@@ -1,5 +1,7 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -7,6 +9,7 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using TokenForge.Client.Agents;
 using TokenForge.Client.Auth;
+using TokenForge.Client.Domain;
 using TokenForge.Client.Git;
 using TokenForge.Client.Platform;
 using TokenForge.Client.Privacy;
@@ -39,12 +42,15 @@ namespace TokenForge.Client
         private static readonly string[] RepresentativeStartupTexts =
         {
             "TokenForge",
-            "Turn your development activity into RPG growth",
-            "Start your developer RPG",
-            "Create Account",
-            "Continue Offline",
-            "AI Agents",
-            "Start Game"
+            "Turn your coding activity into a growing desktop companion",
+            "Local-first",
+            "Sync optional",
+            "Start Game",
+            "Add Repository",
+            "Connect Codex Agent",
+            "My Companion",
+            "Today’s Growth",
+            "Review Activity"
         };
 
         [SerializeField] private BootstrapRootView bootstrapRoot;
@@ -66,6 +72,10 @@ namespace TokenForge.Client
         private GitAnalysisFlowController gitAnalysisFlow;
         private AgentAnalysisFlowController agentAnalysisFlow;
         private ApprovedActivityAnalysisViewModel approvedActivityAnalysis;
+        private IApplicationLifecycleService lifecycleService;
+        private INativeDashboardService nativeDashboardService;
+        private DesktopCompanionOverlayController nativeDesktopCompanionController;
+        private bool nativeDashboardShown;
         private bool prefabUiUnavailableLogged;
 
 #if UNITY_EDITOR
@@ -80,19 +90,36 @@ namespace TokenForge.Client
         public bool IsVisibleUiValidated { get; private set; }
         public bool IsBootstrapComplete { get; private set; }
         public bool IsRenderedFrameSmokeSkippedForBatchMode { get; private set; }
-        public bool RequirePrefabUi => true;
+        public bool RequirePrefabUi => !UseNativeMacDashboardShell;
         public bool LoadAuthSessionOnStart => loadAuthSessionOnStart;
         public bool RunSafeSmokeFlowWhenEmpty => runSafeSmokeFlowWhenEmpty;
         public int LastViewportVisibleCandidateCount { get; private set; }
         public float LastRenderedFrameAverageLuminance { get; private set; }
         public float LastRenderedFrameNonBlackPixelRatio { get; private set; }
         public float LastRenderedFrameBrightestPixelLuminance { get; private set; }
+        public string LastBootstrapRootSource { get; private set; } = string.Empty;
+        public string LastBootstrapRootPrefabPath { get; private set; } = string.Empty;
+        public string LastBootstrapRootUiVersion { get; private set; } = string.Empty;
+
+        private static bool UseNativeMacDashboardShell
+        {
+            get
+            {
+#if UNITY_STANDALONE_OSX && !UNITY_EDITOR
+                return true;
+#else
+                return false;
+#endif
+            }
+        }
 
         private void Awake()
         {
             Debug.Log("INFO " + LogPrefix + " TokenForge bootstrap starting.");
+            LogStartupScene();
             LogHierarchyDump("AwakeStart");
-            new MacApplicationLifecycleService().Install();
+            lifecycleService = new MacApplicationLifecycleService();
+            lifecycleService.Install();
             EnsureSceneInfrastructure();
             LogHierarchyDump("AfterEnsureSceneInfrastructure");
             ConfigureServices();
@@ -115,7 +142,14 @@ namespace TokenForge.Client
                 safeSyncService,
                 authSessionService);
 
-            if (bootstrapRoot != null)
+            if (UseNativeMacDashboardShell)
+            {
+                Debug.Log("INFO [NativeDashboard] mode=macOSPlayer source=AppKit");
+                Debug.Log("INFO [BootstrapRoot] productUI=disabled reason=nativeShell");
+                EnsureNativeDashboardShell();
+                ApplyNativeShellState(showDashboardIfNeeded: true);
+            }
+            else if (bootstrapRoot != null)
             {
                 bootstrapRoot.Bind(localStatus, approvedActivityAnalysis);
                 LogHierarchyDump("AfterBootstrapRootBind");
@@ -221,6 +255,11 @@ namespace TokenForge.Client
             {
                 bootstrapRoot.Bind(localStatus, approvedActivityAnalysis);
             }
+
+            if (UseNativeMacDashboardShell)
+            {
+                ApplyNativeShellState(showDashboardIfNeeded: false);
+            }
         }
 
         private void ConfigureServices()
@@ -305,8 +344,328 @@ namespace TokenForge.Client
                 syncService);
         }
 
+        private void EnsureNativeDashboardShell()
+        {
+            if (!UseNativeMacDashboardShell)
+            {
+                return;
+            }
+
+            if (nativeDashboardService == null)
+            {
+                nativeDashboardService = new MacNativeDashboardService();
+                nativeDashboardService.ActionRequested -= HandleNativeDashboardAction;
+                nativeDashboardService.ActionRequested += HandleNativeDashboardAction;
+                nativeDashboardService.Install();
+            }
+
+            if (nativeDesktopCompanionController == null)
+            {
+                var controllerObject = new GameObject("NativeDesktopCompanionController");
+                DontDestroyOnLoad(controllerObject);
+                nativeDesktopCompanionController = controllerObject.AddComponent<DesktopCompanionOverlayController>();
+                nativeDesktopCompanionController.Initialize(null, lifecycleService);
+            }
+        }
+
+        private void ApplyNativeShellState(bool showDashboardIfNeeded)
+        {
+            if (!UseNativeMacDashboardShell)
+            {
+                return;
+            }
+
+            EnsureNativeDashboardShell();
+            var state = BuildNativeDashboardState();
+            nativeDashboardService.UpdateDashboardState(state);
+            nativeDashboardService.SetMenuBarStatus(state);
+            nativeDesktopCompanionController?.ApplySettings(
+                approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault(),
+                approvedActivityAnalysis?.CharacterDashboard?.CompanionState ?? CompanionState.CreateDefault());
+
+            if (showDashboardIfNeeded && !nativeDashboardShown)
+            {
+                nativeDashboardShown = true;
+                nativeDashboardService.ShowDashboardWindow();
+            }
+        }
+
+        private NativeDashboardState BuildNativeDashboardState()
+        {
+            var dashboard = approvedActivityAnalysis?.CharacterDashboard ?? new CharacterDashboardSummary();
+            var companion = dashboard.CompanionState ?? CompanionState.CreateDefault();
+            var settings = dashboard.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault();
+            var codexConnected = approvedActivityAnalysis != null
+                && approvedActivityAnalysis.Onboarding.AgentSources.Any(source => source.SourceType == ConnectedAgentSourceType.Codex && source.Selected);
+            var repositoryConnected = approvedActivityAnalysis != null
+                && (approvedActivityAnalysis.Onboarding.GitConnected || !string.IsNullOrWhiteSpace(dashboard.CurrentRepositoryHash));
+
+            var state = NativeDashboardState.CreateDefault();
+            state.connection = "local";
+            state.sync = approvedActivityAnalysis != null && approvedActivityAnalysis.AuthState == AuthState.LoggedIn ? "connected" : "optional";
+            state.appTitle = "TokenForge";
+            state.subtitle = "Turn your development activity into companion growth.";
+            state.isLocalMode = true;
+            state.syncStatusText = state.sync == "connected" ? "Safe sync connected" : "Sync optional";
+            state.selectedNavItem = "dashboard";
+            state.primaryActionEnabled = true;
+            state.pendingReviewCount = (gitAnalysisFlow != null && gitAnalysisFlow.HasPendingReview ? 1 : 0)
+                + (agentAnalysisFlow != null && agentAnalysisFlow.HasPendingReview ? 1 : 0);
+            state.warningCount = Math.Max(0, (approvedActivityAnalysis?.RetryQueueSummary?.PendingCount ?? 0) + (approvedActivityAnalysis?.TombstoneSummary?.PendingDeleteCount ?? 0));
+            state.lastRunSummary = SafeNativeText(dashboard.LatestSafeSessionSummary, "No saved growth yet. Run Analysis on a repository or AI agent log to generate your first XP.");
+            state.codeStat = Math.Max(0, dashboard.Code);
+            state.focusStat = Math.Max(0, dashboard.Focus);
+            state.debugStat = Math.Max(0, dashboard.Debug);
+            state.designStat = Math.Max(0, dashboard.Design);
+            state.syncStat = Math.Max(0, dashboard.Sync);
+            state.companionVisible = settings.IsDesktopCompanionEnabled;
+            state.wanderEnabled = settings.MotionMode != CompanionDesktopMotionMode.Calm;
+            state.clickReactionEnabled = !settings.IsClickThroughEnabled;
+            state.companion.name = string.IsNullOrWhiteSpace(dashboard.CharacterName) ? "Token" : dashboard.CharacterName;
+            state.companion.stage = companion.Stage.ToString();
+            state.companion.level = Math.Max(1, companion.Level);
+            state.companion.xp = Math.Max(0, dashboard.CurrentLevelExp);
+            state.companion.xpToNextLevel = Math.Max(1, companion.XpToNextStage);
+            state.companion.mood = settings.IsDesktopCompanionEnabled ? "active" : "hidden";
+            state.companion.skin = string.IsNullOrWhiteSpace(settings.VisualThemeId) ? "orange_cat" : settings.VisualThemeId;
+            state.repository.connected = repositoryConnected;
+            state.repository.name = repositoryConnected ? SafeNativeText(dashboard.CurrentRepositoryAlias, "Local Repository") : string.Empty;
+            state.repository.status = repositoryConnected ? "local_connected" : "not_selected";
+            state.repository.statusText = repositoryConnected ? "Connected locally" : "Not selected";
+            state.codexAgent.connected = codexConnected;
+            state.codexAgent.status = codexConnected ? "connected" : "not_connected";
+            state.codexAgent.statusText = codexConnected ? "Connected" : "Not connected";
+            state.activity.todaySummary = SafeNativeText(dashboard.LatestSafeSessionSummary, "No activity yet");
+            state.activity.state = state.pendingReviewCount > 0 ? "Pending review" : dashboard.HasSavedRun ? "Saved" : "No pending review";
+            state.activity.code = Math.Max(0, dashboard.Code);
+            state.activity.focus = Math.Max(0, dashboard.Focus);
+            state.activity.debug = Math.Max(0, dashboard.Debug);
+            state.activity.design = Math.Max(0, dashboard.Design);
+            state.activity.sync = Math.Max(0, dashboard.Sync);
+            state.statusText = "Cdx " + state.activity.code + "% · CI " + state.activity.focus + "% · Gem " + state.activity.design + "%";
+            return state;
+        }
+
+        private void HandleNativeDashboardAction(NativeDashboardActionRequest request)
+        {
+            if (request == null)
+            {
+                return;
+            }
+
+            Debug.Log("INFO [NativeDashboard] action received action=" + request.Action + " raw=" + request.RawAction);
+            switch (request.Action)
+            {
+                case NativeDashboardAction.Dashboard:
+                case NativeDashboardAction.ShowDashboard:
+                    nativeDashboardService?.ShowDashboardWindow();
+                    break;
+                case NativeDashboardAction.HideDashboard:
+                    nativeDashboardService?.HideDashboardWindow();
+                    break;
+                case NativeDashboardAction.Settings:
+                    nativeDashboardService?.ShowSettingsWindow();
+                    break;
+                case NativeDashboardAction.Activity:
+                    _ = RefreshAndPublishNativeDashboardAsync();
+                    break;
+                case NativeDashboardAction.RunAnalysis:
+                    _ = RunNativeAnalysisAsync();
+                    break;
+                case NativeDashboardAction.ConnectRepository:
+                case NativeDashboardAction.Repository:
+                    _ = ConnectRepositoryFromNativeAsync();
+                    break;
+                case NativeDashboardAction.ConnectCodexAgent:
+                case NativeDashboardAction.CodexAgent:
+                    _ = ConnectCodexFromNativeAsync();
+                    break;
+                case NativeDashboardAction.ReviewActivity:
+                    _ = ReviewNativeActivityAsync();
+                    break;
+                case NativeDashboardAction.ToggleCompanionVisible:
+                    _ = SetCompanionVisibleFromNativeAsync(request.BoolValue(!(approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings?.IsDesktopCompanionEnabled ?? true)));
+                    break;
+                case NativeDashboardAction.SetWanderEnabled:
+                    _ = SetWanderEnabledFromNativeAsync(request.BoolValue(true));
+                    break;
+                case NativeDashboardAction.SetClickReactionEnabled:
+                    _ = SetClickReactionEnabledFromNativeAsync(request.BoolValue(true));
+                    break;
+                case NativeDashboardAction.ResetCompanionPosition:
+                    _ = ResetCompanionPositionFromNativeAsync();
+                    break;
+                case NativeDashboardAction.ChangeCompanionSkin:
+                    _ = SetCompanionSkinFromNativeAsync(request.Value);
+                    break;
+                case NativeDashboardAction.SetLaunchAtLogin:
+                    Debug.Log("INFO [NativeDashboard] launch at login requested value=" + request.Value + " status=comingSoon");
+                    _ = RefreshAndPublishNativeDashboardAsync();
+                    break;
+                case NativeDashboardAction.Homepage:
+                    Application.OpenURL("https://github.com/HwangSeokBeom/TokenForge");
+                    break;
+                case NativeDashboardAction.ReportIssue:
+                    Application.OpenURL("https://github.com/HwangSeokBeom/TokenForge/issues");
+                    break;
+                case NativeDashboardAction.Quit:
+                    lifecycleService?.Quit();
+                    break;
+                case NativeDashboardAction.ResetLocalState:
+                    Debug.Log("INFO [NativeDashboard] reset local state requested status=manualRequired");
+                    nativeDashboardService?.ShowDashboardWindow();
+                    break;
+            }
+        }
+
+        private async Task RefreshAndPublishNativeDashboardAsync()
+        {
+            await RefreshDashboardAsync(loadAuthSessionOnStart);
+            ApplyNativeShellState(showDashboardIfNeeded: false);
+        }
+
+        private async Task ConnectRepositoryFromNativeAsync()
+        {
+            if (approvedActivityAnalysis == null)
+            {
+                return;
+            }
+
+            await approvedActivityAnalysis.SelectLocalGitRepositoryForOnboardingAsync();
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task ConnectCodexFromNativeAsync()
+        {
+            if (approvedActivityAnalysis == null)
+            {
+                return;
+            }
+
+            await approvedActivityAnalysis.DetectAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex);
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task RunNativeAnalysisAsync()
+        {
+            if (approvedActivityAnalysis == null)
+            {
+                return;
+            }
+
+            if (gitAnalysisFlow != null && gitAnalysisFlow.HasSelectedRepositoryForLocalOnlyApproval)
+            {
+                await approvedActivityAnalysis.AnalyzeGitActivityAsync();
+            }
+            else if (agentAnalysisFlow != null && agentAnalysisFlow.HasSelectedAgentLogLocationForLocalOnlyApproval)
+            {
+                await approvedActivityAnalysis.AnalyzeAgentActivityAsync();
+            }
+            else
+            {
+                Debug.Log("INFO [NativeDashboard] runAnalysis requires repository or Codex connection");
+            }
+
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task ReviewNativeActivityAsync()
+        {
+            if (approvedActivityAnalysis == null)
+            {
+                return;
+            }
+
+            if (gitAnalysisFlow != null && gitAnalysisFlow.HasPendingReview)
+            {
+                Debug.Log("INFO [NativeDashboard] reviewActivity pending=git safeAggregateReady=true");
+            }
+            else if (agentAnalysisFlow != null && agentAnalysisFlow.HasPendingReview)
+            {
+                Debug.Log("INFO [NativeDashboard] reviewActivity pending=agent safeAggregateReady=true");
+            }
+            else
+            {
+                Debug.Log("INFO [NativeDashboard] reviewActivity pending=false");
+            }
+
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task SetCompanionVisibleFromNativeAsync(bool visible)
+        {
+            if (approvedActivityAnalysis != null)
+            {
+                await approvedActivityAnalysis.SetDesktopCompanionEnabledAsync(visible);
+            }
+
+            nativeDashboardService?.SetCompanionVisible(visible);
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task SetWanderEnabledFromNativeAsync(bool enabled)
+        {
+            if (approvedActivityAnalysis != null)
+            {
+                await approvedActivityAnalysis.SetDesktopCompanionMotionModeAsync(enabled ? CompanionDesktopMotionMode.Normal : CompanionDesktopMotionMode.Calm);
+            }
+
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task SetClickReactionEnabledFromNativeAsync(bool enabled)
+        {
+            if (approvedActivityAnalysis != null)
+            {
+                await approvedActivityAnalysis.SetDesktopCompanionClickThroughAsync(!enabled);
+            }
+
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task SetCompanionSkinFromNativeAsync(string skin)
+        {
+            if (approvedActivityAnalysis != null)
+            {
+                await approvedActivityAnalysis.SetDesktopCompanionVisualThemeAsync(skin);
+            }
+
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task ResetCompanionPositionFromNativeAsync()
+        {
+            if (approvedActivityAnalysis != null)
+            {
+                await approvedActivityAnalysis.ResetDesktopCompanionPositionAsync();
+            }
+
+            nativeDesktopCompanionController?.ResetPosition();
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private static string SafeNativeText(string value, string fallback)
+        {
+            value = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+            value = value.Replace('\n', ' ').Replace('\r', ' ');
+            return value.Length <= 180 ? value : value.Substring(0, 180);
+        }
+
         private void EnsureSceneInfrastructure()
         {
+            if (UseNativeMacDashboardShell)
+            {
+                Debug.Log("INFO [NativeDashboard] mode=macOSPlayer source=AppKit");
+                Debug.Log("INFO [BootstrapRoot] productUI=disabled reason=nativeShell");
+                Debug.Log("INFO " + LogPrefix + " native macOS dashboard shell active; Unity BootstrapRoot UI is disabled for product runtime.");
+                return;
+            }
+
+#if UNITY_EDITOR
+            Debug.Log("INFO [NativeDashboard] mode=UnityEditor source=BootstrapRootFallback productUI=debugFallback");
+#else
+            Debug.Log("INFO [NativeDashboard] mode=NonMacPlayer source=BootstrapRootFallback productUI=fallback");
+#endif
             EnsureEventSystem();
             var canvasObject = EnsureCanvas();
             bootstrapRoot = EnsureBootstrapRoot(canvasObject);
@@ -384,36 +743,6 @@ namespace TokenForge.Client
         private BootstrapRootView EnsureBootstrapRoot(GameObject canvasObject)
         {
             var existingRoots = FindSceneObjects<BootstrapRootView>();
-            BootstrapRootView existingRoot = null;
-            foreach (var sceneRoot in existingRoots)
-            {
-                if (sceneRoot == null)
-                {
-                    continue;
-                }
-
-                if (existingRoot == null)
-                {
-                    existingRoot = sceneRoot;
-                    continue;
-                }
-
-                Debug.Log("INFO " + HierarchyLogPrefix + " removing duplicate BootstrapRoot path="
-                    + GetHierarchyPath(sceneRoot.transform)
-                    + " scene=" + sceneRoot.gameObject.scene.path);
-                DestroySceneObject(sceneRoot.gameObject);
-            }
-
-            if (existingRoot != null)
-            {
-                NormalizeBootstrapRoot(existingRoot.gameObject, canvasObject);
-                Debug.Log("INFO " + HierarchyLogPrefix + " using existing scene BootstrapRoot path="
-                    + GetHierarchyPath(existingRoot.transform)
-                    + " parent=" + (existingRoot.transform.parent != null ? existingRoot.transform.parent.name : "<none>")
-                    + " scene=" + existingRoot.gameObject.scene.path);
-                return existingRoot;
-            }
-
             var prefab = bootstrapRootPrefab;
 #if UNITY_EDITOR
             if (prefab == null && loadPrefabFromAssetPathInEditor && !DisableEditorAssetPrefabLookupForTests)
@@ -423,15 +752,31 @@ namespace TokenForge.Client
 #endif
             if (prefab != null)
             {
+                foreach (var sceneRoot in existingRoots)
+                {
+                    if (sceneRoot == null)
+                    {
+                        continue;
+                    }
+
+                    Debug.Log("INFO " + HierarchyLogPrefix + " removing scene BootstrapRoot before prefab instantiation path="
+                        + GetHierarchyPath(sceneRoot.transform)
+                        + " scene=" + sceneRoot.gameObject.scene.path);
+                    DestroySceneObjectImmediate(sceneRoot.gameObject);
+                }
+
                 var instance = Instantiate(prefab, canvasObject.transform, false);
                 instance.name = "BootstrapRoot";
                 NormalizeBootstrapRoot(instance, canvasObject);
+                MarkBootstrapRoot(instance, "prefab", BootstrapRootPrefabPath);
                 instance.SetActive(true);
                 Debug.Log("INFO " + HierarchyLogPrefix + " instantiated BootstrapRoot prefab path="
                     + GetHierarchyPath(instance.transform)
                     + " parent=" + (instance.transform.parent != null ? instance.transform.parent.name : "<none>")
                     + " scene=" + instance.scene.path);
-                return instance.GetComponent<BootstrapRootView>();
+                var root = instance.GetComponent<BootstrapRootView>();
+                LogBootstrapRootSource(root);
+                return root;
             }
 
             if (prefab == null)
@@ -445,6 +790,55 @@ namespace TokenForge.Client
             return null;
         }
 
+        private void LogStartupScene()
+        {
+            var activeScene = SceneManager.GetActiveScene();
+            Debug.Log("[StartupScene] activeScene=" + activeScene.name);
+            Debug.Log("[StartupScene] buildIndex=" + activeScene.buildIndex);
+            Debug.Log("[StartupScene] path=" + activeScene.path);
+#if UNITY_EDITOR
+            var buildScenePath = UnityEditor.EditorBuildSettings.scenes != null && UnityEditor.EditorBuildSettings.scenes.Length > 0
+                ? UnityEditor.EditorBuildSettings.scenes[0].path
+                : "<none>";
+            Debug.Log("[StartupScene] buildSettingsFirst=" + buildScenePath);
+#endif
+        }
+
+        private void MarkBootstrapRoot(GameObject rootObject, string source, string prefabPath)
+        {
+            if (rootObject == null)
+            {
+                return;
+            }
+
+            var marker = GetOrAddComponent<BootstrapRootSourceMarker>(rootObject);
+            marker.SetSource(source, prefabPath, BootstrapRootSourceMarker.CurrentUiVersion);
+        }
+
+        private void LogBootstrapRootSource(BootstrapRootView root)
+        {
+            if (root == null)
+            {
+                LastBootstrapRootSource = "missing";
+                LastBootstrapRootPrefabPath = BootstrapRootPrefabPath;
+                LastBootstrapRootUiVersion = BootstrapRootSourceMarker.CurrentUiVersion;
+                Debug.Log("[BootstrapRoot] source=missing");
+                Debug.Log("[BootstrapRoot] prefabPath=" + BootstrapRootPrefabPath);
+                Debug.Log("[BootstrapRoot] rootInstanceId=<none>");
+                Debug.Log("[BootstrapRoot] uiVersion=" + BootstrapRootSourceMarker.CurrentUiVersion);
+                return;
+            }
+
+            var marker = root.GetComponent<BootstrapRootSourceMarker>();
+            LastBootstrapRootSource = marker != null ? marker.Source : "unknown";
+            LastBootstrapRootPrefabPath = marker != null ? marker.PrefabPathValue : BootstrapRootPrefabPath;
+            LastBootstrapRootUiVersion = marker != null ? marker.UiVersion : BootstrapRootSourceMarker.CurrentUiVersion;
+            Debug.Log("[BootstrapRoot] source=" + LastBootstrapRootSource);
+            Debug.Log("[BootstrapRoot] prefabPath=" + LastBootstrapRootPrefabPath);
+            Debug.Log("[BootstrapRoot] rootInstanceId=" + root.gameObject.GetInstanceID());
+            Debug.Log("[BootstrapRoot] uiVersion=" + LastBootstrapRootUiVersion);
+        }
+
         private void LogHierarchyDump(string stage)
         {
             var activeScene = SceneManager.GetActiveScene();
@@ -455,6 +849,12 @@ namespace TokenForge.Client
                 + " isLoaded=" + activeScene.isLoaded
                 + " rootCount=" + roots.Length
                 + " isPlaying=" + Application.isPlaying);
+
+            if (UseNativeMacDashboardShell)
+            {
+                Debug.Log("INFO " + HierarchyLogPrefix + " native dashboard shell owns product UI; Unity hierarchy validation is limited to runtime companion objects.");
+                return;
+            }
 
             if (Application.isPlaying
                 && activeScene.path != StartupScenePath
@@ -521,10 +921,10 @@ namespace TokenForge.Client
                     + " matchWidthOrHeight=" + scaler.matchWidthOrHeight.ToString("0.###"));
             }
 
-            var rootsInScene = FindSceneObjects<BootstrapRootView>();
-            if (rootsInScene.Count > 1)
+            var activeRootsInScene = CountActiveSceneObjects(FindSceneObjects<BootstrapRootView>());
+            if (activeRootsInScene > 1)
             {
-                Debug.LogError("ERROR " + HierarchyLogPrefix + " duplicate BootstrapRoot count=" + rootsInScene.Count);
+                Debug.LogError("ERROR " + HierarchyLogPrefix + " duplicate active BootstrapRoot count=" + activeRootsInScene);
             }
 
             var root = bootstrapRoot != null ? bootstrapRoot : FindSceneObject<BootstrapRootView>();
@@ -542,21 +942,17 @@ namespace TokenForge.Client
 
             LogPathState(canvas.transform, "Canvas/BootstrapRoot");
             LogPathState(canvas.transform, "Canvas/BootstrapRoot/Background");
-            LogPathState(canvas.transform, "Canvas/BootstrapRoot/Root Scroll");
-            LogPathState(canvas.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport");
-            LogPathState(canvas.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content");
-            LogPathState(canvas.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Start Screen Root");
-            LogPathState(canvas.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Game Dashboard Root");
-            LogPathState(canvas.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Run Analysis Root");
-            LogPathState(canvas.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Settings Advanced Root");
-            LogPathState(canvas.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Developer Diagnostics Root");
-            LogPathState(canvas.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Settings Advanced Root/AccountPanel");
-            LogPathState(canvas.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Settings Advanced Root/PrivacyNoticePanel");
-            LogPathState(canvas.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Run Analysis Root/Run Analysis Grid/ActivityAnalysisPanel");
-            LogPathState(canvas.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Run Analysis Root/Run Analysis Grid/ReviewPanel");
-            LogPathState(canvas.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Developer Diagnostics Root/ApprovedLocationsPanel");
-            LogPathState(canvas.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Developer Diagnostics Root/RecentSessionsPanel");
-            LogPathState(canvas.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Developer Diagnostics Root/SafeSyncPanel");
+            LogPathState(canvas.transform, "Canvas/BootstrapRoot/WindowShell");
+            LogPathState(canvas.transform, "Canvas/BootstrapRoot/WindowShell/TopBar");
+            LogPathState(canvas.transform, "Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar");
+            LogPathState(canvas.transform, "Canvas/BootstrapRoot/WindowShell/AppBody/MainContent");
+            LogPathState(canvas.transform, "Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll");
+            LogPathState(canvas.transform, "Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport");
+            LogPathState(canvas.transform, "Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content");
+            LogPathState(canvas.transform, "Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root");
+            LogPathState(canvas.transform, "Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Game Dashboard Root");
+            LogPathState(canvas.transform, "Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Add Repository Flow Root");
+            LogPathState(canvas.transform, "Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Settings Root");
 
             var scrollRect = root.rootScrollRect;
             var background = root.transform.Find("Background");
@@ -595,9 +991,9 @@ namespace TokenForge.Client
                 Debug.LogError("ERROR " + HierarchyLogPrefix + " representative root screens missing");
             }
 
-            LogRepresentativeTextState(root.transform, "TokenForge Subtitle");
-            LogRepresentativeTextState(root.transform, "Start Developer RPG Title");
-            LogRepresentativeTextState(root.transform, "Continue Offline/Label");
+            LogRepresentativeTextState(root.transform, "Hero Title");
+            LogRepresentativeTextState(root.transform, "Start Game/Label");
+            LogRepresentativeTextState(root.transform, "Connect Codex Agent/Label");
         }
 
         private static bool RequiredPanelExists(RectTransform content, string childName)
@@ -716,7 +1112,7 @@ namespace TokenForge.Client
             NormalizeTransform(background);
             StretchRect(background.GetComponent<RectTransform>());
             var image = GetOrAddComponent<Image>(background.gameObject);
-            image.color = new Color(0.035f, 0.047f, 0.063f, 1f);
+            image.color = new Color(0.965f, 0.945f, 0.905f, 1f);
             image.raycastTarget = false;
             background.SetSiblingIndex(0);
         }
@@ -850,6 +1246,17 @@ namespace TokenForge.Client
 
         public bool ValidateVisibleUiTree()
         {
+            if (UseNativeMacDashboardShell)
+            {
+                IsVisibleUiValidated = nativeDashboardService != null && nativeDashboardService.IsAvailable;
+                if (!IsVisibleUiValidated)
+                {
+                    Debug.LogError("ERROR " + LogPrefix + " native macOS dashboard shell unavailable.");
+                }
+
+                return IsVisibleUiValidated;
+            }
+
             Canvas.ForceUpdateCanvases();
             if (bootstrapRoot != null)
             {
@@ -956,8 +1363,8 @@ namespace TokenForge.Client
                 valid = false;
             }
 
-            var mainPanelActive = root.startScreenRoot != null && root.startScreenRoot.activeInHierarchy;
-            if (!mainPanelActive)
+            var launchPanelActive = root.startScreenRoot != null && root.startScreenRoot.activeInHierarchy;
+            if (!launchPanelActive)
             {
                 Debug.LogError("ERROR " + LogPrefix + " Start Screen inactive");
                 valid = false;
@@ -998,7 +1405,7 @@ namespace TokenForge.Client
             {
                 Debug.LogError("ERROR " + LogPrefix + " fewer than "
                     + MinimumVisibleRepresentativeStartupTextCount
-                    + " representative startup texts are viewport-visible count="
+                    + " representative product dashboard texts are viewport-visible count="
                     + visibility.RepresentativeTextVisibleCount);
                 LogRepresentativeTextDiagnostics(root.gameObject, canvas);
                 valid = false;
@@ -1030,6 +1437,17 @@ namespace TokenForge.Client
 
         private void CompleteBootstrap(string message)
         {
+            if (UseNativeMacDashboardShell)
+            {
+                ApplyNativeShellState(showDashboardIfNeeded: true);
+                IsVisibleUiValidated = nativeDashboardService != null && nativeDashboardService.IsAvailable;
+                IsRenderedFrameSmokeSkippedForBatchMode = true;
+                IsBootstrapComplete = IsVisibleUiValidated;
+                Debug.Log("INFO " + LogPrefix + " native macOS dashboard shell ready; Unity uGUI dashboard validation skipped.");
+                Debug.Log("INFO " + LogPrefix + " " + message);
+                return;
+            }
+
             if (!ValidateVisibleUiTree())
             {
                 Debug.LogError("ERROR " + LogPrefix + " visible UI validation failed; bootstrap completion suppressed.");
@@ -1109,7 +1527,9 @@ namespace TokenForge.Client
                 Debug.LogError("ERROR " + LogPrefix + " BootstrapRoot/Background missing.");
                 valid = false;
             }
-            else if (rootScroll != null && background.GetSiblingIndex() >= rootScroll.transform.GetSiblingIndex())
+            else if (rootScroll != null
+                     && background.parent == rootScroll.transform.parent
+                     && background.GetSiblingIndex() >= rootScroll.transform.GetSiblingIndex())
             {
                 Debug.LogError("ERROR " + LogPrefix + " BootstrapRoot/Background is not behind Root Scroll siblingIndex="
                     + background.GetSiblingIndex()
@@ -1210,7 +1630,7 @@ namespace TokenForge.Client
         {
             var valid = true;
             valid &= LogLayoutRect("BootstrapRoot", root.GetComponent<RectTransform>(), canvas, null);
-            valid &= LogLayoutRect("Start Screen Root", root.startScreenRoot != null ? root.startScreenRoot.GetComponent<RectTransform>() : null, canvas, root.GetComponent<RectTransform>());
+            valid &= LogLayoutRect("Game Dashboard Root", root.gameDashboardRoot != null ? root.gameDashboardRoot.GetComponent<RectTransform>() : null, canvas, root.GetComponent<RectTransform>());
 
             var dashboardRect = root.gameDashboardRoot != null ? root.gameDashboardRoot.GetComponent<RectTransform>() : null;
             var settingsRect = root.settingsAdvancedRoot != null ? root.settingsAdvancedRoot.GetComponent<RectTransform>() : null;
@@ -1237,9 +1657,9 @@ namespace TokenForge.Client
             }
             else
             {
-                if (scroll.transform.parent != root.transform)
+                if (scroll.transform.parent != root.transform && scroll.transform.parent == null)
                 {
-                    Debug.LogError("ERROR " + LogPrefix + " Root Scroll must live directly under BootstrapRoot.");
+                    Debug.LogError("ERROR " + LogPrefix + " Root Scroll parent is missing.");
                     valid = false;
                 }
 
@@ -1267,13 +1687,6 @@ namespace TokenForge.Client
                 valid &= ValidateObjectParent(root.runAnalysisRoot, content, "Run Analysis Root");
                 valid &= ValidateObjectParent(root.settingsAdvancedRoot, content, "Settings Advanced Root");
                 valid &= ValidateObjectParent(root.developerDiagnosticsRoot, content, "Developer Diagnostics Root");
-                valid &= ValidateObjectParent(root.accountPanel != null ? root.accountPanel.gameObject : null, root.settingsAdvancedRoot != null ? root.settingsAdvancedRoot.GetComponent<RectTransform>() : null, "AccountPanel");
-                valid &= ValidateObjectParent(root.privacyNoticePanel != null ? root.privacyNoticePanel.gameObject : null, root.settingsAdvancedRoot != null ? root.settingsAdvancedRoot.GetComponent<RectTransform>() : null, "PrivacyNoticePanel");
-                valid &= ValidateObjectParent(root.activityAnalysisPanel != null ? root.activityAnalysisPanel.gameObject : null, root.runAnalysisRoot != null ? root.runAnalysisRoot.transform.Find("Run Analysis Grid") as RectTransform : null, "ActivityAnalysisPanel");
-                valid &= ValidateObjectParent(root.reviewPanel != null ? root.reviewPanel.gameObject : null, root.runAnalysisRoot != null ? root.runAnalysisRoot.transform.Find("Run Analysis Grid") as RectTransform : null, "ReviewPanel");
-                valid &= ValidateObjectParent(root.approvedLocationsPanel != null ? root.approvedLocationsPanel.gameObject : null, root.developerDiagnosticsRoot != null ? root.developerDiagnosticsRoot.GetComponent<RectTransform>() : null, "ApprovedLocationsPanel");
-                valid &= ValidateObjectParent(root.safeSyncPanel != null ? root.safeSyncPanel.gameObject : null, root.developerDiagnosticsRoot != null ? root.developerDiagnosticsRoot.GetComponent<RectTransform>() : null, "SafeSyncPanel");
-                valid &= ValidateObjectParent(root.recentSessionsPanel != null ? root.recentSessionsPanel.gameObject : null, root.developerDiagnosticsRoot != null ? root.developerDiagnosticsRoot.GetComponent<RectTransform>() : null, "RecentSessionsPanel");
             }
 
             return valid;
@@ -1991,9 +2404,13 @@ namespace TokenForge.Client
                 return false;
             }
 
-            return graphic.transform.name == "Background"
-                && graphic.transform.parent == root.transform
-                && graphic.transform.GetSiblingIndex() < root.rootScrollRect.transform.GetSiblingIndex();
+            if (graphic.transform.name != "Background" || graphic.transform.parent != root.transform)
+            {
+                return false;
+            }
+
+            return root.rootScrollRect.transform.parent != root.transform
+                || graphic.transform.GetSiblingIndex() < root.rootScrollRect.transform.GetSiblingIndex();
         }
 
         private static bool IsRenderedAfterContent(Graphic graphic, RectTransform content, List<Graphic> renderOrderedGraphics, int graphicIndex)
@@ -2123,6 +2540,26 @@ namespace TokenForge.Client
             return results;
         }
 
+        private static int CountActiveSceneObjects<T>(List<T> components) where T : Component
+        {
+            if (components == null)
+            {
+                return 0;
+            }
+
+            var count = 0;
+            for (var i = 0; i < components.Count; i++)
+            {
+                var component = components[i];
+                if (component != null && component.gameObject.activeInHierarchy)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
         private static void DestroySceneObject(GameObject target)
         {
             if (target == null)
@@ -2143,6 +2580,17 @@ namespace TokenForge.Client
 #else
             Destroy(target);
 #endif
+        }
+
+        private static void DestroySceneObjectImmediate(GameObject target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            target.SetActive(false);
+            DestroyImmediate(target);
         }
 
         private static void DestroySceneComponent(Component target)

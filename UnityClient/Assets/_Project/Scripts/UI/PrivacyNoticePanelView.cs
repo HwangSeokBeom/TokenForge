@@ -15,8 +15,8 @@ namespace TokenForge.Client.UI
 
         public void Render()
         {
-            SetText(bodyLabel, "Only saved aggregate summaries can sync. Raw paths and source data stay local.\n\n" +
-                "TokenForge does not render prompts, responses, commands, filenames, repo names, branch names, source snippets, tokens, or payload bodies.");
+            SetText(bodyLabel, "Only approved aggregate summaries can sync.\n\n" +
+                               "Private local details stay on this device and are not rendered in the dashboard.");
         }
 
         protected override bool ValidateRequiredReferencesInternal(ref string error)

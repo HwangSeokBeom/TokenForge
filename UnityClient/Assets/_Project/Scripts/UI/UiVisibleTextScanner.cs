@@ -28,6 +28,24 @@ namespace TokenForge.Client.UI
             "{\""
         };
 
+        public static readonly string[] ProductUiForbiddenTextFragments =
+        {
+            "Companion Hero",
+            "Growth Loop",
+            "Connected Sources",
+            "Pending Growth Review",
+            "Desktop Companion",
+            "Safe Sync",
+            "Step 1 Account",
+            "Run Summary",
+            "Create Account",
+            "Continue Offline",
+            "Friendly empty state",
+            "Recent Runs",
+            "Game Loop",
+            "Chat" + "GPT"
+        };
+
         public static IReadOnlyList<string> Collect(GameObject root, bool includeInactive = false)
         {
             if (root == null)
@@ -35,10 +53,14 @@ namespace TokenForge.Client.UI
                 return Array.Empty<string>();
             }
 
-            return root.GetComponentsInChildren<Text>(includeInactive)
+            var unityText = root.GetComponentsInChildren<Text>(includeInactive)
                 .Select(text => text.text ?? string.Empty)
-                .Where(text => !string.IsNullOrWhiteSpace(text))
-                .ToList();
+                .Where(text => !string.IsNullOrWhiteSpace(text));
+            var tmpText = root.GetComponentsInChildren<Component>(includeInactive)
+                .Where(component => component != null && component.GetType().Name == "TMP_Text")
+                .Select(ReadTmpText)
+                .Where(text => !string.IsNullOrWhiteSpace(text));
+            return unityText.Concat(tmpText).ToList();
         }
 
         public static bool Contains(GameObject root, string fragment, bool includeInactive = false)
@@ -77,6 +99,12 @@ namespace TokenForge.Client.UI
             return fragments
                 .Where(fragment => allText.IndexOf(fragment, StringComparison.Ordinal) >= 0)
                 .ToList();
+        }
+
+        private static string ReadTmpText(Component component)
+        {
+            var property = component.GetType().GetProperty("text");
+            return property != null ? property.GetValue(component, null) as string ?? string.Empty : string.Empty;
         }
     }
 }

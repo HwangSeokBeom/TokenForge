@@ -159,32 +159,31 @@ namespace TokenForge.Client.Platform
             GameObject root;
             if (existingCanvas != null)
             {
-                root = new GameObject("TokenForge Fallback Desktop Companion", typeof(RectTransform));
+                root = new GameObject("TokenForge Fallback Desktop Companion", typeof(RectTransform), typeof(Image), typeof(FallbackCompanionView));
                 root.transform.SetParent(existingCanvas.transform, false);
-                Stretch(root.GetComponent<RectTransform>(), 0f);
             }
             else
             {
-                root = new GameObject("TokenForge Fallback Desktop Companion", typeof(RectTransform));
-                UnityEngine.Object.DontDestroyOnLoad(root);
-                var canvas = root.AddComponent<Canvas>();
+                var canvasHost = new GameObject("TokenForge Fallback Desktop Companion Canvas", typeof(RectTransform));
+                UnityEngine.Object.DontDestroyOnLoad(canvasHost);
+                var canvas = canvasHost.AddComponent<Canvas>();
                 canvas.renderMode = RenderMode.ScreenSpaceOverlay;
                 canvas.sortingOrder = 32760;
-                root.AddComponent<GraphicRaycaster>();
-                var scaler = root.AddComponent<CanvasScaler>();
+                canvasHost.AddComponent<GraphicRaycaster>();
+                var scaler = canvasHost.AddComponent<CanvasScaler>();
                 scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+                root = new GameObject("TokenForge Fallback Desktop Companion", typeof(RectTransform), typeof(Image), typeof(FallbackCompanionView));
+                root.transform.SetParent(canvasHost.transform, false);
             }
 
-            var actor = new GameObject("Fallback Companion Actor", typeof(RectTransform), typeof(Image), typeof(FallbackCompanionView));
-            actor.transform.SetParent(root.transform, false);
-            view = actor.GetComponent<FallbackCompanionView>();
+            view = root.GetComponent<FallbackCompanionView>();
             view.Initialize(
                 () => Clicked?.Invoke(),
                 () => DoubleClicked?.Invoke(),
                 draggedPosition =>
                 {
                     position = ClampOrigin(draggedPosition);
-                    Debug.Log("INFO " + LogPrefix + " fallback drag ended");
+                    Debug.Log("INFO [CompanionDrag] mouseUp final=(" + position.x.ToString("0.##") + "," + position.y.ToString("0.##") + ") callback=true");
                     DragEnded?.Invoke(position);
                 });
             view.SetSize(size);
@@ -214,6 +213,8 @@ namespace TokenForge.Client.Platform
         {
             private const float DragThreshold = 4f;
             private RectTransform rectTransform;
+            private Canvas canvas;
+            private Image hitTargetImage;
             private Image bodyImage;
             private Text speechText;
             private Image glowImage;
@@ -238,9 +239,16 @@ namespace TokenForge.Client.Platform
                 this.doubleClicked = doubleClicked;
                 this.dragEnded = dragEnded;
                 rectTransform = GetComponent<RectTransform>();
+                canvas = GetComponentInParent<Canvas>();
+                hitTargetImage = GetComponent<Image>();
                 rectTransform.anchorMin = Vector2.zero;
                 rectTransform.anchorMax = Vector2.zero;
                 rectTransform.pivot = new Vector2(0.5f, 0.5f);
+                if (hitTargetImage != null)
+                {
+                    hitTargetImage.color = new Color(0f, 0f, 0f, 0f);
+                    hitTargetImage.raycastTarget = true;
+                }
 
                 glowImage = new GameObject("Reaction Glow", typeof(RectTransform), typeof(Image)).GetComponent<Image>();
                 glowImage.transform.SetParent(transform, false);
@@ -248,9 +256,11 @@ namespace TokenForge.Client.Platform
                 glowImage.raycastTarget = false;
                 Stretch(glowImage.rectTransform, -10f);
 
-                bodyImage = GetComponent<Image>();
+                bodyImage = new GameObject("Fallback Companion Visual", typeof(RectTransform), typeof(Image)).GetComponent<Image>();
+                bodyImage.transform.SetParent(transform, false);
                 bodyImage.preserveAspect = true;
-                bodyImage.raycastTarget = true;
+                bodyImage.raycastTarget = false;
+                Stretch(bodyImage.rectTransform, 0f);
 
                 var bubbleObject = new GameObject("Reaction Bubble", typeof(RectTransform), typeof(Image));
                 bubbleObject.transform.SetParent(transform, false);
@@ -288,20 +298,25 @@ namespace TokenForge.Client.Platform
                 inputEnabled = enabled;
                 if (bodyImage != null)
                 {
-                    bodyImage.raycastTarget = enabled;
+                    bodyImage.raycastTarget = false;
+                }
+
+                if (hitTargetImage != null)
+                {
+                    hitTargetImage.raycastTarget = enabled;
                 }
             }
 
             public void SetSize(Vector2 value)
             {
                 size = value;
-                rectTransform.sizeDelta = size;
+                rectTransform.sizeDelta = size / CanvasScaleFactor();
             }
 
             public void SetPosition(Vector2 value)
             {
                 origin = ClampOrigin(value);
-                rectTransform.anchoredPosition = origin + size * 0.5f;
+                rectTransform.anchoredPosition = ScreenOriginToAnchoredPosition(origin);
             }
 
             public void SetVisualState(CompanionState state, CompanionAnimationState animationState, bool facingLeft)
@@ -332,7 +347,7 @@ namespace TokenForge.Client.Platform
                 dragExceeded = false;
                 pointerStart = eventData.position;
                 dragStartOrigin = origin;
-                Debug.Log("INFO [DesktopCompanion] mouseDown");
+                Debug.Log("INFO [CompanionDrag] mouseDown screen=(" + pointerStart.x.ToString("0.##") + "," + pointerStart.y.ToString("0.##") + ") window=(" + origin.x.ToString("0.##") + "," + origin.y.ToString("0.##") + ")");
             }
 
             public void OnDrag(PointerEventData eventData)
@@ -343,17 +358,18 @@ namespace TokenForge.Client.Platform
                 }
 
                 var delta = eventData.position - pointerStart;
-                Debug.Log("INFO [DesktopCompanion] mouseDragged");
                 if (!dragExceeded && delta.magnitude >= DragThreshold)
                 {
                     dragExceeded = true;
-                    Debug.Log("INFO [DesktopCompanion] drag started");
-                    Debug.Log("INFO [DesktopCompanion] fallback drag started");
+                    Debug.Log("INFO [CompanionDrag] thresholdExceeded");
+                    Debug.Log("INFO [CompanionMotion] idlePaused reason=drag");
                 }
 
                 if (dragExceeded)
                 {
+                    var oldOrigin = origin;
                     SetPosition(dragStartOrigin + delta);
+                    Debug.Log("INFO [CompanionDrag] setFrameOrigin old=(" + oldOrigin.x.ToString("0.##") + "," + oldOrigin.y.ToString("0.##") + ") new=(" + origin.x.ToString("0.##") + "," + origin.y.ToString("0.##") + ")");
                 }
             }
 
@@ -365,11 +381,11 @@ namespace TokenForge.Client.Platform
                     return;
                 }
 
-                Debug.Log("INFO [DesktopCompanion] mouseUp");
+                Debug.Log("INFO [CompanionDrag] mouseUp screen=(" + eventData.position.x.ToString("0.##") + "," + eventData.position.y.ToString("0.##") + ")");
                 if (dragExceeded)
                 {
-                    Debug.Log("INFO [DesktopCompanion] drag ended with x/y " + origin.x.ToString("0.##") + "," + origin.y.ToString("0.##"));
                     dragEnded?.Invoke(origin);
+                    Debug.Log("INFO [CompanionMotion] idleResumed anchor=(" + origin.x.ToString("0.##") + "," + origin.y.ToString("0.##") + ")");
                 }
 
                 pointerDown = false;
@@ -413,6 +429,17 @@ namespace TokenForge.Client.Platform
                 value.x = Mathf.Clamp(value.x, 0f, Mathf.Max(0f, Screen.width - size.x));
                 value.y = Mathf.Clamp(value.y, 0f, Mathf.Max(0f, Screen.height - size.y));
                 return value;
+            }
+
+            private Vector2 ScreenOriginToAnchoredPosition(Vector2 screenOrigin)
+            {
+                var scale = CanvasScaleFactor();
+                return screenOrigin / scale + (size / scale) * 0.5f;
+            }
+
+            private float CanvasScaleFactor()
+            {
+                return canvas != null && canvas.scaleFactor > 0.001f ? canvas.scaleFactor : 1f;
             }
 
             private static void Stretch(RectTransform target, float inset)

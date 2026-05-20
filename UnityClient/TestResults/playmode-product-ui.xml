@@ -1,0 +1,736 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="4" result="Passed" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-05-19 15:09:32Z" end-time="2026-05-19 15:09:33Z" duration="1.0530061">
+  <test-suite type="TestSuite" id="1000" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-05-19 15:09:32Z" end-time="2026-05-19 15:09:33Z" duration="1.053006" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties />
+    <test-suite type="Assembly" id="1008" name="TokenForge.Client.PlayModeTests.dll" fullname="/Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/ScriptAssemblies/TokenForge.Client.PlayModeTests.dll" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-05-19 15:09:32Z" end-time="2026-05-19 15:09:33Z" duration="1.050638" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="94141" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="PlayMode" />
+      </properties>
+      <test-suite type="TestSuite" id="1009" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-05-19 15:09:32Z" end-time="2026-05-19 15:09:33Z" duration="1.050355" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1010" name="Client" fullname="TokenForge.Client" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-05-19 15:09:32Z" end-time="2026-05-19 15:09:33Z" duration="1.050187" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="1011" name="Tests" fullname="TokenForge.Client.Tests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-05-19 15:09:32Z" end-time="2026-05-19 15:09:33Z" duration="1.050055" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1001" name="BootstrapSourceTests" fullname="TokenForge.Client.Tests.BootstrapSourceTests" classname="TokenForge.Client.Tests.BootstrapSourceTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-05-19 15:09:32Z" end-time="2026-05-19 15:09:32Z" duration="0.534503" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1002" name="BootstrapRootIsCreatedFromPrefabPathOnly" fullname="TokenForge.Client.Tests.BootstrapSourceTests.BootstrapRootIsCreatedFromPrefabPathOnly" methodname="BootstrapRootIsCreatedFromPrefabPathOnly" classname="TokenForge.Client.Tests.BootstrapSourceTests" runstate="Runnable" seed="380502316" result="Passed" start-time="2026-05-19 15:09:32Z" end-time="2026-05-19 15:09:32Z" duration="0.530643" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                </properties>
+                <output><![CDATA[INFO [TokenForgeBootstrap] TokenForge bootstrap starting.
+[StartupScene] activeScene=TokenForgeMain
+[StartupScene] buildIndex=0
+[StartupScene] path=Assets/_Project/Scenes/TokenForgeMain.unity
+[StartupScene] buildSettingsFirst=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] stage=AwakeStart Scene=TokenForgeMain path=Assets/_Project/Scenes/TokenForgeMain.unity isLoaded=False rootCount=4 isPlaying=True
+INFO [TokenForgeHierarchy] BuildSettings[0]=Assets/_Project/Scenes/TokenForgeMain.unity expected=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Main Camera active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=EventSystem active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Canvas active=True childCount=1 scale=(0.58,0.58,0.58) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=AppBootstrapper active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] Canvas renderMode=ScreenSpaceOverlay enabled=True activeInHierarchy=True sortingOrder=0 targetDisplay=0 scale=(0.58,0.58,0.58) worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0)
+INFO [TokenForgeHierarchy] CanvasScaler uiScaleMode=ScaleWithScreenSize referenceResolution=(1280,720) screenMatchMode=MatchWidthOrHeight matchWidthOrHeight=0.5
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot active=True childCount=2 scale=(0.58,0.58,0.58) worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/Background active=True childCount=0 scale=(0.58,0.58,0.58) worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell active=True childCount=2 scale=(0.58,0.58,0.58) worldCorners=(22.4,28.8,0) (22.4,451.2,0) (617.6,451.2,0) (617.6,28.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/TopBar active=True childCount=7 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar active=True childCount=9 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent active=True childCount=1 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll active=True childCount=1 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport active=True childCount=1 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content active=True childCount=5 scale=(0.58,0.58,0.58) worldCorners=(291.13,268.87,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,268.87,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root active=True childCount=5 scale=(0.58,0.58,0.58) worldCorners=(291.13,240,0) (291.13,297.74,0) (348.87,297.74,0) (348.87,240,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Game Dashboard Root active=False childCount=4 scale=(0.58,0.58,0.58) worldCorners=(291.13,240,0) (291.13,297.74,0) (348.87,297.74,0) (348.87,240,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Add Repository Flow Root active=False childCount=2 scale=(0.58,0.58,0.58) worldCorners=(291.13,240,0) (291.13,297.74,0) (348.87,297.74,0) (348.87,240,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Settings Root active=False childCount=2 scale=(0.58,0.58,0.58) worldCorners=(291.13,240,0) (291.13,297.74,0) (348.87,297.74,0) (348.87,240,0)
+INFO [TokenForgeHierarchy] Background siblingIndex=0 RootScroll siblingIndex=0
+INFO [TokenForgeHierarchy] Viewport imageAlpha=0 Mask.showMaskGraphic=<missing> RectMask2D=True canvasRendererCull=False
+INFO [TokenForgeHierarchy] Content childCount=5 worldCorners=(291.13,268.87,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,268.87,0) scale=(0.58,0.58,0.58)
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Title active=True enabled=True alpha=1 text=Your companion is ready to grow
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Start Game/Label active=True enabled=True alpha=1 text=Start Game
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Connect Codex Agent/Label active=True enabled=True alpha=1 text=Connect Codex Agent
+INFO [TokenForgeHierarchy] removing scene BootstrapRoot before prefab instantiation path=Canvas/BootstrapRoot scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] instantiated BootstrapRoot prefab path=Canvas/BootstrapRoot parent=Canvas scene=Assets/_Project/Scenes/TokenForgeMain.unity
+[BootstrapRoot] source=prefab
+[BootstrapRoot] prefabPath=Assets/_Project/Prefabs/UI/BootstrapRoot.prefab
+[BootstrapRoot] rootInstanceId=-1350
+[BootstrapRoot] uiVersion=product-game-ui-v3
+INFO [TokenForgeHierarchy] stage=AfterEnsureSceneInfrastructure Scene=TokenForgeMain path=Assets/_Project/Scenes/TokenForgeMain.unity isLoaded=False rootCount=4 isPlaying=True
+INFO [TokenForgeHierarchy] BuildSettings[0]=Assets/_Project/Scenes/TokenForgeMain.unity expected=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Main Camera active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=EventSystem active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Canvas active=True childCount=1 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=AppBootstrapper active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] Canvas renderMode=ScreenSpaceOverlay enabled=True activeInHierarchy=True sortingOrder=0 targetDisplay=0 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] CanvasScaler uiScaleMode=ScaleWithScreenSize referenceResolution=(1280,720) screenMatchMode=MatchWidthOrHeight matchWidthOrHeight=0.5
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot active=True childCount=2 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/Background active=True childCount=0 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell active=True childCount=2 scale=(1,1,1) worldCorners=(-892.8,-475.2,0) (-892.8,475.2,0) (892.8,475.2,0) (892.8,-475.2,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/TopBar active=True childCount=7 scale=(1,1,1) worldCorners=(-892.8,353.2,0) (-892.8,475.2,0) (892.8,475.2,0) (892.8,353.2,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar active=True childCount=9 scale=(1,1,1) worldCorners=(-892.8,-664.8,0) (-892.8,353.2,0) (108,353.2,0) (108,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content active=True childCount=5 scale=(1,1,1) worldCorners=(180,-336.8,0) (180,353.2,0) (820.8,353.2,0) (820.8,-336.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root active=True childCount=5 scale=(1,1,1) worldCorners=(180,-296.8,0) (180,323.2,0) (1078,323.2,0) (1078,-296.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Game Dashboard Root active=False childCount=4 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Add Repository Flow Root active=False childCount=2 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Settings Root active=False childCount=2 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] Background siblingIndex=0 RootScroll siblingIndex=0
+INFO [TokenForgeHierarchy] Viewport imageAlpha=0 Mask.showMaskGraphic=<missing> RectMask2D=True canvasRendererCull=False
+INFO [TokenForgeHierarchy] Content childCount=5 worldCorners=(180,-336.8,0) (180,353.2,0) (820.8,353.2,0) (820.8,-336.8,0) scale=(1,1,1)
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Title active=True enabled=True alpha=1 text=Your companion is ready to grow
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Start Game/Label active=True enabled=True alpha=1 text=Start Game
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Connect Codex Agent/Label active=True enabled=True alpha=1 text=Connect Codex Agent
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] companion overlay enabled
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] fallback companion active
+INFO [TokenForgeHierarchy] stage=AfterBootstrapRootBind Scene=TokenForgeMain path=Assets/_Project/Scenes/TokenForgeMain.unity isLoaded=False rootCount=4 isPlaying=True
+INFO [TokenForgeHierarchy] BuildSettings[0]=Assets/_Project/Scenes/TokenForgeMain.unity expected=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Main Camera active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=EventSystem active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Canvas active=True childCount=2 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=AppBootstrapper active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] Canvas renderMode=ScreenSpaceOverlay enabled=True activeInHierarchy=True sortingOrder=0 targetDisplay=0 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] CanvasScaler uiScaleMode=ScaleWithScreenSize referenceResolution=(1280,720) screenMatchMode=MatchWidthOrHeight matchWidthOrHeight=0.5
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot active=True childCount=2 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/Background active=True childCount=0 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell active=True childCount=2 scale=(1,1,1) worldCorners=(-892.8,-475.2,0) (-892.8,475.2,0) (892.8,475.2,0) (892.8,-475.2,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/TopBar active=True childCount=7 scale=(1,1,1) worldCorners=(-892.8,353.2,0) (-892.8,475.2,0) (892.8,475.2,0) (892.8,353.2,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar active=True childCount=9 scale=(1,1,1) worldCorners=(-892.8,-664.8,0) (-892.8,353.2,0) (108,353.2,0) (108,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content active=True childCount=5 scale=(1,1,1) worldCorners=(180,-336.8,0) (180,353.2,0) (820.8,353.2,0) (820.8,-336.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root active=True childCount=5 scale=(1,1,1) worldCorners=(180,-296.8,0) (180,323.2,0) (1078,323.2,0) (1078,-296.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Game Dashboard Root active=False childCount=4 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Add Repository Flow Root active=False childCount=2 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Settings Root active=False childCount=2 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] Background siblingIndex=0 RootScroll siblingIndex=0
+INFO [TokenForgeHierarchy] Viewport imageAlpha=0 Mask.showMaskGraphic=<missing> RectMask2D=True canvasRendererCull=False
+INFO [TokenForgeHierarchy] Content childCount=5 worldCorners=(180,-336.8,0) (180,353.2,0) (820.8,353.2,0) (820.8,-336.8,0) scale=(1,1,1)
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Title active=True enabled=True alpha=1 text=TokenForge
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Start Game/Label active=True enabled=True alpha=1 text=Start Game
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Connect Codex Agent/Label active=True enabled=True alpha=1 text=Connect Codex Agent
+INFO [TokenForgeBootstrap] TokenForge bootstrap UI references ready.
+INFO [DesktopCompanion] idle/wander tick started
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] idle/wander position updated 120.13,160
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [CompanionMotion] idleResumed anchor=(968,334)
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] idle/wander tick started
+INFO [CompanionMotion] idlePaused reason=dragCooldown
+INFO [TokenForgeBootstrap] canvas targetDisplay=0 renderMode=ScreenSpaceOverlay sortingOrder=0 overrideSorting=False sortingLayer=Default
+INFO [TokenForgeBootstrap] root rect worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0)
+INFO [TokenForgeBootstrap] layout BootstrapRoot active=True scale=(0.58,0.58,0.58) rectSize=(1108.51,831.38) screenRect=(0,0)-(640,480) worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0) intersectsScreen=True intersectsParent=True
+INFO [TokenForgeBootstrap] layout Game Dashboard Root active=False scale=(0.58,0.58,0.58) rectSize=(100,100) screenRect=(471.1,152.7)-(528.8,210.4) worldCorners=(471.11,152.71,0) (471.11,210.44,0) (528.84,210.44,0) (528.84,152.71,0) intersectsScreen=True intersectsParent=True
+INFO [TokenForgeBootstrap] visible candidate rank=1 path=Canvas/BootstrapRoot/Background name=Background type=Image color=(0.965,0.945,0.905,1) renderAlpha=1 expectedLuminance=0.946 rect=(-554.3,-415.7)-(554.3,415.7) screenRect=(0,0)-(640,480) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=2 path=Canvas/BootstrapRoot/WindowShell name=WindowShell type=SoftUiGraphic color=(0.995,0.985,0.965,0.98) renderAlpha=0.98 expectedLuminance=0.986 rect=(-515.5,-365.8)-(515.5,365.8) screenRect=(22.4,28.8)-(617.6,451.2) canvasRendererCull=False alpha=0.98 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=3 path=Canvas/BootstrapRoot/WindowShell/TopBar/Close Dot name=Close Dot type=SoftUiGraphic color=(1,0.36,0.32,1) renderAlpha=1 expectedLuminance=0.493 rect=(-50,-50)-(50,50) screenRect=(35.1,386.5)-(92.8,444.3) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=4 path=Canvas/BootstrapRoot/WindowShell/TopBar/Minimize Dot name=Minimize Dot type=SoftUiGraphic color=(1,0.76,0.25,1) renderAlpha=1 expectedLuminance=0.774 rect=(-50,-50)-(50,50) screenRect=(98.6,386.5)-(156.3,444.3) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=5 path=Canvas/BootstrapRoot/WindowShell/TopBar/Zoom Dot name=Zoom Dot type=SoftUiGraphic color=(0.22,0.78,0.36,1) renderAlpha=1 expectedLuminance=0.631 rect=(-50,-50)-(50,50) screenRect=(162.1,386.5)-(219.9,444.3) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=6 path=Canvas/BootstrapRoot/WindowShell/TopBar/TokenForge Title name=TokenForge Title type=Text color=(0.13,0.115,0.095,1) renderAlpha=1 expectedLuminance=0.117 rect=(-50,-50)-(50,50) screenRect=(225.6,386.5)-(283.4,444.3) canvasRendererCull=False alpha=1 textLength=10 textSample=TokenForge
+INFO [TokenForgeBootstrap] visible candidate rank=7 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Status Pill name=TopBar Status Pill type=SoftUiGraphic color=(0.18,0.68,0.54,0.14) renderAlpha=0.14 expectedLuminance=0.564 rect=(-50,-50)-(50,50) screenRect=(352.6,386.5)-(410.4,444.3) canvasRendererCull=False alpha=0.14 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=8 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Status Pill/TopBar Status Pill Dot name=TopBar Status Pill Dot type=SoftUiGraphic color=(0.18,0.68,0.54,1) renderAlpha=1 expectedLuminance=0.564 rect=(-50,-50)-(50,50) screenRect=(359.6,386.2)-(417.3,444) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=9 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Status Pill/TopBar Status Pill Label name=TopBar Status Pill Label type=Text color=(0.39,0.35,0.3,1) renderAlpha=1 expectedLuminance=0.355 rect=(-50,-50)-(50,50) screenRect=(420.8,386.2)-(478.5,444) canvasRendererCull=False alpha=1 textLength=10 textSample=Local mode
+INFO [TokenForgeBootstrap] visible candidate rank=10 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Sync Pill name=TopBar Sync Pill type=SoftUiGraphic color=(0.96,0.72,0.48,0.14) renderAlpha=0.14 expectedLuminance=0.754 rect=(-50,-50)-(50,50) screenRect=(416.2,386.5)-(473.9,444.3) canvasRendererCull=False alpha=0.14 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=11 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Sync Pill/TopBar Sync Pill Dot name=TopBar Sync Pill Dot type=SoftUiGraphic color=(0.96,0.72,0.48,1) renderAlpha=1 expectedLuminance=0.754 rect=(-50,-50)-(50,50) screenRect=(423.1,386.2)-(480.8,444) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=12 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Sync Pill/TopBar Sync Pill Label name=TopBar Sync Pill Label type=Text color=(0.39,0.35,0.3,1) renderAlpha=1 expectedLuminance=0.355 rect=(-50,-50)-(50,50) screenRect=(484.3,386.2)-(542,444) canvasRendererCull=False alpha=1 textLength=13 textSample=Sync optional
+INFO [TokenForgeBootstrap] visible candidate rank=13 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar name=Sidebar type=SoftUiGraphic color=(0.965,0.936,0.888,1) renderAlpha=1 expectedLuminance=0.939 rect=(-311.7,-509)-(311.7,509) screenRect=(22.4,-207)-(382.4,380.8) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] ignored graphic reason=zero_rect name=Companion App Icon
+INFO [TokenForgeBootstrap] visible candidate rank=14 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Identity/Companion App Icon/Companion Icon Glyph name=Companion Icon Glyph type=Text color=(1,1,1,1) renderAlpha=1 expectedLuminance=1 rect=(-50,-50)-(50,50) screenRect=(17.2,311.5)-(74.9,369.2) canvasRendererCull=False alpha=1 textLength=2 textSample=TF
+INFO [TokenForgeBootstrap] visible candidate rank=15 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Identity/Sidebar Identity Text/Sidebar App Title name=Sidebar App Title type=Text color=(0.13,0.115,0.095,1) renderAlpha=1 expectedLuminance=0.117 rect=(-264.7,-13)-(264.7,13) screenRect=(66.3,339.8)-(372,354.8) canvasRendererCull=False alpha=1 textLength=10 textSample=TokenForge
+INFO [TokenForgeBootstrap] visible candidate rank=16 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Identity/Sidebar Identity Text/Sidebar App Status name=Sidebar App Status type=Text color=(0.56,0.51,0.45,1) renderAlpha=1 expectedLuminance=0.516 rect=(-264.7,-11)-(264.7,11) screenRect=(66.3,325.9)-(372,338.6) canvasRendererCull=False alpha=1 textLength=10 textSample=Local mode
+INFO [TokenForgeBootstrap] visible candidate rank=17 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Dashboard Item name=Sidebar Dashboard Item type=SoftUiGraphic color=(1,0.995,0.982,1) renderAlpha=1 expectedLuminance=0.995 rect=(-293.7,-50)-(293.7,50) screenRect=(32.8,248)-(372,305.7) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=18 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Dashboard Item/Label name=Label type=Text color=(0.13,0.115,0.095,1) renderAlpha=1 expectedLuminance=0.117 rect=(-293.7,-50)-(293.7,50) screenRect=(32.8,248)-(372,305.7) canvasRendererCull=False alpha=1 textLength=9 textSample=Dashboard
+INFO [TokenForgeBootstrap] visible candidate rank=19 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Repository Item name=Sidebar Repository Item type=SoftUiGraphic color=(1,0.96,0.9,0.42) renderAlpha=0.42 expectedLuminance=0.964 rect=(-293.7,-50)-(293.7,50) screenRect=(32.8,184.5)-(372,242.2) canvasRendererCull=False alpha=0.42 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=20 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Repository Item/Label name=Label type=Text color=(0.13,0.115,0.095,1) renderAlpha=1 expectedLuminance=0.117 rect=(-293.7,-50)-(293.7,50) screenRect=(32.8,184.5)-(372,242.2) canvasRendererCull=False alpha=1 textLength=10 textSample=Repository
+INFO [TokenForgeBootstrap] ignored graphic reason=offscreen name=Sidebar Local Mode
+INFO [TokenForgeBootstrap] ignored graphic reason=offscreen name=Sidebar Sync Optional
+INFO [TokenForgeBootstrap] ignored graphic reason=alpha_zero name=Viewport
+INFO [TokenForgeBootstrap] ignored graphic reason=alpha_zero name=Start Companion Runtime Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Eyebrow
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Title
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Summary
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Level Pill
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Level Pill Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero XP Pill
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero XP Pill Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Growth Pill
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Growth Pill Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Start Game
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Add Repository
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Connect Codex Agent
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Label
+INFO [TokenForgeBootstrap] visible candidate mix images=1 buttons=14 panels=1 text=21 tmpText=0 representativeTextVisible=True representativeTextVisibleCount=5
+INFO [TokenForgeBootstrap] topmost fullscreen graphic rank=1 path=Canvas/BootstrapRoot/WindowShell type=SoftUiGraphic color=(0.995,0.985,0.965,0.98) luminance=0.986 alpha=0.98 siblingIndex=1 depth=3 parent=BootstrapRoot raycastTarget=False material=Default UI Material screenRect=(22.4,28.8)-(617.6,451.2) canvasRendererCull=False
+INFO [TokenForgeBootstrap] topmost fullscreen graphic rank=2 path=Canvas/BootstrapRoot/Background type=Image color=(0.965,0.945,0.905,1) luminance=0.946 alpha=1 siblingIndex=0 depth=3 parent=BootstrapRoot raycastTarget=False material=Default UI Material screenRect=(0,0)-(640,480) canvasRendererCull=False
+INFO [TokenForgeBootstrap] visible UI validated canvas=Canvas renderMode=ScreenSpaceOverlay targetDisplay=0 candidates=54 graphics=54 texts=21 panels=0
+INFO [TokenForgeBootstrap] TokenForge bootstrap UI ready.
+INFO [TokenForgeBootstrap] rendered frame smoke skipped in batchmode; structure validation only.
+INFO [TokenForgeBootstrap] TokenForge bootstrap completed.
+]]></output>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1003" name="ProductUiSmokePlayModeTest" fullname="TokenForge.Client.Tests.ProductUiSmokePlayModeTest" classname="TokenForge.Client.Tests.ProductUiSmokePlayModeTest" runstate="Runnable" testcasecount="2" result="Passed" start-time="2026-05-19 15:09:32Z" end-time="2026-05-19 15:09:33Z" duration="0.352670" total="2" passed="2" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1005" name="RuntimeBindingKeepsRequiredProductText" fullname="TokenForge.Client.Tests.ProductUiSmokePlayModeTest.RuntimeBindingKeepsRequiredProductText" methodname="RuntimeBindingKeepsRequiredProductText" classname="TokenForge.Client.Tests.ProductUiSmokePlayModeTest" runstate="Runnable" seed="2109574716" result="Passed" start-time="2026-05-19 15:09:32Z" end-time="2026-05-19 15:09:33Z" duration="0.177952" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                </properties>
+                <output><![CDATA[INFO [TokenForgeBootstrap] TokenForge bootstrap starting.
+[StartupScene] activeScene=TokenForgeMain
+[StartupScene] buildIndex=0
+[StartupScene] path=Assets/_Project/Scenes/TokenForgeMain.unity
+[StartupScene] buildSettingsFirst=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] stage=AwakeStart Scene=TokenForgeMain path=Assets/_Project/Scenes/TokenForgeMain.unity isLoaded=False rootCount=4 isPlaying=True
+INFO [TokenForgeHierarchy] BuildSettings[0]=Assets/_Project/Scenes/TokenForgeMain.unity expected=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Main Camera active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=EventSystem active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Canvas active=True childCount=1 scale=(0.58,0.58,0.58) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=AppBootstrapper active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] Canvas renderMode=ScreenSpaceOverlay enabled=True activeInHierarchy=True sortingOrder=0 targetDisplay=0 scale=(0.58,0.58,0.58) worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0)
+INFO [TokenForgeHierarchy] CanvasScaler uiScaleMode=ScaleWithScreenSize referenceResolution=(1280,720) screenMatchMode=MatchWidthOrHeight matchWidthOrHeight=0.5
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot active=True childCount=2 scale=(0.58,0.58,0.58) worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/Background active=True childCount=0 scale=(0.58,0.58,0.58) worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell active=True childCount=2 scale=(0.58,0.58,0.58) worldCorners=(22.4,28.8,0) (22.4,451.2,0) (617.6,451.2,0) (617.6,28.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/TopBar active=True childCount=7 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar active=True childCount=9 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent active=True childCount=1 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll active=True childCount=1 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport active=True childCount=1 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content active=True childCount=5 scale=(0.58,0.58,0.58) worldCorners=(291.13,268.87,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,268.87,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root active=True childCount=5 scale=(0.58,0.58,0.58) worldCorners=(291.13,240,0) (291.13,297.74,0) (348.87,297.74,0) (348.87,240,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Game Dashboard Root active=False childCount=4 scale=(0.58,0.58,0.58) worldCorners=(291.13,240,0) (291.13,297.74,0) (348.87,297.74,0) (348.87,240,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Add Repository Flow Root active=False childCount=2 scale=(0.58,0.58,0.58) worldCorners=(291.13,240,0) (291.13,297.74,0) (348.87,297.74,0) (348.87,240,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Settings Root active=False childCount=2 scale=(0.58,0.58,0.58) worldCorners=(291.13,240,0) (291.13,297.74,0) (348.87,297.74,0) (348.87,240,0)
+INFO [TokenForgeHierarchy] Background siblingIndex=0 RootScroll siblingIndex=0
+INFO [TokenForgeHierarchy] Viewport imageAlpha=0 Mask.showMaskGraphic=<missing> RectMask2D=True canvasRendererCull=False
+INFO [TokenForgeHierarchy] Content childCount=5 worldCorners=(291.13,268.87,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,268.87,0) scale=(0.58,0.58,0.58)
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Title active=True enabled=True alpha=1 text=Your companion is ready to grow
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Start Game/Label active=True enabled=True alpha=1 text=Start Game
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Connect Codex Agent/Label active=True enabled=True alpha=1 text=Connect Codex Agent
+INFO [TokenForgeHierarchy] removing scene BootstrapRoot before prefab instantiation path=Canvas/BootstrapRoot scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] instantiated BootstrapRoot prefab path=Canvas/BootstrapRoot parent=Canvas scene=Assets/_Project/Scenes/TokenForgeMain.unity
+[BootstrapRoot] source=prefab
+[BootstrapRoot] prefabPath=Assets/_Project/Prefabs/UI/BootstrapRoot.prefab
+[BootstrapRoot] rootInstanceId=-4740
+[BootstrapRoot] uiVersion=product-game-ui-v3
+INFO [TokenForgeHierarchy] stage=AfterEnsureSceneInfrastructure Scene=TokenForgeMain path=Assets/_Project/Scenes/TokenForgeMain.unity isLoaded=False rootCount=4 isPlaying=True
+INFO [TokenForgeHierarchy] BuildSettings[0]=Assets/_Project/Scenes/TokenForgeMain.unity expected=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Main Camera active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=EventSystem active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Canvas active=True childCount=1 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=AppBootstrapper active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] Canvas renderMode=ScreenSpaceOverlay enabled=True activeInHierarchy=True sortingOrder=0 targetDisplay=0 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] CanvasScaler uiScaleMode=ScaleWithScreenSize referenceResolution=(1280,720) screenMatchMode=MatchWidthOrHeight matchWidthOrHeight=0.5
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot active=True childCount=2 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/Background active=True childCount=0 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell active=True childCount=2 scale=(1,1,1) worldCorners=(-892.8,-475.2,0) (-892.8,475.2,0) (892.8,475.2,0) (892.8,-475.2,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/TopBar active=True childCount=7 scale=(1,1,1) worldCorners=(-892.8,353.2,0) (-892.8,475.2,0) (892.8,475.2,0) (892.8,353.2,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar active=True childCount=9 scale=(1,1,1) worldCorners=(-892.8,-664.8,0) (-892.8,353.2,0) (108,353.2,0) (108,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content active=True childCount=5 scale=(1,1,1) worldCorners=(180,-336.8,0) (180,353.2,0) (820.8,353.2,0) (820.8,-336.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root active=True childCount=5 scale=(1,1,1) worldCorners=(180,-296.8,0) (180,323.2,0) (1078,323.2,0) (1078,-296.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Game Dashboard Root active=False childCount=4 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Add Repository Flow Root active=False childCount=2 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Settings Root active=False childCount=2 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] Background siblingIndex=0 RootScroll siblingIndex=0
+INFO [TokenForgeHierarchy] Viewport imageAlpha=0 Mask.showMaskGraphic=<missing> RectMask2D=True canvasRendererCull=False
+INFO [TokenForgeHierarchy] Content childCount=5 worldCorners=(180,-336.8,0) (180,353.2,0) (820.8,353.2,0) (820.8,-336.8,0) scale=(1,1,1)
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Title active=True enabled=True alpha=1 text=Your companion is ready to grow
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Start Game/Label active=True enabled=True alpha=1 text=Start Game
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Connect Codex Agent/Label active=True enabled=True alpha=1 text=Connect Codex Agent
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] companion overlay enabled
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] fallback companion active
+INFO [TokenForgeHierarchy] stage=AfterBootstrapRootBind Scene=TokenForgeMain path=Assets/_Project/Scenes/TokenForgeMain.unity isLoaded=False rootCount=4 isPlaying=True
+INFO [TokenForgeHierarchy] BuildSettings[0]=Assets/_Project/Scenes/TokenForgeMain.unity expected=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Main Camera active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=EventSystem active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Canvas active=True childCount=2 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=AppBootstrapper active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] Canvas renderMode=ScreenSpaceOverlay enabled=True activeInHierarchy=True sortingOrder=0 targetDisplay=0 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] CanvasScaler uiScaleMode=ScaleWithScreenSize referenceResolution=(1280,720) screenMatchMode=MatchWidthOrHeight matchWidthOrHeight=0.5
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot active=True childCount=2 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/Background active=True childCount=0 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell active=True childCount=2 scale=(1,1,1) worldCorners=(-892.8,-475.2,0) (-892.8,475.2,0) (892.8,475.2,0) (892.8,-475.2,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/TopBar active=True childCount=7 scale=(1,1,1) worldCorners=(-892.8,353.2,0) (-892.8,475.2,0) (892.8,475.2,0) (892.8,353.2,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar active=True childCount=9 scale=(1,1,1) worldCorners=(-892.8,-664.8,0) (-892.8,353.2,0) (108,353.2,0) (108,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content active=True childCount=5 scale=(1,1,1) worldCorners=(180,-336.8,0) (180,353.2,0) (820.8,353.2,0) (820.8,-336.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root active=True childCount=5 scale=(1,1,1) worldCorners=(180,-296.8,0) (180,323.2,0) (1078,323.2,0) (1078,-296.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Game Dashboard Root active=False childCount=4 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Add Repository Flow Root active=False childCount=2 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Settings Root active=False childCount=2 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] Background siblingIndex=0 RootScroll siblingIndex=0
+INFO [TokenForgeHierarchy] Viewport imageAlpha=0 Mask.showMaskGraphic=<missing> RectMask2D=True canvasRendererCull=False
+INFO [TokenForgeHierarchy] Content childCount=5 worldCorners=(180,-336.8,0) (180,353.2,0) (820.8,353.2,0) (820.8,-336.8,0) scale=(1,1,1)
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Title active=True enabled=True alpha=1 text=TokenForge
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Start Game/Label active=True enabled=True alpha=1 text=Start Game
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Connect Codex Agent/Label active=True enabled=True alpha=1 text=Connect Codex Agent
+INFO [TokenForgeBootstrap] TokenForge bootstrap UI references ready.
+INFO [DesktopCompanion] idle/wander tick started
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] idle/wander position updated 120.01,160
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [CompanionMotion] idleResumed anchor=(968,334)
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] idle/wander tick started
+INFO [CompanionMotion] idlePaused reason=dragCooldown
+INFO [TokenForgeBootstrap] canvas targetDisplay=0 renderMode=ScreenSpaceOverlay sortingOrder=0 overrideSorting=False sortingLayer=Default
+INFO [TokenForgeBootstrap] root rect worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0)
+INFO [TokenForgeBootstrap] layout BootstrapRoot active=True scale=(0.58,0.58,0.58) rectSize=(1108.51,831.38) screenRect=(0,0)-(640,480) worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0) intersectsScreen=True intersectsParent=True
+INFO [TokenForgeBootstrap] layout Game Dashboard Root active=False scale=(0.58,0.58,0.58) rectSize=(100,100) screenRect=(471.1,152.7)-(528.8,210.4) worldCorners=(471.11,152.71,0) (471.11,210.44,0) (528.84,210.44,0) (528.84,152.71,0) intersectsScreen=True intersectsParent=True
+INFO [TokenForgeBootstrap] visible candidate rank=1 path=Canvas/BootstrapRoot/Background name=Background type=Image color=(0.965,0.945,0.905,1) renderAlpha=1 expectedLuminance=0.946 rect=(-554.3,-415.7)-(554.3,415.7) screenRect=(0,0)-(640,480) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=2 path=Canvas/BootstrapRoot/WindowShell name=WindowShell type=SoftUiGraphic color=(0.995,0.985,0.965,0.98) renderAlpha=0.98 expectedLuminance=0.986 rect=(-515.5,-365.8)-(515.5,365.8) screenRect=(22.4,28.8)-(617.6,451.2) canvasRendererCull=False alpha=0.98 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=3 path=Canvas/BootstrapRoot/WindowShell/TopBar/Close Dot name=Close Dot type=SoftUiGraphic color=(1,0.36,0.32,1) renderAlpha=1 expectedLuminance=0.493 rect=(-50,-50)-(50,50) screenRect=(35.1,386.5)-(92.8,444.3) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=4 path=Canvas/BootstrapRoot/WindowShell/TopBar/Minimize Dot name=Minimize Dot type=SoftUiGraphic color=(1,0.76,0.25,1) renderAlpha=1 expectedLuminance=0.774 rect=(-50,-50)-(50,50) screenRect=(98.6,386.5)-(156.3,444.3) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=5 path=Canvas/BootstrapRoot/WindowShell/TopBar/Zoom Dot name=Zoom Dot type=SoftUiGraphic color=(0.22,0.78,0.36,1) renderAlpha=1 expectedLuminance=0.631 rect=(-50,-50)-(50,50) screenRect=(162.1,386.5)-(219.9,444.3) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=6 path=Canvas/BootstrapRoot/WindowShell/TopBar/TokenForge Title name=TokenForge Title type=Text color=(0.13,0.115,0.095,1) renderAlpha=1 expectedLuminance=0.117 rect=(-50,-50)-(50,50) screenRect=(225.6,386.5)-(283.4,444.3) canvasRendererCull=False alpha=1 textLength=10 textSample=TokenForge
+INFO [TokenForgeBootstrap] visible candidate rank=7 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Status Pill name=TopBar Status Pill type=SoftUiGraphic color=(0.18,0.68,0.54,0.14) renderAlpha=0.14 expectedLuminance=0.564 rect=(-50,-50)-(50,50) screenRect=(352.6,386.5)-(410.4,444.3) canvasRendererCull=False alpha=0.14 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=8 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Status Pill/TopBar Status Pill Dot name=TopBar Status Pill Dot type=SoftUiGraphic color=(0.18,0.68,0.54,1) renderAlpha=1 expectedLuminance=0.564 rect=(-50,-50)-(50,50) screenRect=(359.6,386.2)-(417.3,444) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=9 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Status Pill/TopBar Status Pill Label name=TopBar Status Pill Label type=Text color=(0.39,0.35,0.3,1) renderAlpha=1 expectedLuminance=0.355 rect=(-50,-50)-(50,50) screenRect=(420.8,386.2)-(478.5,444) canvasRendererCull=False alpha=1 textLength=10 textSample=Local mode
+INFO [TokenForgeBootstrap] visible candidate rank=10 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Sync Pill name=TopBar Sync Pill type=SoftUiGraphic color=(0.96,0.72,0.48,0.14) renderAlpha=0.14 expectedLuminance=0.754 rect=(-50,-50)-(50,50) screenRect=(416.2,386.5)-(473.9,444.3) canvasRendererCull=False alpha=0.14 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=11 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Sync Pill/TopBar Sync Pill Dot name=TopBar Sync Pill Dot type=SoftUiGraphic color=(0.96,0.72,0.48,1) renderAlpha=1 expectedLuminance=0.754 rect=(-50,-50)-(50,50) screenRect=(423.1,386.2)-(480.8,444) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=12 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Sync Pill/TopBar Sync Pill Label name=TopBar Sync Pill Label type=Text color=(0.39,0.35,0.3,1) renderAlpha=1 expectedLuminance=0.355 rect=(-50,-50)-(50,50) screenRect=(484.3,386.2)-(542,444) canvasRendererCull=False alpha=1 textLength=13 textSample=Sync optional
+INFO [TokenForgeBootstrap] visible candidate rank=13 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar name=Sidebar type=SoftUiGraphic color=(0.965,0.936,0.888,1) renderAlpha=1 expectedLuminance=0.939 rect=(-311.7,-509)-(311.7,509) screenRect=(22.4,-207)-(382.4,380.8) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] ignored graphic reason=zero_rect name=Companion App Icon
+INFO [TokenForgeBootstrap] visible candidate rank=14 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Identity/Companion App Icon/Companion Icon Glyph name=Companion Icon Glyph type=Text color=(1,1,1,1) renderAlpha=1 expectedLuminance=1 rect=(-50,-50)-(50,50) screenRect=(17.2,311.5)-(74.9,369.2) canvasRendererCull=False alpha=1 textLength=2 textSample=TF
+INFO [TokenForgeBootstrap] visible candidate rank=15 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Identity/Sidebar Identity Text/Sidebar App Title name=Sidebar App Title type=Text color=(0.13,0.115,0.095,1) renderAlpha=1 expectedLuminance=0.117 rect=(-264.7,-13)-(264.7,13) screenRect=(66.3,339.8)-(372,354.8) canvasRendererCull=False alpha=1 textLength=10 textSample=TokenForge
+INFO [TokenForgeBootstrap] visible candidate rank=16 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Identity/Sidebar Identity Text/Sidebar App Status name=Sidebar App Status type=Text color=(0.56,0.51,0.45,1) renderAlpha=1 expectedLuminance=0.516 rect=(-264.7,-11)-(264.7,11) screenRect=(66.3,325.9)-(372,338.6) canvasRendererCull=False alpha=1 textLength=10 textSample=Local mode
+INFO [TokenForgeBootstrap] visible candidate rank=17 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Dashboard Item name=Sidebar Dashboard Item type=SoftUiGraphic color=(1,0.995,0.982,1) renderAlpha=1 expectedLuminance=0.995 rect=(-293.7,-50)-(293.7,50) screenRect=(32.8,248)-(372,305.7) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=18 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Dashboard Item/Label name=Label type=Text color=(0.13,0.115,0.095,1) renderAlpha=1 expectedLuminance=0.117 rect=(-293.7,-50)-(293.7,50) screenRect=(32.8,248)-(372,305.7) canvasRendererCull=False alpha=1 textLength=9 textSample=Dashboard
+INFO [TokenForgeBootstrap] visible candidate rank=19 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Repository Item name=Sidebar Repository Item type=SoftUiGraphic color=(1,0.96,0.9,0.42) renderAlpha=0.42 expectedLuminance=0.964 rect=(-293.7,-50)-(293.7,50) screenRect=(32.8,184.5)-(372,242.2) canvasRendererCull=False alpha=0.42 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=20 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Repository Item/Label name=Label type=Text color=(0.13,0.115,0.095,1) renderAlpha=1 expectedLuminance=0.117 rect=(-293.7,-50)-(293.7,50) screenRect=(32.8,184.5)-(372,242.2) canvasRendererCull=False alpha=1 textLength=10 textSample=Repository
+INFO [TokenForgeBootstrap] ignored graphic reason=offscreen name=Sidebar Local Mode
+INFO [TokenForgeBootstrap] ignored graphic reason=offscreen name=Sidebar Sync Optional
+INFO [TokenForgeBootstrap] ignored graphic reason=alpha_zero name=Viewport
+INFO [TokenForgeBootstrap] ignored graphic reason=alpha_zero name=Start Companion Runtime Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Eyebrow
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Title
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Summary
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Level Pill
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Level Pill Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero XP Pill
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero XP Pill Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Growth Pill
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Growth Pill Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Start Game
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Add Repository
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Connect Codex Agent
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Label
+INFO [TokenForgeBootstrap] visible candidate mix images=1 buttons=14 panels=1 text=21 tmpText=0 representativeTextVisible=True representativeTextVisibleCount=5
+INFO [TokenForgeBootstrap] topmost fullscreen graphic rank=1 path=Canvas/BootstrapRoot/WindowShell type=SoftUiGraphic color=(0.995,0.985,0.965,0.98) luminance=0.986 alpha=0.98 siblingIndex=1 depth=3 parent=BootstrapRoot raycastTarget=False material=Default UI Material screenRect=(22.4,28.8)-(617.6,451.2) canvasRendererCull=False
+INFO [TokenForgeBootstrap] topmost fullscreen graphic rank=2 path=Canvas/BootstrapRoot/Background type=Image color=(0.965,0.945,0.905,1) luminance=0.946 alpha=1 siblingIndex=0 depth=3 parent=BootstrapRoot raycastTarget=False material=Default UI Material screenRect=(0,0)-(640,480) canvasRendererCull=False
+INFO [TokenForgeBootstrap] visible UI validated canvas=Canvas renderMode=ScreenSpaceOverlay targetDisplay=0 candidates=54 graphics=54 texts=21 panels=0
+INFO [TokenForgeBootstrap] TokenForge bootstrap UI ready.
+INFO [TokenForgeBootstrap] rendered frame smoke skipped in batchmode; structure validation only.
+INFO [TokenForgeBootstrap] TokenForge bootstrap completed.
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [CompanionMotion] idleResumed anchor=(968,334)
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [CompanionMotion] idleResumed anchor=(968,334)
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [CompanionMotion] idleResumed anchor=(968,334)
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] idle/wander tick started
+INFO [CompanionMotion] idlePaused reason=dragCooldown
+]]></output>
+              </test-case>
+              <test-case id="1004" name="TokenForgeMainLoadsProductStartScreen" fullname="TokenForge.Client.Tests.ProductUiSmokePlayModeTest.TokenForgeMainLoadsProductStartScreen" methodname="TokenForgeMainLoadsProductStartScreen" classname="TokenForge.Client.Tests.ProductUiSmokePlayModeTest" runstate="Runnable" seed="688074624" result="Passed" start-time="2026-05-19 15:09:33Z" end-time="2026-05-19 15:09:33Z" duration="0.173966" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                </properties>
+                <output><![CDATA[INFO [TokenForgeBootstrap] TokenForge bootstrap starting.
+[StartupScene] activeScene=TokenForgeMain
+[StartupScene] buildIndex=0
+[StartupScene] path=Assets/_Project/Scenes/TokenForgeMain.unity
+[StartupScene] buildSettingsFirst=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] stage=AwakeStart Scene=TokenForgeMain path=Assets/_Project/Scenes/TokenForgeMain.unity isLoaded=False rootCount=4 isPlaying=True
+INFO [TokenForgeHierarchy] BuildSettings[0]=Assets/_Project/Scenes/TokenForgeMain.unity expected=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Main Camera active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=EventSystem active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Canvas active=True childCount=1 scale=(0.58,0.58,0.58) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=AppBootstrapper active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] Canvas renderMode=ScreenSpaceOverlay enabled=True activeInHierarchy=True sortingOrder=0 targetDisplay=0 scale=(0.58,0.58,0.58) worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0)
+INFO [TokenForgeHierarchy] CanvasScaler uiScaleMode=ScaleWithScreenSize referenceResolution=(1280,720) screenMatchMode=MatchWidthOrHeight matchWidthOrHeight=0.5
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot active=True childCount=2 scale=(0.58,0.58,0.58) worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/Background active=True childCount=0 scale=(0.58,0.58,0.58) worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell active=True childCount=2 scale=(0.58,0.58,0.58) worldCorners=(22.4,28.8,0) (22.4,451.2,0) (617.6,451.2,0) (617.6,28.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/TopBar active=True childCount=7 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar active=True childCount=9 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent active=True childCount=1 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll active=True childCount=1 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport active=True childCount=1 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content active=True childCount=5 scale=(0.58,0.58,0.58) worldCorners=(291.13,268.87,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,268.87,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root active=True childCount=5 scale=(0.58,0.58,0.58) worldCorners=(291.13,240,0) (291.13,297.74,0) (348.87,297.74,0) (348.87,240,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Game Dashboard Root active=False childCount=4 scale=(0.58,0.58,0.58) worldCorners=(291.13,240,0) (291.13,297.74,0) (348.87,297.74,0) (348.87,240,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Add Repository Flow Root active=False childCount=2 scale=(0.58,0.58,0.58) worldCorners=(291.13,240,0) (291.13,297.74,0) (348.87,297.74,0) (348.87,240,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Settings Root active=False childCount=2 scale=(0.58,0.58,0.58) worldCorners=(291.13,240,0) (291.13,297.74,0) (348.87,297.74,0) (348.87,240,0)
+INFO [TokenForgeHierarchy] Background siblingIndex=0 RootScroll siblingIndex=0
+INFO [TokenForgeHierarchy] Viewport imageAlpha=0 Mask.showMaskGraphic=<missing> RectMask2D=True canvasRendererCull=False
+INFO [TokenForgeHierarchy] Content childCount=5 worldCorners=(291.13,268.87,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,268.87,0) scale=(0.58,0.58,0.58)
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Title active=True enabled=True alpha=1 text=Your companion is ready to grow
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Start Game/Label active=True enabled=True alpha=1 text=Start Game
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Connect Codex Agent/Label active=True enabled=True alpha=1 text=Connect Codex Agent
+INFO [TokenForgeHierarchy] removing scene BootstrapRoot before prefab instantiation path=Canvas/BootstrapRoot scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] instantiated BootstrapRoot prefab path=Canvas/BootstrapRoot parent=Canvas scene=Assets/_Project/Scenes/TokenForgeMain.unity
+[BootstrapRoot] source=prefab
+[BootstrapRoot] prefabPath=Assets/_Project/Prefabs/UI/BootstrapRoot.prefab
+[BootstrapRoot] rootInstanceId=-8168
+[BootstrapRoot] uiVersion=product-game-ui-v3
+INFO [TokenForgeHierarchy] stage=AfterEnsureSceneInfrastructure Scene=TokenForgeMain path=Assets/_Project/Scenes/TokenForgeMain.unity isLoaded=False rootCount=4 isPlaying=True
+INFO [TokenForgeHierarchy] BuildSettings[0]=Assets/_Project/Scenes/TokenForgeMain.unity expected=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Main Camera active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=EventSystem active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Canvas active=True childCount=1 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=AppBootstrapper active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] Canvas renderMode=ScreenSpaceOverlay enabled=True activeInHierarchy=True sortingOrder=0 targetDisplay=0 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] CanvasScaler uiScaleMode=ScaleWithScreenSize referenceResolution=(1280,720) screenMatchMode=MatchWidthOrHeight matchWidthOrHeight=0.5
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot active=True childCount=2 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/Background active=True childCount=0 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell active=True childCount=2 scale=(1,1,1) worldCorners=(-892.8,-475.2,0) (-892.8,475.2,0) (892.8,475.2,0) (892.8,-475.2,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/TopBar active=True childCount=7 scale=(1,1,1) worldCorners=(-892.8,353.2,0) (-892.8,475.2,0) (892.8,475.2,0) (892.8,353.2,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar active=True childCount=9 scale=(1,1,1) worldCorners=(-892.8,-664.8,0) (-892.8,353.2,0) (108,353.2,0) (108,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content active=True childCount=5 scale=(1,1,1) worldCorners=(180,-336.8,0) (180,353.2,0) (820.8,353.2,0) (820.8,-336.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root active=True childCount=5 scale=(1,1,1) worldCorners=(180,-296.8,0) (180,323.2,0) (1078,323.2,0) (1078,-296.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Game Dashboard Root active=False childCount=4 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Add Repository Flow Root active=False childCount=2 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Settings Root active=False childCount=2 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] Background siblingIndex=0 RootScroll siblingIndex=0
+INFO [TokenForgeHierarchy] Viewport imageAlpha=0 Mask.showMaskGraphic=<missing> RectMask2D=True canvasRendererCull=False
+INFO [TokenForgeHierarchy] Content childCount=5 worldCorners=(180,-336.8,0) (180,353.2,0) (820.8,353.2,0) (820.8,-336.8,0) scale=(1,1,1)
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Title active=True enabled=True alpha=1 text=Your companion is ready to grow
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Start Game/Label active=True enabled=True alpha=1 text=Start Game
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Connect Codex Agent/Label active=True enabled=True alpha=1 text=Connect Codex Agent
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] companion overlay enabled
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] fallback companion active
+INFO [TokenForgeHierarchy] stage=AfterBootstrapRootBind Scene=TokenForgeMain path=Assets/_Project/Scenes/TokenForgeMain.unity isLoaded=False rootCount=4 isPlaying=True
+INFO [TokenForgeHierarchy] BuildSettings[0]=Assets/_Project/Scenes/TokenForgeMain.unity expected=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Main Camera active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=EventSystem active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Canvas active=True childCount=2 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=AppBootstrapper active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] Canvas renderMode=ScreenSpaceOverlay enabled=True activeInHierarchy=True sortingOrder=0 targetDisplay=0 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] CanvasScaler uiScaleMode=ScaleWithScreenSize referenceResolution=(1280,720) screenMatchMode=MatchWidthOrHeight matchWidthOrHeight=0.5
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot active=True childCount=2 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/Background active=True childCount=0 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell active=True childCount=2 scale=(1,1,1) worldCorners=(-892.8,-475.2,0) (-892.8,475.2,0) (892.8,475.2,0) (892.8,-475.2,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/TopBar active=True childCount=7 scale=(1,1,1) worldCorners=(-892.8,353.2,0) (-892.8,475.2,0) (892.8,475.2,0) (892.8,353.2,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar active=True childCount=9 scale=(1,1,1) worldCorners=(-892.8,-664.8,0) (-892.8,353.2,0) (108,353.2,0) (108,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content active=True childCount=5 scale=(1,1,1) worldCorners=(180,-336.8,0) (180,353.2,0) (820.8,353.2,0) (820.8,-336.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root active=True childCount=5 scale=(1,1,1) worldCorners=(180,-296.8,0) (180,323.2,0) (1078,323.2,0) (1078,-296.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Game Dashboard Root active=False childCount=4 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Add Repository Flow Root active=False childCount=2 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Settings Root active=False childCount=2 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] Background siblingIndex=0 RootScroll siblingIndex=0
+INFO [TokenForgeHierarchy] Viewport imageAlpha=0 Mask.showMaskGraphic=<missing> RectMask2D=True canvasRendererCull=False
+INFO [TokenForgeHierarchy] Content childCount=5 worldCorners=(180,-336.8,0) (180,353.2,0) (820.8,353.2,0) (820.8,-336.8,0) scale=(1,1,1)
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Title active=True enabled=True alpha=1 text=TokenForge
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Start Game/Label active=True enabled=True alpha=1 text=Start Game
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Connect Codex Agent/Label active=True enabled=True alpha=1 text=Connect Codex Agent
+INFO [TokenForgeBootstrap] TokenForge bootstrap UI references ready.
+INFO [DesktopCompanion] idle/wander tick started
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] idle/wander position updated 120.01,160
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [CompanionMotion] idleResumed anchor=(968,334)
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] idle/wander tick started
+INFO [CompanionMotion] idlePaused reason=dragCooldown
+INFO [TokenForgeBootstrap] canvas targetDisplay=0 renderMode=ScreenSpaceOverlay sortingOrder=0 overrideSorting=False sortingLayer=Default
+INFO [TokenForgeBootstrap] root rect worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0)
+INFO [TokenForgeBootstrap] layout BootstrapRoot active=True scale=(0.58,0.58,0.58) rectSize=(1108.51,831.38) screenRect=(0,0)-(640,480) worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0) intersectsScreen=True intersectsParent=True
+INFO [TokenForgeBootstrap] layout Game Dashboard Root active=False scale=(0.58,0.58,0.58) rectSize=(100,100) screenRect=(471.1,152.7)-(528.8,210.4) worldCorners=(471.11,152.71,0) (471.11,210.44,0) (528.84,210.44,0) (528.84,152.71,0) intersectsScreen=True intersectsParent=True
+INFO [TokenForgeBootstrap] visible candidate rank=1 path=Canvas/BootstrapRoot/Background name=Background type=Image color=(0.965,0.945,0.905,1) renderAlpha=1 expectedLuminance=0.946 rect=(-554.3,-415.7)-(554.3,415.7) screenRect=(0,0)-(640,480) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=2 path=Canvas/BootstrapRoot/WindowShell name=WindowShell type=SoftUiGraphic color=(0.995,0.985,0.965,0.98) renderAlpha=0.98 expectedLuminance=0.986 rect=(-515.5,-365.8)-(515.5,365.8) screenRect=(22.4,28.8)-(617.6,451.2) canvasRendererCull=False alpha=0.98 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=3 path=Canvas/BootstrapRoot/WindowShell/TopBar/Close Dot name=Close Dot type=SoftUiGraphic color=(1,0.36,0.32,1) renderAlpha=1 expectedLuminance=0.493 rect=(-50,-50)-(50,50) screenRect=(35.1,386.5)-(92.8,444.3) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=4 path=Canvas/BootstrapRoot/WindowShell/TopBar/Minimize Dot name=Minimize Dot type=SoftUiGraphic color=(1,0.76,0.25,1) renderAlpha=1 expectedLuminance=0.774 rect=(-50,-50)-(50,50) screenRect=(98.6,386.5)-(156.3,444.3) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=5 path=Canvas/BootstrapRoot/WindowShell/TopBar/Zoom Dot name=Zoom Dot type=SoftUiGraphic color=(0.22,0.78,0.36,1) renderAlpha=1 expectedLuminance=0.631 rect=(-50,-50)-(50,50) screenRect=(162.1,386.5)-(219.9,444.3) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=6 path=Canvas/BootstrapRoot/WindowShell/TopBar/TokenForge Title name=TokenForge Title type=Text color=(0.13,0.115,0.095,1) renderAlpha=1 expectedLuminance=0.117 rect=(-50,-50)-(50,50) screenRect=(225.6,386.5)-(283.4,444.3) canvasRendererCull=False alpha=1 textLength=10 textSample=TokenForge
+INFO [TokenForgeBootstrap] visible candidate rank=7 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Status Pill name=TopBar Status Pill type=SoftUiGraphic color=(0.18,0.68,0.54,0.14) renderAlpha=0.14 expectedLuminance=0.564 rect=(-50,-50)-(50,50) screenRect=(352.6,386.5)-(410.4,444.3) canvasRendererCull=False alpha=0.14 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=8 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Status Pill/TopBar Status Pill Dot name=TopBar Status Pill Dot type=SoftUiGraphic color=(0.18,0.68,0.54,1) renderAlpha=1 expectedLuminance=0.564 rect=(-50,-50)-(50,50) screenRect=(359.6,386.2)-(417.3,444) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=9 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Status Pill/TopBar Status Pill Label name=TopBar Status Pill Label type=Text color=(0.39,0.35,0.3,1) renderAlpha=1 expectedLuminance=0.355 rect=(-50,-50)-(50,50) screenRect=(420.8,386.2)-(478.5,444) canvasRendererCull=False alpha=1 textLength=10 textSample=Local mode
+INFO [TokenForgeBootstrap] visible candidate rank=10 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Sync Pill name=TopBar Sync Pill type=SoftUiGraphic color=(0.96,0.72,0.48,0.14) renderAlpha=0.14 expectedLuminance=0.754 rect=(-50,-50)-(50,50) screenRect=(416.2,386.5)-(473.9,444.3) canvasRendererCull=False alpha=0.14 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=11 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Sync Pill/TopBar Sync Pill Dot name=TopBar Sync Pill Dot type=SoftUiGraphic color=(0.96,0.72,0.48,1) renderAlpha=1 expectedLuminance=0.754 rect=(-50,-50)-(50,50) screenRect=(423.1,386.2)-(480.8,444) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=12 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Sync Pill/TopBar Sync Pill Label name=TopBar Sync Pill Label type=Text color=(0.39,0.35,0.3,1) renderAlpha=1 expectedLuminance=0.355 rect=(-50,-50)-(50,50) screenRect=(484.3,386.2)-(542,444) canvasRendererCull=False alpha=1 textLength=13 textSample=Sync optional
+INFO [TokenForgeBootstrap] visible candidate rank=13 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar name=Sidebar type=SoftUiGraphic color=(0.965,0.936,0.888,1) renderAlpha=1 expectedLuminance=0.939 rect=(-311.7,-509)-(311.7,509) screenRect=(22.4,-207)-(382.4,380.8) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] ignored graphic reason=zero_rect name=Companion App Icon
+INFO [TokenForgeBootstrap] visible candidate rank=14 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Identity/Companion App Icon/Companion Icon Glyph name=Companion Icon Glyph type=Text color=(1,1,1,1) renderAlpha=1 expectedLuminance=1 rect=(-50,-50)-(50,50) screenRect=(17.2,311.5)-(74.9,369.2) canvasRendererCull=False alpha=1 textLength=2 textSample=TF
+INFO [TokenForgeBootstrap] visible candidate rank=15 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Identity/Sidebar Identity Text/Sidebar App Title name=Sidebar App Title type=Text color=(0.13,0.115,0.095,1) renderAlpha=1 expectedLuminance=0.117 rect=(-264.7,-13)-(264.7,13) screenRect=(66.3,339.8)-(372,354.8) canvasRendererCull=False alpha=1 textLength=10 textSample=TokenForge
+INFO [TokenForgeBootstrap] visible candidate rank=16 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Identity/Sidebar Identity Text/Sidebar App Status name=Sidebar App Status type=Text color=(0.56,0.51,0.45,1) renderAlpha=1 expectedLuminance=0.516 rect=(-264.7,-11)-(264.7,11) screenRect=(66.3,325.9)-(372,338.6) canvasRendererCull=False alpha=1 textLength=10 textSample=Local mode
+INFO [TokenForgeBootstrap] visible candidate rank=17 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Dashboard Item name=Sidebar Dashboard Item type=SoftUiGraphic color=(1,0.995,0.982,1) renderAlpha=1 expectedLuminance=0.995 rect=(-293.7,-50)-(293.7,50) screenRect=(32.8,248)-(372,305.7) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=18 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Dashboard Item/Label name=Label type=Text color=(0.13,0.115,0.095,1) renderAlpha=1 expectedLuminance=0.117 rect=(-293.7,-50)-(293.7,50) screenRect=(32.8,248)-(372,305.7) canvasRendererCull=False alpha=1 textLength=9 textSample=Dashboard
+INFO [TokenForgeBootstrap] visible candidate rank=19 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Repository Item name=Sidebar Repository Item type=SoftUiGraphic color=(1,0.96,0.9,0.42) renderAlpha=0.42 expectedLuminance=0.964 rect=(-293.7,-50)-(293.7,50) screenRect=(32.8,184.5)-(372,242.2) canvasRendererCull=False alpha=0.42 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=20 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Repository Item/Label name=Label type=Text color=(0.13,0.115,0.095,1) renderAlpha=1 expectedLuminance=0.117 rect=(-293.7,-50)-(293.7,50) screenRect=(32.8,184.5)-(372,242.2) canvasRendererCull=False alpha=1 textLength=10 textSample=Repository
+INFO [TokenForgeBootstrap] ignored graphic reason=offscreen name=Sidebar Local Mode
+INFO [TokenForgeBootstrap] ignored graphic reason=offscreen name=Sidebar Sync Optional
+INFO [TokenForgeBootstrap] ignored graphic reason=alpha_zero name=Viewport
+INFO [TokenForgeBootstrap] ignored graphic reason=alpha_zero name=Start Companion Runtime Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Eyebrow
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Title
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Summary
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Level Pill
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Level Pill Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero XP Pill
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero XP Pill Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Growth Pill
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Growth Pill Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Start Game
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Add Repository
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Connect Codex Agent
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Label
+INFO [TokenForgeBootstrap] visible candidate mix images=1 buttons=14 panels=1 text=21 tmpText=0 representativeTextVisible=True representativeTextVisibleCount=5
+INFO [TokenForgeBootstrap] topmost fullscreen graphic rank=1 path=Canvas/BootstrapRoot/WindowShell type=SoftUiGraphic color=(0.995,0.985,0.965,0.98) luminance=0.986 alpha=0.98 siblingIndex=1 depth=3 parent=BootstrapRoot raycastTarget=False material=Default UI Material screenRect=(22.4,28.8)-(617.6,451.2) canvasRendererCull=False
+INFO [TokenForgeBootstrap] topmost fullscreen graphic rank=2 path=Canvas/BootstrapRoot/Background type=Image color=(0.965,0.945,0.905,1) luminance=0.946 alpha=1 siblingIndex=0 depth=3 parent=BootstrapRoot raycastTarget=False material=Default UI Material screenRect=(0,0)-(640,480) canvasRendererCull=False
+INFO [TokenForgeBootstrap] visible UI validated canvas=Canvas renderMode=ScreenSpaceOverlay targetDisplay=0 candidates=54 graphics=54 texts=21 panels=0
+INFO [TokenForgeBootstrap] TokenForge bootstrap UI ready.
+INFO [TokenForgeBootstrap] rendered frame smoke skipped in batchmode; structure validation only.
+INFO [TokenForgeBootstrap] TokenForge bootstrap completed.
+]]></output>
+              </test-case>
+            </test-suite>
+            <test-suite type="TestFixture" id="1006" name="RuntimeBindingRegressionTests" fullname="TokenForge.Client.Tests.RuntimeBindingRegressionTests" classname="TokenForge.Client.Tests.RuntimeBindingRegressionTests" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-05-19 15:09:33Z" end-time="2026-05-19 15:09:33Z" duration="0.162381" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1007" name="BootstrapRootRefreshDoesNotReintroduceLegacyDashboardText" fullname="TokenForge.Client.Tests.RuntimeBindingRegressionTests.BootstrapRootRefreshDoesNotReintroduceLegacyDashboardText" methodname="BootstrapRootRefreshDoesNotReintroduceLegacyDashboardText" classname="TokenForge.Client.Tests.RuntimeBindingRegressionTests" runstate="Runnable" seed="1041528510" result="Passed" start-time="2026-05-19 15:09:33Z" end-time="2026-05-19 15:09:33Z" duration="0.161932" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                </properties>
+                <output><![CDATA[INFO [TokenForgeBootstrap] TokenForge bootstrap starting.
+[StartupScene] activeScene=TokenForgeMain
+[StartupScene] buildIndex=0
+[StartupScene] path=Assets/_Project/Scenes/TokenForgeMain.unity
+[StartupScene] buildSettingsFirst=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] stage=AwakeStart Scene=TokenForgeMain path=Assets/_Project/Scenes/TokenForgeMain.unity isLoaded=False rootCount=4 isPlaying=True
+INFO [TokenForgeHierarchy] BuildSettings[0]=Assets/_Project/Scenes/TokenForgeMain.unity expected=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Main Camera active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=EventSystem active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Canvas active=True childCount=1 scale=(0.58,0.58,0.58) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=AppBootstrapper active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] Canvas renderMode=ScreenSpaceOverlay enabled=True activeInHierarchy=True sortingOrder=0 targetDisplay=0 scale=(0.58,0.58,0.58) worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0)
+INFO [TokenForgeHierarchy] CanvasScaler uiScaleMode=ScaleWithScreenSize referenceResolution=(1280,720) screenMatchMode=MatchWidthOrHeight matchWidthOrHeight=0.5
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot active=True childCount=2 scale=(0.58,0.58,0.58) worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/Background active=True childCount=0 scale=(0.58,0.58,0.58) worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell active=True childCount=2 scale=(0.58,0.58,0.58) worldCorners=(22.4,28.8,0) (22.4,451.2,0) (617.6,451.2,0) (617.6,28.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/TopBar active=True childCount=7 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar active=True childCount=9 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent active=True childCount=1 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll active=True childCount=1 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport active=True childCount=1 scale=(0.58,0.58,0.58) worldCorners=(291.13,211.13,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,211.13,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content active=True childCount=5 scale=(0.58,0.58,0.58) worldCorners=(291.13,268.87,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,268.87,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root active=True childCount=5 scale=(0.58,0.58,0.58) worldCorners=(291.13,240,0) (291.13,297.74,0) (348.87,297.74,0) (348.87,240,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Game Dashboard Root active=False childCount=4 scale=(0.58,0.58,0.58) worldCorners=(291.13,240,0) (291.13,297.74,0) (348.87,297.74,0) (348.87,240,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Add Repository Flow Root active=False childCount=2 scale=(0.58,0.58,0.58) worldCorners=(291.13,240,0) (291.13,297.74,0) (348.87,297.74,0) (348.87,240,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Settings Root active=False childCount=2 scale=(0.58,0.58,0.58) worldCorners=(291.13,240,0) (291.13,297.74,0) (348.87,297.74,0) (348.87,240,0)
+INFO [TokenForgeHierarchy] Background siblingIndex=0 RootScroll siblingIndex=0
+INFO [TokenForgeHierarchy] Viewport imageAlpha=0 Mask.showMaskGraphic=<missing> RectMask2D=True canvasRendererCull=False
+INFO [TokenForgeHierarchy] Content childCount=5 worldCorners=(291.13,268.87,0) (291.13,268.87,0) (348.87,268.87,0) (348.87,268.87,0) scale=(0.58,0.58,0.58)
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Title active=True enabled=True alpha=1 text=Your companion is ready to grow
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Start Game/Label active=True enabled=True alpha=1 text=Start Game
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Connect Codex Agent/Label active=True enabled=True alpha=1 text=Connect Codex Agent
+INFO [TokenForgeHierarchy] removing scene BootstrapRoot before prefab instantiation path=Canvas/BootstrapRoot scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] instantiated BootstrapRoot prefab path=Canvas/BootstrapRoot parent=Canvas scene=Assets/_Project/Scenes/TokenForgeMain.unity
+[BootstrapRoot] source=prefab
+[BootstrapRoot] prefabPath=Assets/_Project/Prefabs/UI/BootstrapRoot.prefab
+[BootstrapRoot] rootInstanceId=-11544
+[BootstrapRoot] uiVersion=product-game-ui-v3
+INFO [TokenForgeHierarchy] stage=AfterEnsureSceneInfrastructure Scene=TokenForgeMain path=Assets/_Project/Scenes/TokenForgeMain.unity isLoaded=False rootCount=4 isPlaying=True
+INFO [TokenForgeHierarchy] BuildSettings[0]=Assets/_Project/Scenes/TokenForgeMain.unity expected=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Main Camera active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=EventSystem active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Canvas active=True childCount=1 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=AppBootstrapper active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] Canvas renderMode=ScreenSpaceOverlay enabled=True activeInHierarchy=True sortingOrder=0 targetDisplay=0 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] CanvasScaler uiScaleMode=ScaleWithScreenSize referenceResolution=(1280,720) screenMatchMode=MatchWidthOrHeight matchWidthOrHeight=0.5
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot active=True childCount=2 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/Background active=True childCount=0 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell active=True childCount=2 scale=(1,1,1) worldCorners=(-892.8,-475.2,0) (-892.8,475.2,0) (892.8,475.2,0) (892.8,-475.2,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/TopBar active=True childCount=7 scale=(1,1,1) worldCorners=(-892.8,353.2,0) (-892.8,475.2,0) (892.8,475.2,0) (892.8,353.2,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar active=True childCount=9 scale=(1,1,1) worldCorners=(-892.8,-664.8,0) (-892.8,353.2,0) (108,353.2,0) (108,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content active=True childCount=5 scale=(1,1,1) worldCorners=(180,-336.8,0) (180,353.2,0) (820.8,353.2,0) (820.8,-336.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root active=True childCount=5 scale=(1,1,1) worldCorners=(180,-296.8,0) (180,323.2,0) (1078,323.2,0) (1078,-296.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Game Dashboard Root active=False childCount=4 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Add Repository Flow Root active=False childCount=2 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Settings Root active=False childCount=2 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] Background siblingIndex=0 RootScroll siblingIndex=0
+INFO [TokenForgeHierarchy] Viewport imageAlpha=0 Mask.showMaskGraphic=<missing> RectMask2D=True canvasRendererCull=False
+INFO [TokenForgeHierarchy] Content childCount=5 worldCorners=(180,-336.8,0) (180,353.2,0) (820.8,353.2,0) (820.8,-336.8,0) scale=(1,1,1)
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Title active=True enabled=True alpha=1 text=Your companion is ready to grow
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Start Game/Label active=True enabled=True alpha=1 text=Start Game
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Connect Codex Agent/Label active=True enabled=True alpha=1 text=Connect Codex Agent
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] companion overlay enabled
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] fallback companion active
+INFO [TokenForgeHierarchy] stage=AfterBootstrapRootBind Scene=TokenForgeMain path=Assets/_Project/Scenes/TokenForgeMain.unity isLoaded=False rootCount=4 isPlaying=True
+INFO [TokenForgeHierarchy] BuildSettings[0]=Assets/_Project/Scenes/TokenForgeMain.unity expected=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Main Camera active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=EventSystem active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=Canvas active=True childCount=2 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] root=AppBootstrapper active=True childCount=0 scale=(1,1,1) scene=Assets/_Project/Scenes/TokenForgeMain.unity
+INFO [TokenForgeHierarchy] Canvas renderMode=ScreenSpaceOverlay enabled=True activeInHierarchy=True sortingOrder=0 targetDisplay=0 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] CanvasScaler uiScaleMode=ScaleWithScreenSize referenceResolution=(1280,720) screenMatchMode=MatchWidthOrHeight matchWidthOrHeight=0.5
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot active=True childCount=2 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/Background active=True childCount=0 scale=(1,1,1) worldCorners=(-960,-540,0) (-960,540,0) (960,540,0) (960,-540,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell active=True childCount=2 scale=(1,1,1) worldCorners=(-892.8,-475.2,0) (-892.8,475.2,0) (892.8,475.2,0) (892.8,-475.2,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/TopBar active=True childCount=7 scale=(1,1,1) worldCorners=(-892.8,353.2,0) (-892.8,475.2,0) (892.8,475.2,0) (892.8,353.2,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar active=True childCount=9 scale=(1,1,1) worldCorners=(-892.8,-664.8,0) (-892.8,353.2,0) (108,353.2,0) (108,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport active=True childCount=1 scale=(1,1,1) worldCorners=(108,-664.8,0) (108,353.2,0) (892.8,353.2,0) (892.8,-664.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content active=True childCount=5 scale=(1,1,1) worldCorners=(180,-336.8,0) (180,353.2,0) (820.8,353.2,0) (820.8,-336.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root active=True childCount=5 scale=(1,1,1) worldCorners=(180,-296.8,0) (180,323.2,0) (1078,323.2,0) (1078,-296.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Game Dashboard Root active=False childCount=4 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Add Repository Flow Root active=False childCount=2 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Settings Root active=False childCount=2 scale=(1,1,1) worldCorners=(450.4,-41.8,0) (450.4,58.2,0) (550.4,58.2,0) (550.4,-41.8,0)
+INFO [TokenForgeHierarchy] Background siblingIndex=0 RootScroll siblingIndex=0
+INFO [TokenForgeHierarchy] Viewport imageAlpha=0 Mask.showMaskGraphic=<missing> RectMask2D=True canvasRendererCull=False
+INFO [TokenForgeHierarchy] Content childCount=5 worldCorners=(180,-336.8,0) (180,353.2,0) (820.8,353.2,0) (820.8,-336.8,0) scale=(1,1,1)
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Title active=True enabled=True alpha=1 text=TokenForge
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Start Game/Label active=True enabled=True alpha=1 text=Start Game
+INFO [TokenForgeHierarchy] text path=Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard/HeroCopyStack/Hero Action Row/Connect Codex Agent/Label active=True enabled=True alpha=1 text=Connect Codex Agent
+INFO [TokenForgeBootstrap] TokenForge bootstrap UI references ready.
+INFO [DesktopCompanion] idle/wander tick started
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] idle/wander position updated 120.01,160
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [CompanionMotion] idleResumed anchor=(968,334)
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] idle/wander tick started
+INFO [CompanionMotion] idlePaused reason=dragCooldown
+INFO [TokenForgeBootstrap] canvas targetDisplay=0 renderMode=ScreenSpaceOverlay sortingOrder=0 overrideSorting=False sortingLayer=Default
+INFO [TokenForgeBootstrap] root rect worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0)
+INFO [TokenForgeBootstrap] layout BootstrapRoot active=True scale=(0.58,0.58,0.58) rectSize=(1108.51,831.38) screenRect=(0,0)-(640,480) worldCorners=(0,0,0) (0,480,0) (640,480,0) (640,0,0) intersectsScreen=True intersectsParent=True
+INFO [TokenForgeBootstrap] layout Game Dashboard Root active=False scale=(0.58,0.58,0.58) rectSize=(100,100) screenRect=(471.1,152.7)-(528.8,210.4) worldCorners=(471.11,152.71,0) (471.11,210.44,0) (528.84,210.44,0) (528.84,152.71,0) intersectsScreen=True intersectsParent=True
+INFO [TokenForgeBootstrap] visible candidate rank=1 path=Canvas/BootstrapRoot/Background name=Background type=Image color=(0.965,0.945,0.905,1) renderAlpha=1 expectedLuminance=0.946 rect=(-554.3,-415.7)-(554.3,415.7) screenRect=(0,0)-(640,480) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=2 path=Canvas/BootstrapRoot/WindowShell name=WindowShell type=SoftUiGraphic color=(0.995,0.985,0.965,0.98) renderAlpha=0.98 expectedLuminance=0.986 rect=(-515.5,-365.8)-(515.5,365.8) screenRect=(22.4,28.8)-(617.6,451.2) canvasRendererCull=False alpha=0.98 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=3 path=Canvas/BootstrapRoot/WindowShell/TopBar/Close Dot name=Close Dot type=SoftUiGraphic color=(1,0.36,0.32,1) renderAlpha=1 expectedLuminance=0.493 rect=(-50,-50)-(50,50) screenRect=(35.1,386.5)-(92.8,444.3) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=4 path=Canvas/BootstrapRoot/WindowShell/TopBar/Minimize Dot name=Minimize Dot type=SoftUiGraphic color=(1,0.76,0.25,1) renderAlpha=1 expectedLuminance=0.774 rect=(-50,-50)-(50,50) screenRect=(98.6,386.5)-(156.3,444.3) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=5 path=Canvas/BootstrapRoot/WindowShell/TopBar/Zoom Dot name=Zoom Dot type=SoftUiGraphic color=(0.22,0.78,0.36,1) renderAlpha=1 expectedLuminance=0.631 rect=(-50,-50)-(50,50) screenRect=(162.1,386.5)-(219.9,444.3) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=6 path=Canvas/BootstrapRoot/WindowShell/TopBar/TokenForge Title name=TokenForge Title type=Text color=(0.13,0.115,0.095,1) renderAlpha=1 expectedLuminance=0.117 rect=(-50,-50)-(50,50) screenRect=(225.6,386.5)-(283.4,444.3) canvasRendererCull=False alpha=1 textLength=10 textSample=TokenForge
+INFO [TokenForgeBootstrap] visible candidate rank=7 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Status Pill name=TopBar Status Pill type=SoftUiGraphic color=(0.18,0.68,0.54,0.14) renderAlpha=0.14 expectedLuminance=0.564 rect=(-50,-50)-(50,50) screenRect=(352.6,386.5)-(410.4,444.3) canvasRendererCull=False alpha=0.14 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=8 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Status Pill/TopBar Status Pill Dot name=TopBar Status Pill Dot type=SoftUiGraphic color=(0.18,0.68,0.54,1) renderAlpha=1 expectedLuminance=0.564 rect=(-50,-50)-(50,50) screenRect=(359.6,386.2)-(417.3,444) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=9 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Status Pill/TopBar Status Pill Label name=TopBar Status Pill Label type=Text color=(0.39,0.35,0.3,1) renderAlpha=1 expectedLuminance=0.355 rect=(-50,-50)-(50,50) screenRect=(420.8,386.2)-(478.5,444) canvasRendererCull=False alpha=1 textLength=10 textSample=Local mode
+INFO [TokenForgeBootstrap] visible candidate rank=10 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Sync Pill name=TopBar Sync Pill type=SoftUiGraphic color=(0.96,0.72,0.48,0.14) renderAlpha=0.14 expectedLuminance=0.754 rect=(-50,-50)-(50,50) screenRect=(416.2,386.5)-(473.9,444.3) canvasRendererCull=False alpha=0.14 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=11 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Sync Pill/TopBar Sync Pill Dot name=TopBar Sync Pill Dot type=SoftUiGraphic color=(0.96,0.72,0.48,1) renderAlpha=1 expectedLuminance=0.754 rect=(-50,-50)-(50,50) screenRect=(423.1,386.2)-(480.8,444) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=12 path=Canvas/BootstrapRoot/WindowShell/TopBar/TopBar Sync Pill/TopBar Sync Pill Label name=TopBar Sync Pill Label type=Text color=(0.39,0.35,0.3,1) renderAlpha=1 expectedLuminance=0.355 rect=(-50,-50)-(50,50) screenRect=(484.3,386.2)-(542,444) canvasRendererCull=False alpha=1 textLength=13 textSample=Sync optional
+INFO [TokenForgeBootstrap] visible candidate rank=13 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar name=Sidebar type=SoftUiGraphic color=(0.965,0.936,0.888,1) renderAlpha=1 expectedLuminance=0.939 rect=(-311.7,-509)-(311.7,509) screenRect=(22.4,-207)-(382.4,380.8) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] ignored graphic reason=zero_rect name=Companion App Icon
+INFO [TokenForgeBootstrap] visible candidate rank=14 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Identity/Companion App Icon/Companion Icon Glyph name=Companion Icon Glyph type=Text color=(1,1,1,1) renderAlpha=1 expectedLuminance=1 rect=(-50,-50)-(50,50) screenRect=(17.2,311.5)-(74.9,369.2) canvasRendererCull=False alpha=1 textLength=2 textSample=TF
+INFO [TokenForgeBootstrap] visible candidate rank=15 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Identity/Sidebar Identity Text/Sidebar App Title name=Sidebar App Title type=Text color=(0.13,0.115,0.095,1) renderAlpha=1 expectedLuminance=0.117 rect=(-264.7,-13)-(264.7,13) screenRect=(66.3,339.8)-(372,354.8) canvasRendererCull=False alpha=1 textLength=10 textSample=TokenForge
+INFO [TokenForgeBootstrap] visible candidate rank=16 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Identity/Sidebar Identity Text/Sidebar App Status name=Sidebar App Status type=Text color=(0.56,0.51,0.45,1) renderAlpha=1 expectedLuminance=0.516 rect=(-264.7,-11)-(264.7,11) screenRect=(66.3,325.9)-(372,338.6) canvasRendererCull=False alpha=1 textLength=10 textSample=Local mode
+INFO [TokenForgeBootstrap] visible candidate rank=17 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Dashboard Item name=Sidebar Dashboard Item type=SoftUiGraphic color=(1,0.995,0.982,1) renderAlpha=1 expectedLuminance=0.995 rect=(-293.7,-50)-(293.7,50) screenRect=(32.8,248)-(372,305.7) canvasRendererCull=False alpha=1 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=18 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Dashboard Item/Label name=Label type=Text color=(0.13,0.115,0.095,1) renderAlpha=1 expectedLuminance=0.117 rect=(-293.7,-50)-(293.7,50) screenRect=(32.8,248)-(372,305.7) canvasRendererCull=False alpha=1 textLength=9 textSample=Dashboard
+INFO [TokenForgeBootstrap] visible candidate rank=19 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Repository Item name=Sidebar Repository Item type=SoftUiGraphic color=(1,0.96,0.9,0.42) renderAlpha=0.42 expectedLuminance=0.964 rect=(-293.7,-50)-(293.7,50) screenRect=(32.8,184.5)-(372,242.2) canvasRendererCull=False alpha=0.42 textLength=0 textSample=<none>
+INFO [TokenForgeBootstrap] visible candidate rank=20 path=Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar/Sidebar Repository Item/Label name=Label type=Text color=(0.13,0.115,0.095,1) renderAlpha=1 expectedLuminance=0.117 rect=(-293.7,-50)-(293.7,50) screenRect=(32.8,184.5)-(372,242.2) canvasRendererCull=False alpha=1 textLength=10 textSample=Repository
+INFO [TokenForgeBootstrap] ignored graphic reason=offscreen name=Sidebar Local Mode
+INFO [TokenForgeBootstrap] ignored graphic reason=offscreen name=Sidebar Sync Optional
+INFO [TokenForgeBootstrap] ignored graphic reason=alpha_zero name=Viewport
+INFO [TokenForgeBootstrap] ignored graphic reason=alpha_zero name=Start Companion Runtime Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Eyebrow
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Title
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Summary
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Level Pill
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Level Pill Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero XP Pill
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero XP Pill Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Growth Pill
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Hero Growth Pill Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Start Game
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Add Repository
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Label
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Connect Codex Agent
+INFO [TokenForgeBootstrap] ignored graphic reason=canvas_renderer_culled name=Label
+INFO [TokenForgeBootstrap] visible candidate mix images=1 buttons=14 panels=1 text=21 tmpText=0 representativeTextVisible=True representativeTextVisibleCount=5
+INFO [TokenForgeBootstrap] topmost fullscreen graphic rank=1 path=Canvas/BootstrapRoot/WindowShell type=SoftUiGraphic color=(0.995,0.985,0.965,0.98) luminance=0.986 alpha=0.98 siblingIndex=1 depth=3 parent=BootstrapRoot raycastTarget=False material=Default UI Material screenRect=(22.4,28.8)-(617.6,451.2) canvasRendererCull=False
+INFO [TokenForgeBootstrap] topmost fullscreen graphic rank=2 path=Canvas/BootstrapRoot/Background type=Image color=(0.965,0.945,0.905,1) luminance=0.946 alpha=1 siblingIndex=0 depth=3 parent=BootstrapRoot raycastTarget=False material=Default UI Material screenRect=(0,0)-(640,480) canvasRendererCull=False
+INFO [TokenForgeBootstrap] visible UI validated canvas=Canvas renderMode=ScreenSpaceOverlay targetDisplay=0 candidates=54 graphics=54 texts=21 panels=0
+INFO [TokenForgeBootstrap] TokenForge bootstrap UI ready.
+INFO [TokenForgeBootstrap] rendered frame smoke skipped in batchmode; structure validation only.
+INFO [TokenForgeBootstrap] TokenForge bootstrap completed.
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [CompanionMotion] idleResumed anchor=(968,334)
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [CompanionMotion] idleResumed anchor=(968,334)
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] click-through disabled
+INFO [CompanionMotion] idleResumed anchor=(968,334)
+INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] idle/wander tick started
+INFO [CompanionMotion] idlePaused reason=dragCooldown
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

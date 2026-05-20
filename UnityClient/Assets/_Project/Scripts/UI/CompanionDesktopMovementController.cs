@@ -18,7 +18,9 @@ namespace TokenForge.Client.UI
         private bool facingLeft;
         private bool walkFrame;
         private bool tickStartedLogged;
+        private bool pauseLogged;
         private float positionLogTimer;
+        private float dragCooldownRemaining;
 
         public CompanionDesktopMovementController(IDesktopCompanionOverlayService overlayService)
         {
@@ -31,7 +33,10 @@ namespace TokenForge.Client.UI
         {
             position = value;
             ClampToVisibleBounds();
+            velocity = Vector2.zero;
+            dragCooldownRemaining = 1.0f;
             overlayService.SetPosition(position);
+            Debug.Log("INFO [CompanionMotion] idleResumed anchor=(" + position.x.ToString("0.##") + "," + position.y.ToString("0.##") + ")");
         }
 
         public void ResetPosition()
@@ -65,9 +70,22 @@ namespace TokenForge.Client.UI
                 return;
             }
 
-            if (overlayService.IsDragging)
+            if (overlayService.IsDragging || dragCooldownRemaining > 0f)
             {
+                if (!pauseLogged)
+                {
+                    pauseLogged = true;
+                    Debug.Log("INFO [CompanionMotion] idlePaused reason=" + (overlayService.IsDragging ? "drag" : "dragCooldown"));
+                }
+
+                dragCooldownRemaining = Mathf.Max(0f, dragCooldownRemaining - deltaSeconds);
                 return;
+            }
+
+            if (pauseLogged)
+            {
+                pauseLogged = false;
+                Debug.Log("INFO [CompanionMotion] idleResumed anchor=(" + position.x.ToString("0.##") + "," + position.y.ToString("0.##") + ")");
             }
 
             var motionScale = MotionScale(settings.MotionMode);

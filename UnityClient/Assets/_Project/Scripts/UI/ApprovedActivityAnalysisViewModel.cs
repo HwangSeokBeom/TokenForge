@@ -11,6 +11,7 @@ using TokenForge.Client.Persistence;
 using TokenForge.Client.Platform;
 using TokenForge.Client.Privacy;
 using TokenForge.Client.Sync;
+using UnityEngine;
 
 namespace TokenForge.Client.UI
 {
@@ -91,7 +92,7 @@ namespace TokenForge.Client.UI
         public CompanionState CompanionState { get; set; } = CompanionState.CreateDefault();
         public DesktopCompanionSettings DesktopCompanionSettings { get; set; } = DesktopCompanionSettings.CreateDefault();
         public CompanionDesktopOverlayState DesktopOverlayState { get; set; } = CompanionDesktopOverlayState.Disabled;
-        public string LatestSafeSessionSummary { get; set; } = "No saved run yet. Analyze a repository or AI agent log to generate your first XP.";
+        public string LatestSafeSessionSummary { get; set; } = "No saved growth yet. Run Analysis on a repository or AI agent log to generate your first XP.";
         public string RecentGrowthSummary { get; set; } = "No growth recorded yet.";
         public string QuestSummary { get; set; } = "Analyze repository: open | Save session: open | Sync progress: login required";
         public string ActivityLogSummary { get; set; } = "No run saved yet.\nConnect a Git repository or AI Agent log, review the safe aggregate, then save it to gain XP.";
@@ -163,7 +164,7 @@ namespace TokenForge.Client.UI
     public sealed class ApprovedActivityAnalysisViewModel
     {
         public const string SafeAggregateNotice = "Only safe aggregate data will be saved.";
-        public const string RawDataNotice = "Raw paths, prompts, responses, commands, filenames, repository names, and source code are not saved or synced.";
+        public const string RawDataNotice = "Private local details are not saved or synced.";
         public const string ApprovedLocationsNotice = "Approved locations are stored only on this device and are never synced.";
 
         private const int RecentSessionLimit = 8;
@@ -839,6 +840,12 @@ namespace TokenForge.Client.UI
             return await UpdateDesktopCompanionSettingsAsync(settings => settings.MotionMode = motionMode, cancellationToken);
         }
 
+        public async Task<Result<DesktopCompanionSettings>> SetDesktopCompanionVisualThemeAsync(string visualThemeId, CancellationToken cancellationToken = default)
+        {
+            visualThemeId = string.IsNullOrWhiteSpace(visualThemeId) ? "orange_cat" : visualThemeId.Trim();
+            return await UpdateDesktopCompanionSettingsAsync(settings => settings.VisualThemeId = visualThemeId, cancellationToken);
+        }
+
         public async Task<Result<DesktopCompanionSettings>> ResetDesktopCompanionPositionAsync(CancellationToken cancellationToken = default)
         {
             return await UpdateDesktopCompanionSettingsAsync(settings =>
@@ -853,7 +860,7 @@ namespace TokenForge.Client.UI
 
         public async Task<Result<DesktopCompanionSettings>> SaveDesktopCompanionPositionAsync(float x, float y, CancellationToken cancellationToken = default)
         {
-            return await UpdateDesktopCompanionSettingsAsync(settings =>
+            var result = await UpdateDesktopCompanionSettingsAsync(settings =>
             {
                 settings.LastOverlayPositionX = Math.Max(0f, x);
                 settings.LastOverlayPositionY = Math.Max(0f, y);
@@ -861,6 +868,8 @@ namespace TokenForge.Client.UI
                 settings.LastOverlayPositionXBucket = BucketForCoordinate(x);
                 settings.LastOverlayPositionYBucket = BucketForCoordinate(y);
             }, cancellationToken);
+            Debug.Log("INFO [CompanionDrag] SaveDataRepository position=(" + Math.Max(0f, x).ToString("0.##") + "," + Math.Max(0f, y).ToString("0.##") + ") saved=" + (result.IsSuccess ? "true" : "false"));
+            return result;
         }
 
         public Result DiscardGitReview()
@@ -1799,7 +1808,7 @@ namespace TokenForge.Client.UI
                 .FirstOrDefault(summary => selectedSessionIds.Contains(summary.ClientSessionId));
             var latestSession = hasSavedRun
                 ? BootstrapUiTextFormatter.SafeLocalSessionLabel(selectedLatestSummary ?? new RecentSafeSessionSummary())
-                : "No saved run yet. Analyze a repository or AI agent log to generate your first XP.";
+                : "No saved growth yet. Run Analysis on a repository or AI agent log to generate your first XP.";
             var growthSummary = latestGrowth == null
                 ? "No growth recorded yet."
                 : "+" + latestGrowth.ExpGained + " XP | Level " + latestGrowth.LevelBefore + " -> " + latestGrowth.LevelAfter;

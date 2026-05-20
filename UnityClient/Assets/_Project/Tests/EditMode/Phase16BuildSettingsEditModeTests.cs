@@ -26,13 +26,6 @@ namespace TokenForge.Client.Tests
             Assert.IsTrue(buildScene.enabled);
 
             AssertRequiredPrefab<BootstrapRootView>(BootstrapRootPrefabPath);
-            AssertRequiredPrefab<AccountPanelView>("Assets/_Project/Prefabs/UI/AccountPanel.prefab");
-            AssertRequiredPrefab<ActivityAnalysisPanelView>("Assets/_Project/Prefabs/UI/ActivityAnalysisPanel.prefab");
-            AssertRequiredPrefab<ApprovedLocationsPanelView>("Assets/_Project/Prefabs/UI/ApprovedLocationsPanel.prefab");
-            AssertRequiredPrefab<ReviewPanelView>("Assets/_Project/Prefabs/UI/ReviewPanel.prefab");
-            AssertRequiredPrefab<SafeSyncPanelView>("Assets/_Project/Prefabs/UI/SafeSyncPanel.prefab");
-            AssertRequiredPrefab<RecentSessionsPanelView>("Assets/_Project/Prefabs/UI/RecentSessionsPanel.prefab");
-            AssertRequiredPrefab<PrivacyNoticePanelView>("Assets/_Project/Prefabs/UI/PrivacyNoticePanel.prefab");
 
             var rootPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(BootstrapRootPrefabPath);
             var root = rootPrefab.GetComponent<BootstrapRootView>();

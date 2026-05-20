@@ -22,6 +22,7 @@ namespace TokenForge.Client.Tests
             Assert.IsNotNull(sceneAsset);
             Assert.AreEqual(AssetDatabase.AssetPathToGUID(TokenForgeStartupSceneSettings.StartupScenePath), scenes[0].guid.ToString());
             Assert.That(scenes.Count(scene => scene.path == TokenForgeStartupSceneSettings.StartupScenePath), Is.EqualTo(1));
+            Assert.That(scenes.Count(scene => scene.enabled), Is.EqualTo(1));
         }
 
         [Test]

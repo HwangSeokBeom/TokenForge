@@ -17,6 +17,8 @@ namespace TokenForge.Client.UI
         private CompanionVisualProfile visualProfile = CompanionVisualProfileResolver.Resolve(CompanionState.CreateDefault());
         private float reactionCooldownRemaining;
         private bool overlayEnabledLogged;
+        private bool hasPendingDragPosition;
+        private Vector2 pendingDragPosition;
 
         public CompanionDesktopOverlayState OverlayState => overlayService?.State ?? CompanionDesktopOverlayState.Unavailable;
         public string OverlayStatusMessage => string.IsNullOrWhiteSpace(lastFailureReason)
@@ -116,11 +118,23 @@ namespace TokenForge.Client.UI
             overlayService.SetSize(SizeFor(companionState.Stage));
             overlayService.SetVisualState(companionState.Stage, companionState.Archetype, visualProfile.IdleAnimation, false);
             overlayService.SetMotionProfile(visualProfile);
-            if (settings.HasSavedOverlayPosition)
+            if (settings.HasSavedOverlayPosition || hasPendingDragPosition)
             {
-                var savedPosition = new Vector2(settings.LastOverlayPositionX, settings.LastOverlayPositionY);
-                movementController?.SetPosition(savedPosition);
-                overlayService.SetPosition(savedPosition);
+                var savedPosition = hasPendingDragPosition
+                    ? pendingDragPosition
+                    : new Vector2(settings.LastOverlayPositionX, settings.LastOverlayPositionY);
+                if (!overlayService.IsDragging)
+                {
+                    movementController?.SetPosition(savedPosition);
+                    overlayService.SetPosition(savedPosition);
+                }
+
+                if (hasPendingDragPosition &&
+                    settings.HasSavedOverlayPosition &&
+                    Vector2.Distance(pendingDragPosition, new Vector2(settings.LastOverlayPositionX, settings.LastOverlayPositionY)) <= 1f)
+                {
+                    hasPendingDragPosition = false;
+                }
             }
 
             overlayService.Show();
@@ -165,8 +179,10 @@ namespace TokenForge.Client.UI
 
         private void OnDesktopCompanionDragEnded(Vector2 position)
         {
+            hasPendingDragPosition = true;
+            pendingDragPosition = position;
             movementController?.SetPosition(position);
-            Debug.Log("INFO " + LogPrefix + " drag ended with x/y " + position.x.ToString("0.##") + "," + position.y.ToString("0.##"));
+            Debug.Log("INFO [CompanionDrag] mouseUp final=(" + position.x.ToString("0.##") + "," + position.y.ToString("0.##") + ") saved=pending");
             PositionChanged?.Invoke(position);
         }
 

@@ -102,7 +102,7 @@ namespace TokenForge.Client.Editor
             RemoveAudioListener(cameraObject);
             var camera = cameraObject.GetComponent<Camera>();
             camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = new Color(0.035f, 0.045f, 0.06f, 1f);
+            camera.backgroundColor = new Color(0.965f, 0.945f, 0.905f, 1f);
         }
 
         private static void RemoveAudioListener(GameObject cameraObject)
@@ -234,6 +234,17 @@ namespace TokenForge.Client.Editor
             rect.offsetMin = Vector2.zero;
             rect.offsetMax = Vector2.zero;
 
+            var marker = rootObject.GetComponent<BootstrapRootSourceMarker>();
+            if (marker == null)
+            {
+                marker = rootObject.AddComponent<BootstrapRootSourceMarker>();
+            }
+
+            marker.SetSource(
+                "scene-prefab-copy",
+                BootstrapRootSourceMarker.PrefabPath,
+                BootstrapRootSourceMarker.CurrentUiVersion);
+
             return rootObject.GetComponent<BootstrapRootView>();
         }
 
@@ -301,21 +312,16 @@ namespace TokenForge.Client.Editor
 
             LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot");
             LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Background");
-            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll");
-            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport");
-            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content");
-            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Start Screen Root");
-            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Game Dashboard Root");
-            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Run Analysis Root");
-            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Settings Advanced Root");
-            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Developer Diagnostics Root");
-            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Settings Advanced Root/AccountPanel");
-            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Settings Advanced Root/PrivacyNoticePanel");
-            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Run Analysis Root/Run Analysis Grid/ActivityAnalysisPanel");
-            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Run Analysis Root/Run Analysis Grid/ReviewPanel");
-            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Developer Diagnostics Root/ApprovedLocationsPanel");
-            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Developer Diagnostics Root/RecentSessionsPanel");
-            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/Root Scroll/Viewport/Content/Developer Diagnostics Root/SafeSyncPanel");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/WindowShell");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/WindowShell/TopBar");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/WindowShell/AppBody/Sidebar");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/WindowShell/AppBody/MainContent");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/HeroCompanionCard");
+            LogSavedPath(canvasObject.transform, "Canvas/BootstrapRoot/WindowShell/AppBody/MainContent/Root Scroll/Viewport/Content/Start Screen Root/StatusCardGrid");
         }
 
         private static void LogSavedPath(Transform canvasTransform, string expectedPath)
