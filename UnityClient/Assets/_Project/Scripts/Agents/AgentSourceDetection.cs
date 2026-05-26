@@ -156,6 +156,7 @@ namespace TokenForge.Client.Agents
                 case AgentProviderType.ClaudeCode: return "Claude Code";
                 case AgentProviderType.Codex: return "Codex";
                 case AgentProviderType.GitHubCopilot: return "GitHub Copilot";
+                case AgentProviderType.GeminiCli: return "Gemini CLI";
                 case AgentProviderType.Manual: return "Other / Manual Log Folder";
                 default: return "Unknown Agent";
             }
@@ -375,6 +376,11 @@ namespace TokenForge.Client.Agents
                     yield return ("~/Library/Application Support/Code/logs", "GitHub Copilot VS Code logs");
                     yield return ("~/Library/Application Support/Cursor/User/globalStorage", "GitHub Copilot Cursor storage");
                     yield return ("~/Library/Application Support/Cursor/logs", "GitHub Copilot Cursor logs");
+                    break;
+                case AgentProviderType.GeminiCli:
+                    yield return ("~/.gemini", "Gemini CLI local data");
+                    yield return ("~/.config/gemini", "Gemini CLI config data");
+                    yield return ("./.gemini", "Gemini CLI project data");
                     break;
             }
         }

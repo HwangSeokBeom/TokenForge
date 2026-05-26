@@ -41,10 +41,16 @@ namespace TokenForge.Client.Git
             logger?.Info("Git analysis started");
 
             var repositoryCheck = await commandRunner.RunAsync(canonicalRootPath, "rev-parse --is-inside-work-tree", cancellationToken);
-            if (!repositoryCheck.IsSuccess || !repositoryCheck.Output.Trim().Equals("true", StringComparison.OrdinalIgnoreCase))
+            if (!repositoryCheck.IsSuccess)
+            {
+                logger?.Warning("Git analysis failed category=" + repositoryCheck.ErrorCode);
+                return Result<GitChangeSummary>.Failure(repositoryCheck.ErrorCode, repositoryCheck.ErrorMessage);
+            }
+
+            if (!repositoryCheck.Output.Trim().Equals("true", StringComparison.OrdinalIgnoreCase))
             {
                 logger?.Warning("Git analysis failed category=not_repository");
-                return Result<GitChangeSummary>.Failure("not_git_repository", "Selected folder is not a Git repository.");
+                return Result<GitChangeSummary>.Failure("NotAGitRepository", "This folder is not a Git repository.");
             }
 
             var aggregate = new AggregateState
@@ -73,7 +79,7 @@ namespace TokenForge.Client.Git
             {
                 var maxCommits = input.ClampedMaxCommitsToInspect();
                 var windowDays = input.ClampedAnalysisWindowDays();
-                var logArguments = $"log --since={windowDays}.days.ago --numstat --format={CommitBoundary} -n {maxCommits}";
+                var logArguments = $"log --since={windowDays}.days.ago --numstat --format=format:{CommitBoundary} -n {maxCommits}";
                 var logResult = await RunRequiredAsync(canonicalRootPath, logArguments, cancellationToken);
                 if (!logResult.IsSuccess) return Failure(logResult, "log");
                 ParseLogNumstat(logResult.Output, aggregate, maxCommits);
@@ -91,6 +97,27 @@ namespace TokenForge.Client.Git
             return Result<GitChangeSummary>.Success(summary);
         }
 
+        public async Task<GitCommandResult> ValidateRepositoryRootAsync(string repositoryRootPath, CancellationToken cancellationToken = default)
+        {
+            var input = new GitRepositoryAnalysisInput { RepositoryRootPath = repositoryRootPath };
+            var validation = ValidateInput(input, out var canonicalRootPath);
+            if (!validation.IsSuccess)
+            {
+                return GitCommandResult.Failure(validation.ErrorCode, validation.ErrorMessage);
+            }
+
+            var rootResult = await commandRunner.RunAsync(canonicalRootPath, "rev-parse --show-toplevel", cancellationToken);
+            if (rootResult.IsSuccess)
+            {
+                var root = (rootResult.Output ?? string.Empty).Trim();
+                return Directory.Exists(root)
+                    ? GitCommandResult.Success(root + "\n", rootResult.ExitCode)
+                    : GitCommandResult.Success(canonicalRootPath + "\n", rootResult.ExitCode);
+            }
+
+            return rootResult;
+        }
+
         public static CountBucket ToCountBucket(int count)
         {
             if (count <= 0) return CountBucket.None;
@@ -106,7 +133,7 @@ namespace TokenForge.Client.Git
             canonicalRootPath = string.Empty;
             if (input == null || string.IsNullOrWhiteSpace(input.RepositoryRootPath))
             {
-                return Result.Failure("missing_repository_path", "Repository folder is required.");
+                return Result.Failure("RepositoryPathMissing", "Repository path is missing. Reconnect required.");
             }
 
             try
@@ -115,13 +142,13 @@ namespace TokenForge.Client.Git
             }
             catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException)
             {
-                return Result.Failure("invalid_repository_path", "Repository folder is invalid.");
+                return Result.Failure("RepositoryFolderNotFound", "Repository folder was not found. Reconnect required.");
             }
 
             if (!Directory.Exists(canonicalRootPath))
             {
                 canonicalRootPath = string.Empty;
-                return Result.Failure("invalid_repository_path", "Repository folder is invalid.");
+                return Result.Failure("RepositoryFolderNotFound", "Repository folder was not found. Reconnect required.");
             }
 
             return Result.Success();

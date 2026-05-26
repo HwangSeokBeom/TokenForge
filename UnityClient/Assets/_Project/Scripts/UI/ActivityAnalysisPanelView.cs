@@ -152,6 +152,7 @@ namespace TokenForge.Client.UI
                 new Dropdown.OptionData("Claude Code"),
                 new Dropdown.OptionData("Codex"),
                 new Dropdown.OptionData("GitHub Copilot"),
+                new Dropdown.OptionData("Gemini CLI"),
                 new Dropdown.OptionData("Other / Manual Log Folder")
             };
             agentProviderDropdown.value = viewModel != null ? ProviderToDropdownIndex(viewModel.SelectedAgentProviderType) : 0;
@@ -175,7 +176,8 @@ namespace TokenForge.Client.UI
                 case AgentProviderType.ClaudeCode: return 1;
                 case AgentProviderType.Codex: return 2;
                 case AgentProviderType.GitHubCopilot: return 3;
-                case AgentProviderType.Manual: return 4;
+                case AgentProviderType.GeminiCli: return 4;
+                case AgentProviderType.Manual: return 5;
                 default: return 0;
             }
         }
@@ -188,7 +190,8 @@ namespace TokenForge.Client.UI
                 case 1: return AgentProviderType.ClaudeCode;
                 case 2: return AgentProviderType.Codex;
                 case 3: return AgentProviderType.GitHubCopilot;
-                case 4: return AgentProviderType.Manual;
+                case 4: return AgentProviderType.GeminiCli;
+                case 5: return AgentProviderType.Manual;
                 default: return AgentProviderType.Cursor;
             }
         }

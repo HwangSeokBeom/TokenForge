@@ -328,7 +328,7 @@ static NSString *TokenForgeMenuSyncStatus = @"Local only";
 static BOOL TokenForgeMenuCompanionEnabled = NO;
 static BOOL TokenForgeMenuCanAnalyze = NO;
 static BOOL TokenForgeMenuCanSync = NO;
-static NSString *TokenForgeMenuStatusText = @"Cdx 0% · CI 0% · Gem 0%";
+static NSString *TokenForgeMenuStatusText = @"No Agents";
 static TokenForgeNativeDashboardController *TokenForgeDashboardController = nil;
 
 static NSDictionary *TokenForgeParseJsonDictionary(const char *json)
@@ -493,7 +493,7 @@ static NSString *TokenForgeSafeMenuString(const char *value, NSString *fallback)
     return singleLine;
 }
 
-static void TokenForgeAssignMenuString(NSString **target, const char *value, NSString *fallback)
+static void TokenForgeAssignMenuString(NSString *__strong *target, const char *value, NSString *fallback)
 {
     NSString *safe = TokenForgeSafeMenuString(value, fallback);
     *target = [safe copy];
@@ -711,12 +711,12 @@ static NSString *TokenForgeSettingsFrameKey = @"TokenForge.NativeSettings.Frame"
 
 static NSColor *TokenForgeDashboardBackgroundColor(void)
 {
-    return [NSColor colorWithCalibratedRed:0.965 green:0.953 blue:0.925 alpha:1.0];
+    return [NSColor colorWithCalibratedRed:0.070 green:0.082 blue:0.105 alpha:1.0];
 }
 
 static NSColor *TokenForgeSidebarBackgroundColor(void)
 {
-    return [NSColor colorWithCalibratedWhite:1.0 alpha:0.46];
+    return [NSColor colorWithCalibratedRed:0.095 green:0.110 blue:0.140 alpha:0.96];
 }
 
 static NSColor *TokenForgeCardBackgroundColor(void)
@@ -746,7 +746,17 @@ static NSColor *TokenForgeDisabledTextColor(void)
 
 static NSColor *TokenForgeDarkSidebarTextColor(void)
 {
-    return [NSColor labelColor];
+    return [NSColor colorWithCalibratedRed:0.930 green:0.955 blue:0.985 alpha:1.0];
+}
+
+static NSColor *TokenForgeShellSecondaryTextColor(void)
+{
+    return [NSColor colorWithCalibratedRed:0.710 green:0.755 blue:0.820 alpha:1.0];
+}
+
+static NSColor *TokenForgeSidebarMutedTextColor(void)
+{
+    return [NSColor colorWithCalibratedRed:0.650 green:0.700 blue:0.770 alpha:1.0];
 }
 
 static NSColor *TokenForgeSelectedBlueColor(void)
@@ -770,6 +780,12 @@ static NSDictionary *TokenForgeDashboardDictionary(NSDictionary *dictionary, NSS
 {
     id value = dictionary[key];
     return [value isKindOfClass:[NSDictionary class]] ? (NSDictionary *)value : @{};
+}
+
+static NSArray *TokenForgeDashboardArray(NSDictionary *dictionary, NSString *key)
+{
+    id value = dictionary[key];
+    return [value isKindOfClass:[NSArray class]] ? (NSArray *)value : @[];
 }
 
 static NSInteger TokenForgeDashboardInteger(NSDictionary *dictionary, NSString *key, NSInteger fallback)
@@ -802,6 +818,20 @@ static NSDictionary *TokenForgeDefaultDashboardState(void)
         @"syncStatusText": @"Sync optional",
         @"selectedNavItem": @"dashboard",
         @"primaryActionEnabled": @YES,
+        @"hasActiveRepository": @NO,
+        @"isAnalysisRunning": @NO,
+        @"actionStatusKind": @"idle",
+        @"actionStatusText": @"Ready",
+        @"repositoryStatus": @"not_selected",
+        @"repositorySafeError": @"",
+        @"hasPendingReview": @NO,
+        @"canSaveGrowth": @NO,
+        @"canDiscardPendingReview": @NO,
+        @"hasSavedReviews": @NO,
+        @"hasRepositoryActivity": @NO,
+        @"hasAiAgentActivity": @NO,
+        @"persistedCompanionXP": @0,
+        @"pendingEstimatedXP": @0,
         @"pendingReviewCount": @0,
         @"warningCount": @0,
         @"lastRunSummary": @"No saved growth yet. Run Analysis on a repository or AI agent log to generate your first XP.",
@@ -813,12 +843,16 @@ static NSDictionary *TokenForgeDefaultDashboardState(void)
         @"companionVisible": @YES,
         @"wanderEnabled": @YES,
         @"clickReactionEnabled": @YES,
-        @"statusText": @"Cdx 0% · CI 0% · Gem 0%",
+        @"statusText": @"No Agents",
         @"companion": @{@"name": @"Token", @"stage": @"Egg", @"stageIndex": @0, @"level": @1, @"xp": @0, @"xpToNextLevel": @250, @"mood": @"active", @"skin": @"orange_cat"},
-        @"repository": @{@"connected": @NO, @"name": @"", @"status": @"not_selected", @"statusText": @"Not selected"},
+        @"repository": @{@"connected": @NO, @"id": @"", @"name": @"", @"status": @"not_selected", @"statusText": @"Not selected", @"connectedCount": @0, @"hasValidSource": @NO, @"canAnalyze": @NO, @"disabledReason": @"Connect an active repository first.", @"analyzeDisabledReason": @"Connect an active repository first."},
         @"codexAgent": @{@"connected": @NO, @"status": @"not_connected", @"statusText": @"Not connected"},
-        @"activity": @{@"todaySummary": @"No activity yet", @"state": @"No pending review", @"code": @0, @"focus": @0, @"debug": @0, @"design": @0, @"sync": @0},
-        @"review": @{@"pending": @NO, @"summary": @"No pending review", @"source": @"", @"confidence": @"", @"estimatedXpDelta": @0, @"codeDelta": @0, @"focusDelta": @0, @"debugDelta": @0, @"designDelta": @0, @"syncDelta": @0, @"warnings": @""}
+        @"agents": @{@"connectedCount": @0, @"lastProvider": @"None", @"warningCount": @0, @"statusText": @"No agents connected", @"privacyText": @"Local aggregate only"},
+        @"providerUsagePercentages": @[],
+        @"repositories": @[],
+        @"agentProviders": @[],
+        @"activity": @{@"todaySummary": @"No activity yet", @"state": @"No pending review", @"code": @0, @"focus": @0, @"debug": @0, @"design": @0, @"sync": @0, @"recentRunsSummary": @"No recent runs", @"savedReviewsSummary": @"No saved reviews", @"repositoryActivitySummary": @"No repository activity", @"agentActivitySummary": @"No AI agent activity", @"runningJobs": @[], @"pendingReviews": @[], @"recentRuns": @[], @"hasRecentRuns": @NO, @"hasSavedReviews": @NO, @"hasRepositoryActivity": @NO, @"hasAiAgentActivity": @NO},
+        @"review": @{@"reviewId": @"", @"pending": @NO, @"summary": @"No pending review", @"source": @"", @"repositoryName": @"", @"providerName": @"", @"confidence": @"", @"estimatedXpDelta": @0, @"codeDelta": @0, @"focusDelta": @0, @"debugDelta": @0, @"designDelta": @0, @"syncDelta": @0, @"warnings": @"", @"canSaveGrowth": @NO, @"canDiscard": @NO, @"canViewDetails": @NO, @"detailVisible": @NO, @"selectedReviewId": @"", @"generatedAt": @"", @"status": @"none", @"privacyNote": @"Raw prompt, code, file content, and command logs are not stored."}
     };
 }
 
@@ -876,6 +910,16 @@ static NSTextField *TokenForgeLightCardCaptionLabel(NSString *text, NSInteger li
 static NSTextField *TokenForgeDarkSidebarLabel(NSString *text, CGFloat size, NSFontWeight weight, NSInteger lines)
 {
     return TokenForgeDashboardLabel(text, size, weight, TokenForgeDarkSidebarTextColor(), lines);
+}
+
+static NSTextField *TokenForgeShellHeaderLabel(NSString *text, CGFloat size, NSFontWeight weight, NSInteger lines)
+{
+    return TokenForgeDashboardLabel(text, size, weight, [NSColor colorWithCalibratedRed:0.965 green:0.980 blue:1.0 alpha:1.0], lines);
+}
+
+static NSTextField *TokenForgeShellBodyLabel(NSString *text, NSInteger lines)
+{
+    return TokenForgeDashboardLabel(text, 13.0, NSFontWeightRegular, TokenForgeShellSecondaryTextColor(), lines);
 }
 
 static NSButton *TokenForgeDashboardButton(NSString *title, id target, SEL action)
@@ -942,7 +986,7 @@ static NSView *TokenForgeDashboardCard(void)
     view.translatesAutoresizingMaskIntoConstraints = NO;
     view.wantsLayer = YES;
     view.layer.backgroundColor = TokenForgeCardBackgroundColor().CGColor;
-    view.layer.cornerRadius = 10.0;
+    view.layer.cornerRadius = 8.0;
     view.layer.borderColor = [NSColor colorWithCalibratedWhite:0.0 alpha:0.08].CGColor;
     view.layer.borderWidth = 1.0;
     return view;
@@ -1054,24 +1098,23 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     NSDictionary *companion = TokenForgeDashboardDictionary(state.count > 0 ? state : self.state, @"companion");
     NSDictionary *repository = TokenForgeDashboardDictionary(state.count > 0 ? state : self.state, @"repository");
     NSDictionary *agent = TokenForgeDashboardDictionary(state.count > 0 ? state : self.state, @"codexAgent");
+    NSDictionary *agents = TokenForgeDashboardDictionary(state.count > 0 ? state : self.state, @"agents");
     TokenForgeMenuCompanionName = [TokenForgeDashboardString(companion, @"name", @"Token") copy];
     TokenForgeMenuStage = [TokenForgeDashboardString(companion, @"stage", @"Egg") copy];
     TokenForgeMenuStageIndex = MAX(0, MIN(4, TokenForgeDashboardInteger(companion, @"stageIndex", 0)));
     TokenForgeMenuLevel = MAX(1, TokenForgeDashboardInteger(companion, @"level", 1));
     TokenForgeMenuRepositoryAlias = [TokenForgeDashboardString(repository, @"name", TokenForgeDashboardBool(repository, @"connected", NO) ? @"Local Repository" : @"Not selected") copy];
-    TokenForgeMenuAgentStatus = [TokenForgeDashboardString(agent, @"statusText", @"Not connected") copy];
+    TokenForgeMenuAgentStatus = [TokenForgeDashboardString(agents, @"statusText", TokenForgeDashboardString(agent, @"statusText", @"Not connected")) copy];
     TokenForgeMenuSyncStatus = [TokenForgeDashboardString(state.count > 0 ? state : self.state, @"syncStatusText", @"Sync optional") copy];
     TokenForgeMenuCompanionEnabled = TokenForgeDashboardBool(state.count > 0 ? state : self.state, @"companionVisible", TokenForgeMenuCompanionEnabled);
     TokenForgeMenuClickThrough = !TokenForgeDashboardBool(state.count > 0 ? state : self.state, @"clickReactionEnabled", !TokenForgeMenuClickThrough);
-    TokenForgeMenuCanAnalyze = YES;
+    TokenForgeMenuCanAnalyze = TokenForgeDashboardBool(state.count > 0 ? state : self.state, @"primaryActionEnabled", YES) &&
+        !TokenForgeDashboardBool(state.count > 0 ? state : self.state, @"isAnalysisRunning", NO);
 
     NSString *statusText = TokenForgeDashboardString(state, @"statusText", nil);
     if (statusText.length == 0) {
         NSDictionary *activity = TokenForgeDashboardDictionary(state.count > 0 ? state : self.state, @"activity");
-        statusText = [NSString stringWithFormat:@"Cdx %ld%% · CI %ld%% · Gem %ld%%",
-                      (long)TokenForgeDashboardInteger(activity, @"code", 0),
-                      (long)TokenForgeDashboardInteger(activity, @"focus", 0),
-                      (long)TokenForgeDashboardInteger(activity, @"design", 0)];
+        statusText = @"No Agents";
     }
 
     TokenForgeMenuStatusText = [statusText copy];
@@ -1095,7 +1138,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
                                                          backing:NSBackingStoreBuffered
                                                            defer:NO];
     self.dashboardWindow.title = @"TokenForge";
-    self.dashboardWindow.minSize = NSMakeSize(1000, 640);
+    self.dashboardWindow.minSize = NSMakeSize(920, 620);
     self.dashboardWindow.delegate = self;
     self.dashboardWindow.releasedWhenClosed = NO;
     if (savedFrame.length == 0) {
@@ -1175,13 +1218,13 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     sidebar.state = NSVisualEffectStateActive;
     sidebar.wantsLayer = YES;
     sidebar.layer.backgroundColor = TokenForgeSidebarBackgroundColor().CGColor;
-    [sidebar.widthAnchor constraintEqualToConstant:260.0].active = YES;
+    [sidebar.widthAnchor constraintEqualToConstant:236.0].active = YES;
     [split addArrangedSubview:sidebar];
 
     NSStackView *sidebarStack = TokenForgeDashboardVerticalStack(10.0);
     sidebarStack.alignment = NSLayoutAttributeWidth;
     [sidebar addSubview:sidebarStack];
-    TokenForgePinSubview(sidebarStack, sidebar, 24, 18, 18, 18);
+    TokenForgePinSubview(sidebarStack, sidebar, 22, 12, 16, 12);
     [self populateSidebar:sidebarStack];
 
     NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSZeroRect];
@@ -1211,11 +1254,11 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
 {
     NSDictionary *companion = TokenForgeDashboardDictionary(self.state, @"companion");
     NSString *name = TokenForgeDashboardString(companion, @"name", @"Token");
-    NSString *connection = TokenForgeDashboardString(self.state, @"connection", @"local");
     NSString *syncText = TokenForgeDashboardString(self.state, @"syncStatusText", @"Sync optional");
 
     NSView *thumbCard = TokenForgeDashboardCard();
-    [thumbCard.heightAnchor constraintGreaterThanOrEqualToConstant:112.0].active = YES;
+    NSDictionary *repository = TokenForgeDashboardDictionary(self.state, @"repository");
+    [thumbCard.heightAnchor constraintGreaterThanOrEqualToConstant:132.0].active = YES;
     NSStackView *thumbStack = TokenForgeDashboardHorizontalStack(10.0);
     thumbStack.distribution = NSStackViewDistributionFill;
     [thumbCard addSubview:thumbStack];
@@ -1228,17 +1271,21 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     [thumbStack addArrangedSubview:icon];
     NSStackView *labels = TokenForgeDashboardVerticalStack(2.0);
     labels.alignment = NSLayoutAttributeLeading;
-    [labels addArrangedSubview:TokenForgeDarkSidebarLabel(name, 15.0, NSFontWeightSemibold, 1)];
-    [labels addArrangedSubview:TokenForgeDashboardLabel([NSString stringWithFormat:@"● %@ connected", connection.capitalizedString], 11.0, NSFontWeightRegular, [NSColor systemGreenColor], 1)];
+    [labels addArrangedSubview:TokenForgeDashboardLabel(name, 15.0, NSFontWeightSemibold, TokenForgeLightCardPrimaryTextColor(), 1)];
+    [labels addArrangedSubview:TokenForgeDashboardLabel([NSString stringWithFormat:@"● %@", syncText], 11.0, NSFontWeightRegular, [NSColor systemGreenColor], 1)];
     [labels addArrangedSubview:TokenForgeDashboardLabel([NSString stringWithFormat:@"%@ · Lv %ld", TokenForgeDashboardString(companion, @"stage", @"Egg"), (long)TokenForgeDashboardInteger(companion, @"level", 1)], 11.0, NSFontWeightRegular, TokenForgeMutedTextColor(), 1)];
-    [labels addArrangedSubview:TokenForgeDashboardLabel([NSString stringWithFormat:@"%@ XP", TokenForgeDashboardString(companion, @"xp", @"0")], 11.0, NSFontWeightRegular, TokenForgeMutedTextColor(), 1)];
+    [labels addArrangedSubview:TokenForgeDashboardLabel([NSString stringWithFormat:@"%ld XP", (long)TokenForgeDashboardInteger(self.state, @"persistedCompanionXP", TokenForgeDashboardInteger(companion, @"xp", 0))], 11.0, NSFontWeightRegular, TokenForgeMutedTextColor(), 1)];
+    NSString *repositoryLabel = TokenForgeDashboardBool(repository, @"connected", NO)
+        ? TokenForgeDashboardString(repository, @"name", @"Local Repository")
+        : @"No repository connected";
+    [labels addArrangedSubview:TokenForgeDashboardLabel(repositoryLabel, 11.0, NSFontWeightMedium, TokenForgeMutedTextColor(), 2)];
     [thumbStack addArrangedSubview:labels];
     [stack addArrangedSubview:thumbCard];
 
     NSArray<NSArray<NSString *> *> *items = @[
         @[@"Dashboard", @"dashboard", @"dashboard:"],
-        @[@"Repository", @"repository", @"repository:"],
-        @[@"Codex Agent", @"codexAgent", @"codexAgent:"],
+        @[@"Repositories", @"repository", @"repository:"],
+        @[@"AI Agents", @"aiAgents", @"codexAgent:"],
         @[@"Activity", @"activity", @"activity:"],
         @[@"Settings", @"settings", @"settings:"],
         @[@"Homepage", @"homepage", @"homepage:"],
@@ -1252,7 +1299,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     }
 
     [stack addArrangedSubview:[NSView new]];
-    NSTextField *footer = TokenForgeDashboardLabel([NSString stringWithFormat:@"v0.18 · AppKit shell\n%@ · Local-first", syncText], 11.0, NSFontWeightRegular, TokenForgeMutedTextColor(), 2);
+    NSTextField *footer = TokenForgeDashboardLabel([NSString stringWithFormat:@"v0.18 · AppKit native\n%@ · Local-first · Private", syncText], 11.0, NSFontWeightRegular, TokenForgeSidebarMutedTextColor(), 2);
     [stack addArrangedSubview:footer];
 }
 
@@ -1261,6 +1308,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     NSDictionary *companion = TokenForgeDashboardDictionary(self.state, @"companion");
     NSDictionary *repository = TokenForgeDashboardDictionary(self.state, @"repository");
     NSDictionary *agent = TokenForgeDashboardDictionary(self.state, @"codexAgent");
+    NSDictionary *agents = TokenForgeDashboardDictionary(self.state, @"agents");
     NSDictionary *activity = TokenForgeDashboardDictionary(self.state, @"activity");
     NSDictionary *review = TokenForgeDashboardDictionary(self.state, @"review");
 
@@ -1271,23 +1319,58 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     NSStackView *header = TokenForgeDashboardHorizontalStack(16.0);
     header.distribution = NSStackViewDistributionFill;
     NSStackView *headerCopy = TokenForgeDashboardVerticalStack(4.0);
-    [headerCopy addArrangedSubview:TokenForgeDashboardLabel([NSString stringWithFormat:@"%@ Dashboard", title], 26.0, NSFontWeightBold, TokenForgeLightCardPrimaryTextColor(), 1)];
-    [headerCopy addArrangedSubview:TokenForgeLightCardBodyLabel(subtitle, 2)];
+    [headerCopy addArrangedSubview:TokenForgeShellHeaderLabel([NSString stringWithFormat:@"%@ Dashboard", title], 27.0, NSFontWeightBold, 1)];
+    [headerCopy addArrangedSubview:TokenForgeShellBodyLabel(subtitle, 2)];
+    [headerCopy addArrangedSubview:TokenForgeShellBodyLabel(TokenForgeDashboardString(self.state, @"actionStatusText", @"Ready"), 2)];
     [header addArrangedSubview:headerCopy];
-    NSStackView *headerActions = TokenForgeDashboardHorizontalStack(10.0);
-    headerActions.distribution = NSStackViewDistributionFill;
-    [headerActions addArrangedSubview:[self pillLabel:[NSString stringWithFormat:@"Active · Local · %@", syncText]]];
-    [headerActions addArrangedSubview:TokenForgePrimaryButton(@"Run Analysis", self, @selector(runAnalysis:))];
-    [headerActions addArrangedSubview:TokenForgeSecondaryButton(@"Connect Repository", self, @selector(connectRepository:))];
+    NSStackView *headerActions = TokenForgeDashboardVerticalStack(8.0);
+    headerActions.alignment = NSLayoutAttributeTrailing;
+    NSStackView *primaryActions = TokenForgeDashboardHorizontalStack(10.0);
+    NSDictionary *repositoryState = TokenForgeDashboardDictionary(self.state, @"repository");
+    NSString *repositoryBadge = TokenForgeDashboardBool(repositoryState, @"connected", NO) ? @"Active repository" : @"No repository";
+    [headerActions addArrangedSubview:[self pillLabel:[NSString stringWithFormat:@"%@ · Local · %@", repositoryBadge, syncText]]];
+    if (TokenForgeDashboardBool(self.state, @"isAnalysisRunning", NO)) {
+        NSProgressIndicator *spinner = [[NSProgressIndicator alloc] initWithFrame:NSZeroRect];
+        spinner.translatesAutoresizingMaskIntoConstraints = NO;
+        spinner.style = NSProgressIndicatorStyleSpinning;
+        spinner.controlSize = NSControlSizeSmall;
+        [spinner startAnimation:nil];
+        [headerActions addArrangedSubview:spinner];
+    }
+    NSButton *primaryRun = TokenForgePrimaryButton(@"Run Analysis", self, @selector(runAnalysis:));
+    primaryRun.enabled = TokenForgeDashboardBool(self.state, @"primaryActionEnabled", NO);
+    NSDictionary *agentsState = TokenForgeDashboardDictionary(self.state, @"agents");
+    primaryRun.toolTip = primaryRun.enabled
+        ? (TokenForgeDashboardBool(repositoryState, @"canAnalyze", NO) ? @"Run analysis for the active repository." : @"Run analysis for a ready AI provider.")
+        : (TokenForgeDashboardInteger(agentsState, @"connectedCount", 0) > 0 ? @"Analysis is already running." : TokenForgeDashboardString(repositoryState, @"analyzeDisabledReason", @"Connect an active repository first."));
+    [primaryActions addArrangedSubview:primaryRun];
+    [primaryActions addArrangedSubview:TokenForgeSecondaryButton(@"Connect Repository", self, @selector(connectRepository:))];
+    [primaryActions addArrangedSubview:TokenForgeSecondaryButton(@"Connect AI Agent", self, @selector(connectCodexAgent:))];
+    [headerActions addArrangedSubview:primaryActions];
     [header addArrangedSubview:headerActions];
     [content addArrangedSubview:header];
+
+    if ([self.selectedNavItem isEqualToString:@"repository"]) {
+        [content addArrangedSubview:[self repositoryScreen]];
+        return;
+    }
+
+    if ([self.selectedNavItem isEqualToString:@"codexAgent"] || [self.selectedNavItem isEqualToString:@"aiAgents"]) {
+        [content addArrangedSubview:[self agentsScreen]];
+        return;
+    }
+
+    if ([self.selectedNavItem isEqualToString:@"activity"]) {
+        [content addArrangedSubview:[self activityScreenWithActivity:activity review:review]];
+        return;
+    }
 
     [content addArrangedSubview:[self heroCardWithCompanion:companion activity:activity]];
 
     NSStackView *actionRow = TokenForgeDashboardHorizontalStack(14.0);
     actionRow.distribution = NSStackViewDistributionFillEqually;
-    [actionRow addArrangedSubview:[self actionCardWithTitle:@"Repository" state:TokenForgeDashboardString(repository, @"statusText", TokenForgeDashboardBool(repository, @"connected", NO) ? @"Connected" : @"Not selected") detail:TokenForgeDashboardBool(repository, @"connected", NO) ? TokenForgeDashboardString(repository, @"name", @"Local Repository") : @"Choose a local repository. TokenForge stores only aggregate growth signals." buttonTitle:TokenForgeDashboardBool(repository, @"connected", NO) ? @"Change Repository" : @"Add Repository" action:@selector(connectRepository:) accent:[NSColor systemBlueColor]]];
-    [actionRow addArrangedSubview:[self actionCardWithTitle:@"Codex Agent" state:TokenForgeDashboardString(agent, @"statusText", TokenForgeDashboardBool(agent, @"connected", NO) ? @"Connected" : @"Not connected") detail:@"Detect local Codex activity or select an approved agent log folder." buttonTitle:@"Connect Codex Agent" action:@selector(connectCodexAgent:) accent:[NSColor systemPurpleColor]]];
+    [actionRow addArrangedSubview:[self actionCardWithTitle:@"Repositories" state:TokenForgeDashboardString(repository, @"statusText", TokenForgeDashboardBool(repository, @"connected", NO) ? @"Connected" : @"Not selected") detail:TokenForgeDashboardBool(repository, @"connected", NO) ? [NSString stringWithFormat:@"%ld connected · %@", (long)TokenForgeDashboardInteger(repository, @"connectedCount", 1), TokenForgeDashboardString(repository, @"name", @"Local Repository")] : @"Choose a local repository. One companion is created for each connected repository." buttonTitle:TokenForgeDashboardBool(repository, @"connected", NO) ? @"Manage Repositories" : @"Add Repository" action:@selector(repository:) accent:[NSColor systemBlueColor]]];
+    [actionRow addArrangedSubview:[self actionCardWithTitle:@"AI Agents" state:TokenForgeDashboardString(agents, @"statusText", TokenForgeDashboardString(agent, @"statusText", @"No agents connected")) detail:[NSString stringWithFormat:@"Last: %@ · Warnings: %ld · %@", TokenForgeDashboardString(agents, @"lastProvider", @"None"), (long)TokenForgeDashboardInteger(agents, @"warningCount", 0), TokenForgeDashboardString(agents, @"privacyText", @"Local aggregate only")] buttonTitle:@"Manage Agents" action:@selector(codexAgent:) accent:[NSColor systemPurpleColor]]];
     [actionRow addArrangedSubview:[self reviewCardWithActivity:activity review:review]];
     [content addArrangedSubview:actionRow];
 
@@ -1297,8 +1380,10 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
 
 - (NSView *)heroCardWithCompanion:(NSDictionary *)companion activity:(NSDictionary *)activity
 {
+    NSDictionary *repository = TokenForgeDashboardDictionary(self.state, @"repository");
+    NSDictionary *review = TokenForgeDashboardDictionary(self.state, @"review");
     NSView *card = TokenForgeDashboardCard();
-    [card.heightAnchor constraintGreaterThanOrEqualToConstant:220.0].active = YES;
+    [card.heightAnchor constraintGreaterThanOrEqualToConstant:236.0].active = YES;
     NSStackView *row = TokenForgeDashboardHorizontalStack(22.0);
     row.distribution = NSStackViewDistributionFill;
     [card addSubview:row];
@@ -1308,8 +1393,8 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     copy.alignment = NSLayoutAttributeLeading;
     NSString *xp = TokenForgeDashboardString(companion, @"xp", @"0");
     NSInteger xpNext = MAX(1, TokenForgeDashboardInteger(companion, @"xpToNextLevel", 250));
-    [copy addArrangedSubview:TokenForgeDashboardLabel([NSString stringWithFormat:@"%@ is ready to grow", TokenForgeDashboardString(companion, @"name", @"Token")], 23.0, NSFontWeightBold, TokenForgeLightCardPrimaryTextColor(), 2)];
-    [copy addArrangedSubview:TokenForgeDashboardLabel([NSString stringWithFormat:@"%@ stage · Level %ld · %@/%ld XP", TokenForgeDashboardString(companion, @"stage", @"Egg"), (long)TokenForgeDashboardInteger(companion, @"level", 1), xp, (long)xpNext], 13.0, NSFontWeightMedium, TokenForgeLightCardSecondaryTextColor(), 2)];
+    [copy addArrangedSubview:TokenForgeDashboardLabel([NSString stringWithFormat:@"%@ is growing with %@", TokenForgeDashboardString(companion, @"name", @"Token"), TokenForgeDashboardString(repository, @"name", @"No repository")], 23.0, NSFontWeightBold, TokenForgeLightCardPrimaryTextColor(), 2)];
+    [copy addArrangedSubview:TokenForgeDashboardLabel([NSString stringWithFormat:@"%@ stage · Level %ld · %@/%ld XP · %ld XP to next growth", TokenForgeDashboardString(companion, @"stage", @"Egg"), (long)TokenForgeDashboardInteger(companion, @"level", 1), xp, (long)xpNext, (long)MAX(0, xpNext - TokenForgeDashboardInteger(companion, @"xp", 0))], 13.0, NSFontWeightMedium, TokenForgeLightCardSecondaryTextColor(), 2)];
     NSProgressIndicator *progress = [[NSProgressIndicator alloc] initWithFrame:NSZeroRect];
     progress.translatesAutoresizingMaskIntoConstraints = NO;
     progress.indeterminate = NO;
@@ -1319,8 +1404,15 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     [progress.heightAnchor constraintEqualToConstant:8.0].active = YES;
     [copy addArrangedSubview:progress];
     [progress.widthAnchor constraintGreaterThanOrEqualToConstant:360.0].active = YES;
-    [copy addArrangedSubview:TokenForgeLightCardBodyLabel(@"Start with a repository or Codex log. TokenForge reviews aggregate activity, then turns approved work into companion growth.", 3)];
-    [copy addArrangedSubview:TokenForgePrimaryButton(@"Run Analysis", self, @selector(runAnalysis:))];
+    NSString *reviewState = TokenForgeDashboardBool(review, @"pending", NO)
+        ? [NSString stringWithFormat:@"Recent analysis: pending review · +%ld XP estimated", (long)TokenForgeDashboardInteger(review, @"estimatedXpDelta", 0)]
+        : [NSString stringWithFormat:@"Recent analysis: %@", TokenForgeDashboardString(activity, @"state", @"No pending review")];
+    [copy addArrangedSubview:TokenForgeLightCardBodyLabel(reviewState, 2)];
+    [copy addArrangedSubview:TokenForgeLightCardBodyLabel(@"Dashboard preview uses the active repository companion. The desktop overlay follows the same companion state with a separate window layout.", 3)];
+    NSStackView *buttons = TokenForgeDashboardHorizontalStack(8.0);
+    [buttons addArrangedSubview:TokenForgePrimaryButton(@"Run Analysis", self, @selector(runAnalysis:))];
+    [buttons addArrangedSubview:TokenForgeSecondaryButton(@"Review Activity", self, @selector(reviewActivity:))];
+    [copy addArrangedSubview:buttons];
     [row addArrangedSubview:copy];
 
     TokenForgeCompanionView *preview = [[TokenForgeCompanionView alloc] initWithFrame:NSMakeRect(0, 0, 130, 130)];
@@ -1328,8 +1420,8 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     preview.stage = MAX(0, MIN(4, TokenForgeDashboardInteger(companion, @"stageIndex", 0)));
     preview.archetype = 0;
     preview.animationState = 1;
-    [preview.widthAnchor constraintEqualToConstant:172.0].active = YES;
-    [preview.heightAnchor constraintEqualToConstant:172.0].active = YES;
+    [preview.widthAnchor constraintEqualToConstant:156.0].active = YES;
+    [preview.heightAnchor constraintEqualToConstant:156.0].active = YES;
     [row addArrangedSubview:preview];
     return card;
 }
@@ -1341,11 +1433,15 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     button.bordered = NO;
     button.wantsLayer = YES;
     button.layer.cornerRadius = 8.0;
-    button.layer.backgroundColor = selected ? [NSColor colorWithCalibratedRed:0.18 green:0.37 blue:0.84 alpha:0.14].CGColor : [NSColor clearColor].CGColor;
+    button.layer.backgroundColor = selected ? [NSColor colorWithCalibratedRed:0.23 green:0.45 blue:0.92 alpha:0.28].CGColor : [NSColor clearColor].CGColor;
     button.alignment = NSTextAlignmentLeft;
     if (@available(macOS 10.14, *)) {
-        button.contentTintColor = selected ? TokenForgeSelectedBlueColor() : [NSColor labelColor];
+        button.contentTintColor = selected ? [NSColor whiteColor] : TokenForgeShellSecondaryTextColor();
     }
+    button.attributedTitle = [[NSAttributedString alloc] initWithString:title ?: @"" attributes:@{
+        NSFontAttributeName: [NSFont systemFontOfSize:13.0 weight:selected ? NSFontWeightSemibold : NSFontWeightMedium],
+        NSForegroundColorAttributeName: selected ? [NSColor whiteColor] : TokenForgeDarkSidebarTextColor()
+    }];
     [button.heightAnchor constraintEqualToConstant:34.0].active = YES;
     return button;
 }
@@ -1371,13 +1467,16 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     [stack addArrangedSubview:TokenForgeDashboardLabel(title, 13.0, NSFontWeightSemibold, accent ?: [NSColor systemBlueColor], 1)];
     [stack addArrangedSubview:TokenForgeDashboardLabel(state ?: @"Not connected", 19.0, NSFontWeightBold, TokenForgeLightCardPrimaryTextColor(), 2)];
     [stack addArrangedSubview:TokenForgeLightCardCaptionLabel(detail ?: @"", 4)];
+    NSView *spacer = [NSView new];
+    [spacer.heightAnchor constraintGreaterThanOrEqualToConstant:4.0].active = YES;
+    [stack addArrangedSubview:spacer];
     [stack addArrangedSubview:TokenForgeSecondaryButton(buttonTitle, self, action)];
     return card;
 }
 
 - (NSView *)reviewCardWithActivity:(NSDictionary *)activity review:(NSDictionary *)review
 {
-    BOOL pending = TokenForgeDashboardBool(review, @"pending", NO) || TokenForgeDashboardInteger(self.state, @"pendingReviewCount", 0) > 0;
+    BOOL pending = TokenForgeDashboardBool(review, @"pending", NO);
     NSStackView *stack = nil;
     NSView *card = TokenForgeCardWithStack(&stack, 16.0, 8.0);
     [card.heightAnchor constraintGreaterThanOrEqualToConstant:168.0].active = YES;
@@ -1388,13 +1487,231 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
         : TokenForgeDashboardString(activity, @"todaySummary", @"No activity yet");
     [stack addArrangedSubview:TokenForgeLightCardCaptionLabel(summary, 4)];
     NSStackView *buttons = TokenForgeDashboardHorizontalStack(8.0);
-    if (pending) {
+    if (pending && TokenForgeDashboardBool(review, @"canSaveGrowth", NO)) {
         [buttons addArrangedSubview:TokenForgePrimaryButton(@"Approve", self, @selector(approveReview:))];
+    }
+    if (pending && TokenForgeDashboardBool(review, @"canDiscard", NO)) {
         [buttons addArrangedSubview:TokenForgeSecondaryButton(@"Discard", self, @selector(discardReview:))];
-    } else {
+    }
+    if (!pending) {
         [buttons addArrangedSubview:TokenForgeSecondaryButton(@"Run Analysis", self, @selector(runAnalysis:))];
     }
     [stack addArrangedSubview:buttons];
+    return card;
+}
+
+- (NSView *)repositoryScreen
+{
+    NSStackView *stack = nil;
+    NSView *card = TokenForgeCardWithStack(&stack, 18.0, 12.0);
+    [stack addArrangedSubview:TokenForgeLightCardTitleLabel(@"Repositories")];
+    [stack addArrangedSubview:TokenForgeLightCardBodyLabel(@"Each connected Git repository owns exactly one companion. Disconnect archives the companion; permanent deletion requires a separate confirmation flow.", 3)];
+    NSArray *repositories = TokenForgeDashboardArray(self.state, @"repositories");
+    if (repositories.count == 0) {
+        [stack addArrangedSubview:TokenForgeLightCardCaptionLabel(@"Not connected. Add a Git repository to create the first repository companion.", 2)];
+        [stack addArrangedSubview:TokenForgePrimaryButton(@"Add Repository", self, @selector(connectRepository:))];
+        return card;
+    }
+
+    for (NSDictionary *repository in repositories) {
+        if (![repository isKindOfClass:[NSDictionary class]]) {
+            continue;
+        }
+        [stack addArrangedSubview:[self repositoryListRow:repository]];
+    }
+
+    [stack addArrangedSubview:TokenForgeSecondaryButton(@"Add Repository", self, @selector(connectRepository:))];
+    return card;
+}
+
+- (NSView *)repositoryListRow:(NSDictionary *)repository
+{
+    NSStackView *rowStack = nil;
+    NSView *row = TokenForgeCardWithStack(&rowStack, 14.0, 8.0);
+    row.layer.backgroundColor = [NSColor colorWithCalibratedWhite:1.0 alpha:0.74].CGColor;
+    [row.heightAnchor constraintGreaterThanOrEqualToConstant:132.0].active = YES;
+    NSString *name = TokenForgeDashboardString(repository, @"name", @"Local Repository");
+    NSString *identifier = TokenForgeDashboardString(repository, @"id", @"");
+    [rowStack addArrangedSubview:TokenForgeDashboardLabel(name, 16.0, NSFontWeightBold, TokenForgeLightCardPrimaryTextColor(), 1)];
+    [rowStack addArrangedSubview:TokenForgeLightCardCaptionLabel(TokenForgeDashboardString(repository, @"safePath", @"Approved local folder"), 1)];
+    [rowStack addArrangedSubview:TokenForgeLightCardCaptionLabel([NSString stringWithFormat:@"%@ · %@ · %@%@", TokenForgeDashboardString(repository, @"companion", @"Egg · Lv 1"), TokenForgeDashboardString(repository, @"lastAnalyzed", @"Not analyzed"), TokenForgeDashboardString(repository, @"statusText", @"Connected"), TokenForgeDashboardBool(repository, @"archived", NO) ? @" · Archived" : @""], 2)];
+    NSStackView *buttons = TokenForgeDashboardHorizontalStack(8.0);
+    if (TokenForgeDashboardBool(repository, @"archived", NO)) {
+        [buttons addArrangedSubview:TokenForgeDisabledButton(@"Archived")];
+        [buttons addArrangedSubview:TokenForgeDisabledButton(@"Restore")];
+        [buttons addArrangedSubview:TokenForgeDisabledButton(@"Delete")];
+        [rowStack addArrangedSubview:buttons];
+        return row;
+    }
+    NSButton *select = TokenForgeSecondaryButton(TokenForgeDashboardBool(repository, @"selected", NO) ? @"Active" : @"Set Active", self, @selector(selectRepositoryAction:));
+    select.toolTip = identifier;
+    select.enabled = !TokenForgeDashboardBool(repository, @"selected", NO) && !TokenForgeDashboardBool(repository, @"archived", NO);
+    [buttons addArrangedSubview:select];
+    NSButton *analyze = TokenForgePrimaryButton(@"Run Analysis", self, @selector(analyzeRepositoryAction:));
+    analyze.toolTip = identifier;
+    analyze.enabled = TokenForgeDashboardBool(repository, @"canAnalyze", NO);
+    if (!analyze.enabled) {
+        analyze.toolTip = TokenForgeDashboardString(repository, @"analyzeDisabledReason", @"Connect an active repository first.");
+    }
+    [buttons addArrangedSubview:analyze];
+    NSButton *disconnect = TokenForgeSecondaryButton(@"Archive", self, @selector(disconnectRepositoryAction:));
+    disconnect.toolTip = identifier;
+    disconnect.enabled = TokenForgeDashboardBool(repository, @"canDisconnect", YES);
+    [buttons addArrangedSubview:disconnect];
+    [rowStack addArrangedSubview:buttons];
+    return row;
+}
+
+- (NSView *)agentsScreen
+{
+    NSStackView *stack = nil;
+    NSView *card = TokenForgeCardWithStack(&stack, 18.0, 12.0);
+    [stack addArrangedSubview:TokenForgeLightCardTitleLabel(@"AI Agents")];
+    [stack addArrangedSubview:TokenForgeLightCardBodyLabel(@"Provider connections can be auto-detected or selected manually. Analysis is saved only as local aggregate buckets for the active repository.", 3)];
+    NSArray *providers = TokenForgeDashboardArray(self.state, @"agentProviders");
+    for (NSDictionary *provider in providers) {
+        if (![provider isKindOfClass:[NSDictionary class]]) {
+            continue;
+        }
+        [stack addArrangedSubview:[self agentProviderRow:provider]];
+    }
+
+    if (providers.count == 0) {
+        [stack addArrangedSubview:TokenForgeLightCardCaptionLabel(@"No provider definitions are available in this runtime.", 2)];
+    }
+
+    return card;
+}
+
+- (NSView *)agentProviderRow:(NSDictionary *)provider
+{
+    NSStackView *stack = nil;
+    NSView *row = TokenForgeCardWithStack(&stack, 14.0, 8.0);
+    row.layer.backgroundColor = [NSColor colorWithCalibratedWhite:1.0 alpha:0.74].CGColor;
+    [row.heightAnchor constraintGreaterThanOrEqualToConstant:142.0].active = YES;
+    NSString *providerId = TokenForgeDashboardString(provider, @"id", @"");
+    [stack addArrangedSubview:TokenForgeDashboardLabel(TokenForgeDashboardString(provider, @"displayName", @"AI Agent"), 16.0, NSFontWeightBold, TokenForgeLightCardPrimaryTextColor(), 1)];
+    [stack addArrangedSubview:TokenForgeDashboardLabel(TokenForgeDashboardString(provider, @"supportedStatus", @"manual_folder_required"), 12.0, NSFontWeightMedium, [NSColor systemPurpleColor], 1)];
+    [stack addArrangedSubview:TokenForgeLightCardCaptionLabel([NSString stringWithFormat:@"%@ · %@ · warnings %ld", TokenForgeDashboardString(provider, @"statusText", @"Not connected"), TokenForgeDashboardString(provider, @"safeCandidateSummary", @"No local source selected"), (long)TokenForgeDashboardInteger(provider, @"warningCount", 0)], 2)];
+    [stack addArrangedSubview:TokenForgeLightCardCaptionLabel(@"Local aggregate only. Raw prompts, code, file content, and commands are not stored in progress data.", 2)];
+    NSStackView *buttons = TokenForgeDashboardHorizontalStack(8.0);
+    NSButton *connect = TokenForgeSecondaryButton(@"Connect", self, @selector(connectAgentAction:));
+    connect.toolTip = providerId;
+    connect.enabled = TokenForgeDashboardBool(provider, @"canConnect", !TokenForgeDashboardBool(provider, @"connected", NO));
+    [buttons addArrangedSubview:connect];
+    NSButton *detect = TokenForgeSecondaryButton(@"Auto Detect", self, @selector(autoDetectAgentAction:));
+    detect.toolTip = providerId;
+    detect.enabled = TokenForgeDashboardBool(provider, @"canAutoDetect", YES);
+    [buttons addArrangedSubview:detect];
+    NSButton *folder = TokenForgeSecondaryButton(@"Choose Folder", self, @selector(chooseAgentFolderAction:));
+    folder.toolTip = providerId;
+    folder.enabled = TokenForgeDashboardBool(provider, @"canChooseFolder", YES);
+    [buttons addArrangedSubview:folder];
+    NSButton *analyze = TokenForgePrimaryButton(@"Analyze", self, @selector(analyzeAgentAction:));
+    analyze.toolTip = providerId;
+    analyze.enabled = TokenForgeDashboardBool(provider, @"canAnalyze", NO);
+    [buttons addArrangedSubview:analyze];
+    NSButton *disconnect = TokenForgeSecondaryButton(@"Disconnect", self, @selector(disconnectAgentAction:));
+    disconnect.toolTip = providerId;
+    disconnect.enabled = TokenForgeDashboardBool(provider, @"canDisconnect", TokenForgeDashboardBool(provider, @"connected", NO));
+    [buttons addArrangedSubview:disconnect];
+    [stack addArrangedSubview:buttons];
+    return row;
+}
+
+- (NSView *)activityScreenWithActivity:(NSDictionary *)activity review:(NSDictionary *)review
+{
+    NSStackView *stack = nil;
+    NSView *card = TokenForgeCardWithStack(&stack, 18.0, 14.0);
+    [stack addArrangedSubview:TokenForgeLightCardTitleLabel(@"Activity")];
+    [stack addArrangedSubview:TokenForgeLightCardBodyLabel(TokenForgeDashboardString(self.state, @"actionStatusText", @"Review safe aggregate activity before saving growth."), 3)];
+
+    BOOL pending = TokenForgeDashboardBool(review, @"pending", NO);
+    NSStackView *pendingStack = nil;
+    NSView *pendingCard = TokenForgeCardWithStack(&pendingStack, 16.0, 8.0);
+    pendingCard.layer.backgroundColor = [NSColor colorWithCalibratedWhite:1.0 alpha:0.76].CGColor;
+    [pendingStack addArrangedSubview:TokenForgeDashboardLabel(@"Pending Review", 13.0, NSFontWeightSemibold, [NSColor systemOrangeColor], 1)];
+    if (pending) {
+        [pendingStack addArrangedSubview:TokenForgeDashboardLabel(TokenForgeDashboardString(review, @"summary", @"Aggregate activity ready for review."), 18.0, NSFontWeightBold, TokenForgeLightCardPrimaryTextColor(), 3)];
+        [pendingStack addArrangedSubview:TokenForgeLightCardCaptionLabel([NSString stringWithFormat:@"%@ · confidence %@ · +%ld XP estimated", TokenForgeDashboardString(review, @"source", @"activity"), TokenForgeDashboardString(review, @"confidence", @"unknown"), (long)TokenForgeDashboardInteger(review, @"estimatedXpDelta", 0)], 2)];
+        [pendingStack addArrangedSubview:TokenForgeLightCardCaptionLabel([NSString stringWithFormat:@"Code +%ld · Focus +%ld · Debug +%ld · Design +%ld", (long)TokenForgeDashboardInteger(review, @"codeDelta", 0), (long)TokenForgeDashboardInteger(review, @"focusDelta", 0), (long)TokenForgeDashboardInteger(review, @"debugDelta", 0), (long)TokenForgeDashboardInteger(review, @"designDelta", 0)], 2)];
+        NSStackView *buttons = TokenForgeDashboardHorizontalStack(8.0);
+        if (TokenForgeDashboardBool(review, @"canSaveGrowth", NO)) {
+            [buttons addArrangedSubview:TokenForgePrimaryButton(@"Save Growth", self, @selector(approveReview:))];
+        }
+        if (TokenForgeDashboardBool(review, @"canDiscard", NO)) {
+            [buttons addArrangedSubview:TokenForgeSecondaryButton(@"Discard", self, @selector(discardReview:))];
+        }
+        if (TokenForgeDashboardBool(review, @"canViewDetails", NO)) {
+            [buttons addArrangedSubview:TokenForgeSecondaryButton(@"View Details", self, @selector(viewReviewDetails:))];
+        }
+        [pendingStack addArrangedSubview:buttons];
+        if (TokenForgeDashboardBool(review, @"detailVisible", NO)) {
+            NSStackView *detailStack = nil;
+            NSView *detailCard = TokenForgeCardWithStack(&detailStack, 12.0, 7.0);
+            detailCard.layer.backgroundColor = [NSColor colorWithCalibratedWhite:1.0 alpha:0.72].CGColor;
+            [detailStack addArrangedSubview:TokenForgeDashboardLabel(@"Review Details", 13.0, NSFontWeightSemibold, [NSColor systemBlueColor], 1)];
+            [detailStack addArrangedSubview:TokenForgeLightCardCaptionLabel([NSString stringWithFormat:@"reviewId %@ · source %@ · status %@", TokenForgeDashboardString(review, @"reviewId", @"pending-review"), TokenForgeDashboardString(review, @"source", @"activity"), TokenForgeDashboardString(review, @"status", @"pending")], 2)];
+            [detailStack addArrangedSubview:TokenForgeLightCardCaptionLabel([NSString stringWithFormat:@"Repository %@ · Provider %@", TokenForgeDashboardString(review, @"repositoryName", @"No active repository"), TokenForgeDashboardString(review, @"providerName", @"Repository analysis")], 2)];
+            [detailStack addArrangedSubview:TokenForgeLightCardCaptionLabel([NSString stringWithFormat:@"Confidence %@ · Estimated XP +%ld · Generated %@", TokenForgeDashboardString(review, @"confidence", @"unknown"), (long)TokenForgeDashboardInteger(review, @"estimatedXpDelta", 0), TokenForgeDashboardString(review, @"generatedAt", @"Not generated")], 2)];
+            [detailStack addArrangedSubview:TokenForgeLightCardCaptionLabel([NSString stringWithFormat:@"Stats Code +%ld · Focus +%ld · Debug +%ld · Design +%ld · Sync +%ld", (long)TokenForgeDashboardInteger(review, @"codeDelta", 0), (long)TokenForgeDashboardInteger(review, @"focusDelta", 0), (long)TokenForgeDashboardInteger(review, @"debugDelta", 0), (long)TokenForgeDashboardInteger(review, @"designDelta", 0), (long)TokenForgeDashboardInteger(review, @"syncDelta", 0)], 2)];
+            [detailStack addArrangedSubview:TokenForgeLightCardCaptionLabel([NSString stringWithFormat:@"Warnings %@", TokenForgeDashboardString(review, @"warnings", @"none")], 2)];
+            [detailStack addArrangedSubview:TokenForgeLightCardCaptionLabel(TokenForgeDashboardString(review, @"privacyNote", @"Raw prompt, code, file content, and command logs are not stored."), 2)];
+            [pendingStack addArrangedSubview:detailCard];
+        }
+    } else {
+        [pendingStack addArrangedSubview:TokenForgeDashboardLabel(TokenForgeDashboardString(activity, @"state", @"No pending review"), 18.0, NSFontWeightBold, TokenForgeLightCardPrimaryTextColor(), 2)];
+        [pendingStack addArrangedSubview:TokenForgeLightCardCaptionLabel(@"Run analysis to create a pending review. XP and stats are applied only after Save Growth.", 3)];
+        NSStackView *buttons = TokenForgeDashboardHorizontalStack(8.0);
+        NSDictionary *repository = TokenForgeDashboardDictionary(self.state, @"repository");
+        NSDictionary *agents = TokenForgeDashboardDictionary(self.state, @"agents");
+        NSButton *runRepository = TokenForgePrimaryButton(@"Run Repository Analysis", self, @selector(runAnalysis:));
+        runRepository.enabled = TokenForgeDashboardBool(repository, @"canAnalyze", NO);
+        runRepository.toolTip = TokenForgeDashboardString(repository, @"disabledReason", @"Connect a repository first.");
+        [buttons addArrangedSubview:runRepository];
+        NSButton *runAgents = TokenForgeSecondaryButton(@"Analyze AI Agents", self, @selector(runAgentAnalysis:));
+        runAgents.enabled = TokenForgeDashboardInteger(agents, @"connectedCount", 0) > 0;
+        runAgents.toolTip = runAgents.enabled ? @"Run analysis for a ready AI provider." : @"Choose or detect an AI provider source first.";
+        [buttons addArrangedSubview:runAgents];
+        [buttons addArrangedSubview:TokenForgeSecondaryButton(@"Connect Repository", self, @selector(connectRepository:))];
+        [buttons addArrangedSubview:TokenForgeSecondaryButton(@"Connect AI Agent", self, @selector(connectCodexAgent:))];
+        [pendingStack addArrangedSubview:buttons];
+    }
+    [stack addArrangedSubview:pendingCard];
+
+    NSArray *runningJobs = TokenForgeDashboardArray(activity, @"runningJobs");
+    if (runningJobs.count > 0) {
+        NSStackView *jobsStack = nil;
+        NSView *jobsCard = TokenForgeCardWithStack(&jobsStack, 14.0, 8.0);
+        jobsCard.layer.backgroundColor = [NSColor colorWithCalibratedWhite:1.0 alpha:0.74].CGColor;
+        [jobsStack addArrangedSubview:TokenForgeDashboardLabel(@"Running Jobs", 13.0, NSFontWeightSemibold, [NSColor systemBlueColor], 1)];
+        for (NSDictionary *job in runningJobs) {
+            if (![job isKindOfClass:[NSDictionary class]]) {
+                continue;
+            }
+            [jobsStack addArrangedSubview:TokenForgeLightCardCaptionLabel([NSString stringWithFormat:@"%@ · %@ · jobId %@ · %@", TokenForgeDashboardString(job, @"sourceName", @"Activity source"), TokenForgeDashboardString(job, @"status", @"running"), TokenForgeDashboardString(job, @"id", @"analysis-running"), TokenForgeDashboardString(job, @"currentStep", @"validating repository")], 3)];
+        }
+        [stack addArrangedSubview:jobsCard];
+    }
+
+    NSStackView *sections = TokenForgeDashboardHorizontalStack(12.0);
+    sections.distribution = NSStackViewDistributionFillEqually;
+    [sections addArrangedSubview:[self compactActivitySection:@"Recent Runs" detail:TokenForgeDashboardString(activity, @"recentRunsSummary", @"No recent runs")]];
+    [sections addArrangedSubview:[self compactActivitySection:@"Saved Reviews" detail:TokenForgeDashboardString(activity, @"savedReviewsSummary", @"No saved reviews")]];
+    [sections addArrangedSubview:[self compactActivitySection:@"Repository Activity" detail:TokenForgeDashboardString(activity, @"repositoryActivitySummary", @"No repository activity")]];
+    [sections addArrangedSubview:[self compactActivitySection:@"AI Agent Activity" detail:TokenForgeDashboardString(activity, @"agentActivitySummary", @"No AI agent activity")]];
+    [stack addArrangedSubview:sections];
+    return card;
+}
+
+- (NSView *)compactActivitySection:(NSString *)title detail:(NSString *)detail
+{
+    NSStackView *stack = nil;
+    NSView *card = TokenForgeCardWithStack(&stack, 14.0, 7.0);
+    card.layer.backgroundColor = [NSColor colorWithCalibratedWhite:1.0 alpha:0.70].CGColor;
+    [card.heightAnchor constraintGreaterThanOrEqualToConstant:132.0].active = YES;
+    [stack addArrangedSubview:TokenForgeDashboardLabel(title, 13.0, NSFontWeightSemibold, TokenForgeLightCardPrimaryTextColor(), 2)];
+    [stack addArrangedSubview:TokenForgeLightCardCaptionLabel(detail ?: @"", 5)];
     return card;
 }
 
@@ -1405,18 +1722,18 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     [stack addArrangedSubview:TokenForgeLightCardTitleLabel(@"Growth Summary")];
     NSStackView *stats = TokenForgeDashboardHorizontalStack(12.0);
     stats.distribution = NSStackViewDistributionFillEqually;
-    [stats addArrangedSubview:[self statTile:@"Code" value:TokenForgeDashboardInteger(activity, @"code", TokenForgeDashboardInteger(self.state, @"codeStat", 0)) accent:[NSColor systemBlueColor]]];
-    [stats addArrangedSubview:[self statTile:@"Focus" value:TokenForgeDashboardInteger(activity, @"focus", TokenForgeDashboardInteger(self.state, @"focusStat", 0)) accent:[NSColor systemGreenColor]]];
-    [stats addArrangedSubview:[self statTile:@"Debug" value:TokenForgeDashboardInteger(activity, @"debug", TokenForgeDashboardInteger(self.state, @"debugStat", 0)) accent:[NSColor systemOrangeColor]]];
-    [stats addArrangedSubview:[self statTile:@"Design" value:TokenForgeDashboardInteger(activity, @"design", TokenForgeDashboardInteger(self.state, @"designStat", 0)) accent:[NSColor systemPinkColor]]];
-    [stats addArrangedSubview:[self statTile:@"Sync" value:TokenForgeDashboardInteger(activity, @"sync", TokenForgeDashboardInteger(self.state, @"syncStat", 0)) accent:[NSColor systemTealColor]]];
+    [stats addArrangedSubview:[self statTile:@"Code" value:TokenForgeDashboardInteger(activity, @"code", TokenForgeDashboardInteger(self.state, @"codeStat", 0)) detail:@"Implementation growth" accent:[NSColor systemBlueColor]]];
+    [stats addArrangedSubview:[self statTile:@"Focus" value:TokenForgeDashboardInteger(activity, @"focus", TokenForgeDashboardInteger(self.state, @"focusStat", 0)) detail:@"Steady local work" accent:[NSColor systemGreenColor]]];
+    [stats addArrangedSubview:[self statTile:@"Debug" value:TokenForgeDashboardInteger(activity, @"debug", TokenForgeDashboardInteger(self.state, @"debugStat", 0)) detail:@"Fix and test loops" accent:[NSColor systemOrangeColor]]];
+    [stats addArrangedSubview:[self statTile:@"Design" value:TokenForgeDashboardInteger(activity, @"design", TokenForgeDashboardInteger(self.state, @"designStat", 0)) detail:@"UI and structure" accent:[NSColor systemPinkColor]]];
+    [stats addArrangedSubview:[self statTile:@"Sync" value:TokenForgeDashboardInteger(activity, @"sync", TokenForgeDashboardInteger(self.state, @"syncStat", 0)) detail:@"Safe sync state" accent:[NSColor systemTealColor]]];
     [stack addArrangedSubview:stats];
     NSString *summary = TokenForgeDashboardString(self.state, @"lastRunSummary", @"No saved growth yet. Run Analysis on a repository or AI agent log to generate your first XP.");
     [stack addArrangedSubview:TokenForgeLightCardBodyLabel(summary, 3)];
     return card;
 }
 
-- (NSView *)statTile:(NSString *)title value:(NSInteger)value accent:(NSColor *)accent
+- (NSView *)statTile:(NSString *)title value:(NSInteger)value detail:(NSString *)detail accent:(NSColor *)accent
 {
     NSStackView *stack = nil;
     NSView *tile = TokenForgeCardWithStack(&stack, 12.0, 5.0);
@@ -1424,6 +1741,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     [tile.heightAnchor constraintGreaterThanOrEqualToConstant:82.0].active = YES;
     [stack addArrangedSubview:TokenForgeDashboardLabel(title, 11.0, NSFontWeightMedium, accent ?: [NSColor systemBlueColor], 1)];
     [stack addArrangedSubview:TokenForgeDashboardLabel([NSString stringWithFormat:@"%ld", (long)value], 22.0, NSFontWeightBold, TokenForgeLightCardPrimaryTextColor(), 1)];
+    [stack addArrangedSubview:TokenForgeLightCardCaptionLabel(detail ?: @"", 2)];
     return tile;
 }
 
@@ -1440,7 +1758,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
 {
     NSView *root = [[NSView alloc] initWithFrame:NSZeroRect];
     root.wantsLayer = YES;
-    root.layer.backgroundColor = TokenForgeDashboardBackgroundColor().CGColor;
+    root.layer.backgroundColor = [NSColor colorWithCalibratedRed:0.950 green:0.960 blue:0.975 alpha:1.0].CGColor;
     root.translatesAutoresizingMaskIntoConstraints = NO;
 
     NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSZeroRect];
@@ -1462,8 +1780,8 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     TokenForgePinSubview(content, document, 30, 34, 30, 34);
 
     NSDictionary *companion = TokenForgeDashboardDictionary(self.state, @"companion");
-    [content addArrangedSubview:TokenForgeDashboardLabel(@"TokenForge Settings", 25.0, NSFontWeightBold, [NSColor labelColor], 1)];
-    [content addArrangedSubview:TokenForgeDashboardLabel(@"Native shell preferences for the companion overlay and local-only activity flow.", 13.0, NSFontWeightRegular, TokenForgeMutedTextColor(), 2)];
+    [content addArrangedSubview:TokenForgeDashboardLabel(@"TokenForge Settings", 25.0, NSFontWeightBold, TokenForgeLightCardPrimaryTextColor(), 1)];
+    [content addArrangedSubview:TokenForgeDashboardLabel(@"Native shell preferences for the companion overlay and local-only activity flow.", 13.0, NSFontWeightRegular, TokenForgeLightCardSecondaryTextColor(), 2)];
     [content addArrangedSubview:[self settingsSwitchCardWithTitle:@"Companion visible" detail:@"Show the desktop companion independently from dashboard windows." enabled:TokenForgeDashboardBool(self.state, @"companionVisible", TokenForgeMenuCompanionEnabled) action:@selector(toggleCompanionVisible:) actionName:@"toggleCompanionVisible" interactive:YES]];
     [content addArrangedSubview:[self settingsSwitchCardWithTitle:@"Wander movement" detail:@"Allow subtle idle movement while TokenForge is running." enabled:TokenForgeDashboardBool(self.state, @"wanderEnabled", YES) action:@selector(toggleWanderEnabled:) actionName:@"setWanderEnabled" interactive:YES]];
     [content addArrangedSubview:[self settingsSwitchCardWithTitle:@"Click reaction" detail:@"Let the companion react when clicked. Turn this off for click-through mode." enabled:TokenForgeDashboardBool(self.state, @"clickReactionEnabled", YES) action:@selector(toggleClickReactionEnabled:) actionName:@"setClickReactionEnabled" interactive:YES]];
@@ -1474,7 +1792,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     NSStackView *grid = TokenForgeDashboardVerticalStack(10.0);
     [gridCard addSubview:grid];
     TokenForgePinSubview(grid, gridCard, 18, 18, 18, 18);
-    [grid addArrangedSubview:TokenForgeDashboardLabel(@"Companion skin", 15.0, NSFontWeightSemibold, [NSColor labelColor], 1)];
+    [grid addArrangedSubview:TokenForgeDashboardLabel(@"Companion skin", 15.0, NSFontWeightSemibold, TokenForgeLightCardPrimaryTextColor(), 1)];
     NSStackView *skins = TokenForgeDashboardHorizontalStack(10.0);
     skins.distribution = NSStackViewDistributionFillEqually;
     NSArray<NSString *> *skinNames = @[@"Orange Cat", @"White Cat", @"Calico", @"Black Cat", @"Retriever", @"Runner"];
@@ -1504,8 +1822,8 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     [card addSubview:row];
     TokenForgePinSubview(row, card, 14, 18, 14, 18);
     NSStackView *copy = TokenForgeDashboardVerticalStack(4.0);
-    [copy addArrangedSubview:TokenForgeDashboardLabel(title, 14.0, NSFontWeightSemibold, [NSColor labelColor], 1)];
-    [copy addArrangedSubview:TokenForgeDashboardLabel(detail, 12.0, NSFontWeightRegular, TokenForgeMutedTextColor(), 2)];
+    [copy addArrangedSubview:TokenForgeDashboardLabel(title, 14.0, NSFontWeightSemibold, TokenForgeLightCardPrimaryTextColor(), 1)];
+    [copy addArrangedSubview:TokenForgeDashboardLabel(detail, 12.0, NSFontWeightRegular, TokenForgeLightCardSecondaryTextColor(), 2)];
     [row addArrangedSubview:copy];
     NSButton *toggle = [[NSButton alloc] initWithFrame:NSZeroRect];
     toggle.translatesAutoresizingMaskIntoConstraints = NO;
@@ -1540,7 +1858,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     icon.stage = 2;
     [icon.widthAnchor constraintEqualToConstant:58.0].active = YES;
     [icon.heightAnchor constraintEqualToConstant:58.0].active = YES;
-    NSTextField *label = TokenForgeDashboardLabel(title, 12.0, NSFontWeightMedium, [NSColor labelColor], 2);
+    NSTextField *label = TokenForgeDashboardLabel(title, 12.0, NSFontWeightMedium, TokenForgeLightCardPrimaryTextColor(), 2);
     label.alignment = NSTextAlignmentCenter;
     [stack addArrangedSubview:icon];
     [stack addArrangedSubview:label];
@@ -1551,8 +1869,8 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
 {
     NSStackView *stack = nil;
     NSView *card = TokenForgeCardWithStack(&stack, 18.0, 7.0);
-    [stack addArrangedSubview:TokenForgeDashboardLabel(@"Local data and Safe Sync", 15.0, NSFontWeightSemibold, [NSColor labelColor], 1)];
-    [stack addArrangedSubview:TokenForgeDashboardLabel(@"Local progress is stored on this Mac. Safe Sync is optional and only sends sanitized aggregate summaries when connected.", 13.0, NSFontWeightRegular, TokenForgeMutedTextColor(), 3)];
+    [stack addArrangedSubview:TokenForgeDashboardLabel(@"Local data and Safe Sync", 15.0, NSFontWeightSemibold, TokenForgeLightCardPrimaryTextColor(), 1)];
+    [stack addArrangedSubview:TokenForgeDashboardLabel(@"Local progress is stored on this Mac. Safe Sync is optional and only sends sanitized aggregate summaries when connected.", 13.0, NSFontWeightRegular, TokenForgeLightCardSecondaryTextColor(), 3)];
     [stack addArrangedSubview:TokenForgeDashboardLabel([NSString stringWithFormat:@"Status: %@", TokenForgeDashboardString(self.state, @"syncStatusText", @"Sync optional")], 12.0, NSFontWeightMedium, [NSColor systemGreenColor], 1)];
     return card;
 }
@@ -1606,19 +1924,42 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     TokenForgeSendDashboardAction(payload.UTF8String);
 }
 
-- (void)dashboard:(id)sender { [self setSelectedNav:@"dashboard" action:"dashboard" showDashboard:YES]; }
-- (void)repository:(id)sender { [self setSelectedNav:@"repository" action:"repository" showDashboard:YES]; }
-- (void)codexAgent:(id)sender { [self setSelectedNav:@"codexAgent" action:"codexAgent" showDashboard:YES]; }
-- (void)activity:(id)sender { [self setSelectedNav:@"activity" action:"activity" showDashboard:YES]; }
-- (void)settings:(id)sender { [self setSelectedNav:@"settings" action:"settings" showDashboard:YES]; [self showSettings]; }
+- (void)dashboard:(id)sender { [self setSelectedNav:@"dashboard" action:"navigation.openDashboard" showDashboard:YES]; }
+- (void)repository:(id)sender { [self setSelectedNav:@"repository" action:"navigation.openRepositories" showDashboard:YES]; }
+- (void)codexAgent:(id)sender { [self setSelectedNav:@"aiAgents" action:"navigation.openAgents" showDashboard:YES]; }
+- (void)activity:(id)sender { [self setSelectedNav:@"activity" action:"navigation.openActivity" showDashboard:YES]; }
+- (void)settings:(id)sender { [self setSelectedNav:@"settings" action:"openSettings" showDashboard:YES]; [self showSettings]; }
 - (void)homepage:(id)sender { TokenForgeSendDashboardAction("homepage"); if (TokenForgeDashboardActionClicked == nil) [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/HwangSeokBeom/TokenForge"]]; }
-- (void)reportIssue:(id)sender { TokenForgeSendDashboardAction("reportIssue"); if (TokenForgeDashboardActionClicked == nil) [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/HwangSeokBeom/TokenForge/issues"]]; }
-- (void)runAnalysis:(id)sender { TokenForgeSendDashboardAction("runAnalysis"); }
-- (void)connectRepository:(id)sender { [self setSelectedNav:@"repository" action:"connectRepository" showDashboard:YES]; }
-- (void)connectCodexAgent:(id)sender { [self setSelectedNav:@"codexAgent" action:"connectCodexAgent" showDashboard:YES]; }
-- (void)reviewActivity:(id)sender { [self setSelectedNav:@"activity" action:"reviewActivity" showDashboard:YES]; }
-- (void)approveReview:(id)sender { TokenForgeSendDashboardAction("approveReview"); }
-- (void)discardReview:(id)sender { TokenForgeSendDashboardAction("discardReview"); }
+- (void)reportIssue:(id)sender { TokenForgeSendDashboardAction("report_issue"); if (TokenForgeDashboardActionClicked == nil) [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/HwangSeokBeom/TokenForge/issues"]]; }
+- (void)runAnalysis:(id)sender
+{
+    NSDictionary *repository = TokenForgeDashboardDictionary(self.state, @"repository");
+    NSDictionary *agents = TokenForgeDashboardDictionary(self.state, @"agents");
+    if (TokenForgeDashboardBool(repository, @"canAnalyze", NO)) {
+        TokenForgeSendDashboardAction("repository.runAnalysis");
+        return;
+    }
+    if (TokenForgeDashboardInteger(agents, @"connectedCount", 0) > 0) {
+        TokenForgeSendDashboardAction("agent.runAnalysis");
+        return;
+    }
+    TokenForgeSendDashboardAction("repository.runAnalysis");
+}
+- (void)runAgentAnalysis:(id)sender { TokenForgeSendDashboardAction("agent.runAnalysis"); }
+- (void)connectRepository:(id)sender { [self setSelectedNav:@"repository" action:"repository.add" showDashboard:YES]; }
+- (void)connectCodexAgent:(id)sender { [self setSelectedNav:@"aiAgents" action:"agent.connect:codex" showDashboard:YES]; }
+- (void)selectRepositoryAction:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @""; NSString *payload = [NSString stringWithFormat:@"repository.setActive:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)analyzeRepositoryAction:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @""; NSString *payload = [NSString stringWithFormat:@"repository.analyze:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)disconnectRepositoryAction:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @""; NSString *payload = [NSString stringWithFormat:@"repository.archive:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)connectAgentAction:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @"codex"; NSString *payload = [NSString stringWithFormat:@"agent.connect:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)autoDetectAgentAction:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @"codex"; NSString *payload = [NSString stringWithFormat:@"agent.autoDetect:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)chooseAgentFolderAction:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @"codex"; NSString *payload = [NSString stringWithFormat:@"agent.chooseFolder:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)analyzeAgentAction:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @"codex"; NSString *payload = [NSString stringWithFormat:@"agent.analyze:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)disconnectAgentAction:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @"codex"; NSString *payload = [NSString stringWithFormat:@"agent.disconnect:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)reviewActivity:(id)sender { [self setSelectedNav:@"activity" action:"navigation.openActivity" showDashboard:YES]; }
+- (void)approveReview:(id)sender { TokenForgeSendDashboardAction("review.saveGrowth"); }
+- (void)viewReviewDetails:(id)sender { NSString *value = TokenForgeDashboardString(TokenForgeDashboardDictionary(self.state, @"review"), @"reviewId", @""); NSString *payload = [NSString stringWithFormat:@"review.viewDetails:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)discardReview:(id)sender { TokenForgeSendDashboardAction("review.discard"); }
 - (void)toggleCompanionVisible:(id)sender { BOOL enabled = [(NSButton *)sender state] == NSControlStateValueOn; [self setStateBool:@"companionVisible" enabled:enabled]; [self sendBoolAction:@"toggleCompanionVisible" enabled:enabled]; }
 - (void)toggleWanderEnabled:(id)sender { BOOL enabled = [(NSButton *)sender state] == NSControlStateValueOn; [self setStateBool:@"wanderEnabled" enabled:enabled]; [self sendBoolAction:@"setWanderEnabled" enabled:enabled]; }
 - (void)toggleClickReactionEnabled:(id)sender { BOOL enabled = [(NSButton *)sender state] == NSControlStateValueOn; [self setStateBool:@"clickReactionEnabled" enabled:enabled]; [self sendBoolAction:@"setClickReactionEnabled" enabled:enabled]; }
@@ -1711,7 +2052,7 @@ static void TokenForgeOpenNativeDashboardOnMain(void)
     repositoryItem.tag = 1002;
     [menu addItem:repositoryItem];
 
-    NSMenuItem *agentItem = [[NSMenuItem alloc] initWithTitle:@"Codex Agent: Not connected" action:nil keyEquivalent:@""];
+    NSMenuItem *agentItem = [[NSMenuItem alloc] initWithTitle:@"AI Agents: Not connected" action:nil keyEquivalent:@""];
     agentItem.enabled = NO;
     agentItem.tag = 1003;
     [menu addItem:agentItem];
@@ -1767,7 +2108,7 @@ static void TokenForgeOpenNativeDashboardOnMain(void)
     addRepositoryItem.tag = 1015;
     [menu addItem:addRepositoryItem];
 
-    NSMenuItem *connectAgentItem = [[NSMenuItem alloc] initWithTitle:@"Connect Codex Agent" action:@selector(connectAiAgentFromStatusItem:) keyEquivalent:@""];
+    NSMenuItem *connectAgentItem = [[NSMenuItem alloc] initWithTitle:@"Manage AI Agents" action:@selector(connectAiAgentFromStatusItem:) keyEquivalent:@""];
     connectAgentItem.target = self;
     connectAgentItem.tag = 1016;
     [menu addItem:connectAgentItem];
@@ -1809,7 +2150,7 @@ static void TokenForgeOpenNativeDashboardOnMain(void)
     self.statusItem.button.imagePosition = NSImageLeft;
     [[self.statusItem.menu itemWithTag:1001] setTitle:[NSString stringWithFormat:@"%@ · %@ · Level %ld", TokenForgeMenuCompanionName, TokenForgeMenuStage, (long)MAX(1, TokenForgeMenuLevel)]];
     [[self.statusItem.menu itemWithTag:1002] setTitle:[NSString stringWithFormat:@"Repository: %@", TokenForgeMenuRepositoryAlias]];
-    [[self.statusItem.menu itemWithTag:1003] setTitle:[NSString stringWithFormat:@"Codex Agent: %@", TokenForgeMenuAgentStatus]];
+    [[self.statusItem.menu itemWithTag:1003] setTitle:[NSString stringWithFormat:@"AI Agents: %@", TokenForgeMenuAgentStatus]];
     [[self.statusItem.menu itemWithTag:1004] setTitle:[NSString stringWithFormat:@"Safe Sync: %@", TokenForgeMenuSyncStatus]];
     [[self.statusItem.menu itemWithTag:1005] setTitle:[NSString stringWithFormat:@"Desktop Companion: %@", TokenForgeMenuCompanionEnabled ? (TokenForgeMenuClickThrough ? @"Native Active · Click-through" : @"Native Active · Interactive") : @"Off"]];
     [self.statusItem.menu itemWithTag:1006].enabled = !TokenForgeMenuCompanionEnabled;
@@ -1823,7 +2164,7 @@ static void TokenForgeOpenNativeDashboardOnMain(void)
     [self.statusItem.menu itemWithTag:1016].enabled = YES;
     [self.statusItem.menu itemWithTag:1008].enabled = YES;
     [self.statusItem.menu itemWithTag:1009].enabled = [self isMainWindowVisible];
-    [self.statusItem.menu itemWithTag:1010].enabled = YES;
+    [self.statusItem.menu itemWithTag:1010].enabled = TokenForgeMenuCanAnalyze;
     [self.statusItem.menu itemWithTag:1011].enabled = TokenForgeMenuCanSync;
     [self.statusItem.menu itemWithTag:1012].enabled = YES;
 }
@@ -2009,19 +2350,19 @@ static void TokenForgeOpenNativeDashboardOnMain(void)
 
 - (void)analyzeCurrentRepositoryFromStatusItem:(id)sender
 {
-    TokenForgeSendMenuAction("refresh_activity");
+    TokenForgeSendMenuAction("repository.runAnalysis");
     [TokenForgeEnsureNativeDashboardController() showDashboard];
 }
 
 - (void)addRepositoryFromStatusItem:(id)sender
 {
-    TokenForgeSendMenuAction("add_repository");
+    TokenForgeSendMenuAction("repository.add");
     [TokenForgeEnsureNativeDashboardController() showDashboard];
 }
 
 - (void)connectAiAgentFromStatusItem:(id)sender
 {
-    TokenForgeSendMenuAction("connect_ai_agent");
+    TokenForgeSendMenuAction("navigation.openAgents");
     [TokenForgeEnsureNativeDashboardController() showDashboard];
 }
 
@@ -2164,6 +2505,49 @@ extern "C" void TokenForge_ShowSettingsWindow()
     dispatch_async(dispatch_get_main_queue(), ^{
         [TokenForgeEnsureNativeDashboardController() showSettings];
     });
+}
+
+extern "C" bool TokenForge_PickFolder(const char *prompt, char *selectedPath, int selectedPathCapacity)
+{
+    if (selectedPath == NULL || selectedPathCapacity <= 0) {
+        return false;
+    }
+
+    selectedPath[0] = '\0';
+    __block BOOL picked = NO;
+    __block NSString *path = nil;
+    void (^openPanelBlock)(void) = ^{
+        NSOpenPanel *panel = [NSOpenPanel openPanel];
+        panel.canChooseFiles = NO;
+        panel.canChooseDirectories = YES;
+        panel.allowsMultipleSelection = NO;
+        panel.canCreateDirectories = NO;
+        NSString *message = prompt != NULL ? [NSString stringWithUTF8String:prompt] : @"Select Folder";
+        panel.message = message ?: @"Select Folder";
+        NSInteger response = [panel runModal];
+        if (response == NSModalResponseOK && panel.URL != nil) {
+            path = [panel.URL.path copy];
+            picked = path.length > 0;
+        }
+    };
+
+    if ([NSThread isMainThread]) {
+        openPanelBlock();
+    } else {
+        dispatch_sync(dispatch_get_main_queue(), openPanelBlock);
+    }
+
+    if (!picked || path.length == 0) {
+        return false;
+    }
+
+    const char *utf8 = path.UTF8String;
+    if (utf8 == NULL) {
+        return false;
+    }
+
+    strlcpy(selectedPath, utf8, (size_t)selectedPathCapacity);
+    return true;
 }
 
 extern "C" void TokenForge_UpdateDashboardState(const char *json)

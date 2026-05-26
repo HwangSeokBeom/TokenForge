@@ -86,8 +86,9 @@ namespace TokenForge.Client.Platform
 
                 return installed;
             }
-            catch (Exception)
+            catch (Exception exception)
             {
+                Debug.LogWarning("WARN " + LogPrefix + " install failed: " + exception.GetType().Name);
                 return false;
             }
         }
@@ -115,8 +116,9 @@ namespace TokenForge.Client.Platform
                     canAnalyze,
                     canSync);
             }
-            catch (Exception)
+            catch (Exception exception)
             {
+                Debug.LogWarning("WARN " + LogPrefix + " status update failed: " + exception.GetType().Name);
             }
         }
 
@@ -131,8 +133,9 @@ namespace TokenForge.Client.Platform
             {
                 NativeShowMainWindow();
             }
-            catch (Exception)
+            catch (Exception exception)
             {
+                Debug.LogWarning("WARN " + LogPrefix + " show main window failed: " + exception.GetType().Name);
             }
         }
 
@@ -147,8 +150,9 @@ namespace TokenForge.Client.Platform
             {
                 NativeHideMainWindow();
             }
-            catch (Exception)
+            catch (Exception exception)
             {
+                Debug.LogWarning("WARN " + LogPrefix + " hide main window failed: " + exception.GetType().Name);
             }
         }
 
@@ -163,8 +167,9 @@ namespace TokenForge.Client.Platform
             {
                 return NativeIsMainWindowVisible();
             }
-            catch (Exception)
+            catch (Exception exception)
             {
+                Debug.LogWarning("WARN " + LogPrefix + " visibility check failed: " + exception.GetType().Name);
                 return false;
             }
         }
@@ -181,8 +186,9 @@ namespace TokenForge.Client.Platform
             {
                 NativeQuit();
             }
-            catch (Exception)
+            catch (Exception exception)
             {
+                Debug.LogWarning("WARN " + LogPrefix + " native quit failed: " + exception.GetType().Name);
                 Application.Quit();
             }
         }
@@ -224,9 +230,15 @@ namespace TokenForge.Client.Platform
 
         private static void OnNativeMenuAction(string action)
         {
+            Debug.Log("INFO [NativeAction] received action=" + (action ?? "<null>"));
             if (TryParseMenuAction(action, out var parsed))
             {
+                Debug.Log("INFO [NativeAction] routed action=" + action + " handler=" + parsed);
                 GlobalMenuActionRequested?.Invoke(parsed);
+            }
+            else
+            {
+                Debug.LogWarning("WARN [NativeAction] unknown action=" + (action ?? "<null>"));
             }
         }
 
@@ -265,6 +277,7 @@ namespace TokenForge.Client.Platform
                     parsed = ApplicationMenuAction.SyncNow;
                     return true;
                 case "settings":
+                case "open_settings":
                     parsed = ApplicationMenuAction.Settings;
                     return true;
                 case "quit":

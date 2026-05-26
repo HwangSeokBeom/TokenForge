@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using System.Threading;
 using NUnit.Framework;
 using TokenForge.Client.Agents;
@@ -17,7 +18,16 @@ namespace TokenForge.Client.Tests
             var state = new OnboardingState();
 
             Assert.IsTrue(state.AgentSources.Exists(source => source.SourceType == ConnectedAgentSourceType.Codex && source.DisplayName == "Codex"));
+            Assert.IsTrue(state.AgentSources.Exists(source => source.SourceType == ConnectedAgentSourceType.GeminiCli && source.DisplayName == "Gemini CLI"));
             Assert.IsFalse(ObjectContainsString(state, "Chat" + "GPT"));
+        }
+
+        [Test]
+        public void ProviderCatalog_SeparatesAutoManualPartialSupport()
+        {
+            Assert.AreEqual(1, AgentProviderCatalog.DefaultProviders.Count(provider => provider.Type == AgentProviderType.Codex && provider.SupportedStatus == AgentSupportedStatus.AutoDetectSupported));
+            Assert.AreEqual(1, AgentProviderCatalog.DefaultProviders.Count(provider => provider.Type == AgentProviderType.GitHubCopilot && provider.SupportedStatus == AgentSupportedStatus.PartiallySupported));
+            Assert.AreEqual(1, AgentProviderCatalog.DefaultProviders.Count(provider => provider.Type == AgentProviderType.Manual && provider.DetectionStrategy == AgentDetectionStrategy.ManualFolder));
         }
 
         [Test]
@@ -71,6 +81,18 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(AgentSourceAccessState.LimitedSupport, result.AccessState);
             Assert.IsTrue(result.HasUsableCandidate);
             Assert.That(result.BestCandidate().WarningIds, Does.Contain("agent_source_limited_support"));
+            AssertNoRawPath(result.BestCandidate().SafeAlias, home);
+        }
+
+        [Test]
+        public void GeminiCandidatePathExists_ProducesSafeDetectedResult()
+        {
+            var home = CreateHomeWith(".gemini", "session.jsonl");
+            var result = RunDetector(AgentProviderType.GeminiCli, home);
+
+            Assert.AreEqual(AgentSourceAccessState.Detected, result.AccessState);
+            Assert.IsTrue(result.HasUsableCandidate);
+            Assert.That(result.BestCandidate().SafeAlias, Does.Contain("Gemini CLI"));
             AssertNoRawPath(result.BestCandidate().SafeAlias, home);
         }
 

@@ -146,10 +146,19 @@ namespace TokenForge.Client.Platform
 
         private static void OnNativeDashboardAction(string action)
         {
+            Debug.Log("INFO [NativeAction] received action=" + (action ?? "<null>"));
             if (TryParseAction(action, out var parsed))
             {
                 GlobalActionRequested?.Invoke(parsed);
-                Debug.Log("INFO " + LogPrefix + " action=" + parsed.RawAction + " mapped=" + parsed.Action + (string.IsNullOrEmpty(parsed.Value) ? string.Empty : " value=" + parsed.Value));
+                if (parsed.Action == NativeDashboardAction.Unsupported)
+                {
+                    Debug.LogWarning("WARN [NativeAction] unknown action=" + parsed.RawAction);
+                }
+                else
+                {
+                    Debug.Log("INFO [NativeAction] routed action=" + parsed.RawAction + " handler=" + parsed.Action);
+                    Debug.Log("INFO " + LogPrefix + " action=" + parsed.RawAction + " mapped=" + parsed.Action + (string.IsNullOrEmpty(parsed.Value) ? string.Empty : " value=" + parsed.Value));
+                }
             }
             else
             {
@@ -171,6 +180,7 @@ namespace TokenForge.Client.Platform
             switch (action)
             {
                 case "dashboard":
+                case "navigation.openDashboard":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.Dashboard, rawAction, value);
                     return true;
                 case "toggleDashboard":
@@ -186,6 +196,8 @@ namespace TokenForge.Client.Platform
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.HideDashboard, rawAction, value);
                     return true;
                 case "repository":
+                case "open_repositories":
+                case "navigation.openRepositories":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.Repository, rawAction, value);
                     return true;
                 case "connectRepository":
@@ -193,25 +205,90 @@ namespace TokenForge.Client.Platform
                 case "connect_repository":
                 case "change_repository":
                 case "add_repository":
+                case "repository.add":
+                case "repository.connect":
                     parsed = new NativeDashboardActionRequest(
                         action == "changeRepository" || action == "change_repository" ? NativeDashboardAction.ChangeRepository : NativeDashboardAction.ConnectRepository,
                         rawAction,
                         value);
                     return true;
+                case "chooseRepositoryFolder":
+                case "choose_repository_folder":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.ChooseRepositoryFolder, rawAction, value);
+                    return true;
                 case "codexAgent":
                 case "codex_agent":
+                case "agents":
+                case "aiAgents":
+                case "ai_agents":
+                case "open_agents":
+                case "navigation.openAgents":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.CodexAgent, rawAction, value);
+                    return true;
+                case "manageAgents":
+                case "manage_agents":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.ManageAgents, rawAction, value);
+                    return true;
+                case "selectRepository":
+                case "select_repository":
+                case "repository.setActive":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.SelectRepository, rawAction, value);
+                    return true;
+                case "analyzeRepository":
+                case "analyze_repository":
+                case "repository.analyze":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.AnalyzeRepository, rawAction, value);
+                    return true;
+                case "disconnectRepository":
+                case "disconnect_repository":
+                case "repository.archive":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.DisconnectRepository, rawAction, value);
                     return true;
                 case "connectCodexAgent":
                 case "connect_codex_agent":
-                case "connect_ai_agent":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ConnectCodexAgent, rawAction, value);
+                    return true;
+                case "connectAiAgent":
+                case "connect_ai_agent":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.ConnectAiAgent, rawAction, value);
+                    return true;
+                case "connectAgent":
+                case "connect_agent":
+                case "agent.connect":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.ConnectAgent, rawAction, value);
                     return true;
                 case "selectCodexLogFolder":
                 case "select_codex_log_folder":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.SelectCodexLogFolder, rawAction, value);
                     return true;
+                case "chooseAgentFolder":
+                case "choose_agent_folder":
+                case "chooseManualFolder":
+                case "choose_manual_folder":
+                case "agent.chooseFolder":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.ChooseAgentFolder, rawAction, value);
+                    return true;
+                case "autoDetectAgent":
+                case "auto_detect_agent":
+                case "agent.autoDetect":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.AutoDetectAgent, rawAction, value);
+                    return true;
+                case "detectAgent":
+                case "detect_agent":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.DetectAgent, rawAction, value);
+                    return true;
+                case "analyzeAgent":
+                case "analyze_agent":
+                case "agent.analyze":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.AnalyzeAgent, rawAction, value);
+                    return true;
+                case "disconnectAgent":
+                case "disconnect_agent":
+                case "agent.disconnect":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.DisconnectAgent, rawAction, value);
+                    return true;
                 case "activity":
+                case "navigation.openActivity":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.Activity, rawAction, value);
                     return true;
                 case "runAnalysis":
@@ -221,6 +298,30 @@ namespace TokenForge.Client.Platform
                 case "sync_now":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.RunAnalysis, rawAction, value);
                     return true;
+                case "runRepositoryAnalysis":
+                case "run_repository_analysis":
+                case "repository.runAnalysis":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.RunRepositoryAnalysis, rawAction, value);
+                    return true;
+                case "runAgentAnalysis":
+                case "run_agent_analysis":
+                case "agent.runAnalysis":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.RunAgentAnalysis, rawAction, value);
+                    return true;
+                case "safeSync":
+                case "safe_sync":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.SafeSync, rawAction, value);
+                    return true;
+                case "saveGrowth":
+                case "save_growth":
+                case "review.saveGrowth":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.SaveGrowth, rawAction, value);
+                    return true;
+                case "viewReviewDetails":
+                case "view_review_details":
+                case "review.viewDetails":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.ViewReviewDetails, rawAction, value);
+                    return true;
                 case "reviewActivity":
                 case "review_activity":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ReviewActivity, rawAction, value);
@@ -229,11 +330,18 @@ namespace TokenForge.Client.Platform
                 case "approve_review":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ApproveReview, rawAction, value);
                     return true;
+                case "saveReview":
+                case "save_review":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.SaveReview, rawAction, value);
+                    return true;
                 case "discardReview":
                 case "discard_review":
+                case "review.discard":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.DiscardReview, rawAction, value);
                     return true;
                 case "settings":
+                case "openSettings":
+                case "open_settings":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.Settings, rawAction, value);
                     return true;
                 case "homepage":
@@ -276,8 +384,8 @@ namespace TokenForge.Client.Platform
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.Quit, rawAction, value);
                     return true;
                 default:
-                    parsed = null;
-                    return false;
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.Unsupported, rawAction, string.Empty);
+                    return true;
             }
         }
 

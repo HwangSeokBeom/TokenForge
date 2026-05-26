@@ -82,7 +82,7 @@ namespace TokenForge.Client.Tests
             var agentSave = RunAsync(() => fixture.Dashboard.SaveAgentSessionAsync(CancellationToken.None));
 
             Assert.IsFalse(gitAnalyze.IsSuccess);
-            Assert.AreEqual("missing_repository_selection", gitAnalyze.ErrorCode);
+            Assert.AreEqual("NoActiveRepository", gitAnalyze.ErrorCode);
             Assert.IsFalse(agentSave.IsSuccess);
             Assert.AreEqual("missing_agent_review_session", agentSave.ErrorCode);
             Assert.IsNull(fixture.Dashboard.GitFlow.Review);

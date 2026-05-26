@@ -464,7 +464,7 @@ GameObject:
   - component: {fileID: 2819680911417504715}
   - component: {fileID: 6380186749118770250}
   m_Layer: 0
-  m_Name: Connect Codex Agent
+  m_Name: Connect AI Agent
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -975,7 +975,7 @@ GameObject:
   - component: {fileID: 2021170889300449718}
   - component: {fileID: 6287857987413000320}
   m_Layer: 0
-  m_Name: Codex Agent Flow Card
+  m_Name: AI Agents Flow Card
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3510,7 +3510,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Connect Codex Agent
+  m_Text: Connect AI Agent
 --- !u!114 &1705509044979583255
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3697,7 +3697,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Codex Agent
+  m_Text: AI Agents
 --- !u!114 &5326805603226284034
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3798,7 +3798,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: Connect a repository or Codex Agent when you want growth from local activity.
+  m_Text: Connect a repository or AI Agents when you want growth from local activity.
 --- !u!114 &688978480615115501
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5811,7 +5811,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Start Game
+  m_Text: Run Analysis
 --- !u!114 &4642269963463731777
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6185,7 +6185,7 @@ GameObject:
   - component: {fileID: 2977637846634142999}
   - component: {fileID: 6652426087635478269}
   m_Layer: 0
-  m_Name: Codex Agent Toggle
+  m_Name: AI Agents Toggle
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -9768,7 +9768,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Start Game
+  m_Text: Run Analysis
 --- !u!114 &6470217135064421856
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -10461,7 +10461,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: No activity yet. Run analysis from Repository or Codex Agent when you are
+  m_Text: No activity yet. Run analysis from Repository or AI Agents when you are
     ready.
 --- !u!114 &3760801658743259544
 MonoBehaviour:
@@ -11411,7 +11411,7 @@ GameObject:
   - component: {fileID: 6689372139528594664}
   - component: {fileID: 6089996616677006468}
   m_Layer: 0
-  m_Name: Connect Codex Agent
+  m_Name: Connect AI Agent
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -12893,7 +12893,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Connect Codex Agent
+  m_Text: Connect AI Agent
 --- !u!114 &4387645596483530712
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -13066,7 +13066,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: 'Codex Agent
+  m_Text: 'AI Agents
 
     Not connected
 
@@ -13635,7 +13635,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: No activity yet. Run analysis from Repository or Codex Agent when you are
+  m_Text: No activity yet. Run analysis from Repository or AI Agents when you are
     ready.
 --- !u!114 &6170779544030190961
 MonoBehaviour:
@@ -15341,7 +15341,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Start Game
+  m_Text: Run Analysis
 --- !u!114 &4856978965639433688
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -15376,7 +15376,7 @@ GameObject:
   - component: {fileID: 954630613792053730}
   - component: {fileID: 94971817940327553}
   m_Layer: 0
-  m_Name: Sidebar Codex Agent Item
+  m_Name: Sidebar AI Agents Item
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -16007,7 +16007,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Codex Agent
+  m_Text: AI Agents
 --- !u!114 &8158436402682183777
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -16774,7 +16774,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Connect Codex Agent
+  m_Text: Connect AI Agent
 --- !u!114 &684721135257151431
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -18764,7 +18764,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Codex Agent
+  m_Text: AI Agents
 --- !u!114 &1054308697454480346
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -19001,7 +19001,7 @@ GameObject:
   - component: {fileID: 1017740724599246335}
   - component: {fileID: 2267438060377434691}
   m_Layer: 0
-  m_Name: Connect Codex Agent
+  m_Name: Connect AI Agent
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -20680,7 +20680,7 @@ GameObject:
   - component: {fileID: 5958364777908839263}
   - component: {fileID: 3228708653625046255}
   m_Layer: 0
-  m_Name: Start Game
+  m_Name: Run Analysis
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -23989,7 +23989,7 @@ GameObject:
   - component: {fileID: 275368864627606210}
   - component: {fileID: 5622999345498335357}
   m_Layer: 0
-  m_Name: Start Game
+  m_Name: Run Analysis
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -24128,7 +24128,7 @@ GameObject:
   - component: {fileID: 8215277637658974576}
   - component: {fileID: 6906085017916728494}
   m_Layer: 0
-  m_Name: Start Game
+  m_Name: Run Analysis
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -24333,7 +24333,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Codex Agent
+  m_Text: AI Agents
 --- !u!114 &5585682791049743802
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -24847,7 +24847,7 @@ GameObject:
   - component: {fileID: 176816914048025590}
   - component: {fileID: 7395015975047202510}
   m_Layer: 0
-  m_Name: Start Game
+  m_Name: Run Analysis
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -25376,7 +25376,7 @@ GameObject:
   - component: {fileID: 8860749878649764083}
   - component: {fileID: 3374919393711888712}
   m_Layer: 0
-  m_Name: Start Game
+  m_Name: Run Analysis
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -27487,7 +27487,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Codex Agent
+  m_Text: AI Agents
 --- !u!114 &9161363962886939469
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -28013,7 +28013,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Connect Codex Agent
+  m_Text: Connect AI Agent
 --- !u!114 &2350577525740338227
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -29410,7 +29410,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 1
     m_LineSpacing: 1
-  m_Text: Connect a repository or Codex Agent when you want growth from local activity.
+  m_Text: Connect a repository or AI Agents when you want growth from local activity.
 --- !u!114 &7251202270261447863
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -29511,7 +29511,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Start Game
+  m_Text: Run Analysis
 --- !u!114 &6962714587342491772
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -29913,7 +29913,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: Start Game
+  m_Text: Run Analysis
 --- !u!114 &7052643469358397011
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -30601,7 +30601,7 @@ GameObject:
   - component: {fileID: 1092143248500351795}
   - component: {fileID: 1866995450980474755}
   m_Layer: 0
-  m_Name: Codex Agent Detection
+  m_Name: AI Agents Detection
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -33592,7 +33592,7 @@ GameObject:
   - component: {fileID: 2738389608324304997}
   - component: {fileID: 1070932795882218255}
   m_Layer: 0
-  m_Name: Connect Codex Agent
+  m_Name: Connect AI Agent
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

@@ -1,7 +1,7 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -45,9 +45,9 @@ namespace TokenForge.Client
             "Turn your coding activity into a growing desktop companion",
             "Local-first",
             "Sync optional",
-            "Start Game",
+            "Run Analysis",
             "Add Repository",
-            "Connect Codex Agent",
+            "Connect AI Agent",
             "My Companion",
             "Today’s Growth",
             "Review Activity"
@@ -77,6 +77,22 @@ namespace TokenForge.Client
         private DesktopCompanionOverlayController nativeDesktopCompanionController;
         private bool nativeDashboardShown;
         private bool prefabUiUnavailableLogged;
+        private readonly Queue<NativeDashboardActionRequest> pendingNativeActions = new Queue<NativeDashboardActionRequest>();
+        private readonly object pendingNativeActionsLock = new object();
+        private string nativeSelectedNavItem = "dashboard";
+        private bool nativeAnalysisInProgress;
+        private string nativeCurrentAnalysisJobId = string.Empty;
+        private string nativeCurrentAnalysisType = string.Empty;
+        private string nativeCurrentAnalysisSourceName = string.Empty;
+        private string nativeCurrentAnalysisStartedAt = string.Empty;
+        private string nativeCurrentAnalysisStep = string.Empty;
+        private string nativeSelectedReviewId = string.Empty;
+        private bool nativeReviewDetailVisible;
+        private string nativeActionStatusKind = "idle";
+        private string nativeActionStatusText = "Ready";
+        private string lastNativeDashboardStateJson = string.Empty;
+        private float lastUnchangedProjectionLogTime;
+        private int unityMainThreadId;
 
 #if UNITY_EDITOR
         public static bool DisableEditorAssetPrefabLookupForTests { get; set; }
@@ -116,6 +132,8 @@ namespace TokenForge.Client
 
         private void Awake()
         {
+            unityMainThreadId = Thread.CurrentThread.ManagedThreadId;
+            Debug.Log("INFO [Startup] AppBootstrapper begin");
             Debug.Log("INFO " + LogPrefix + " TokenForge bootstrap starting.");
             LogStartupScene();
             LogHierarchyDump("AwakeStart");
@@ -174,40 +192,46 @@ namespace TokenForge.Client
             }
         }
 
-        private IEnumerator Start()
+        private void Update()
         {
-            var startupTask = RunStartupAsync();
-            while (!startupTask.IsCompleted)
+            if (!UseNativeMacDashboardShell)
             {
-                yield return null;
+                return;
             }
 
-            if (startupTask.IsFaulted)
+            while (TryDequeueNativeAction(out var request))
             {
-                var exception = startupTask.Exception != null ? startupTask.Exception.GetBaseException() : null;
-                Debug.LogError("ERROR " + LogPrefix + " startup task failed: " + (exception != null ? exception.Message : "unknown error"));
-                yield break;
+                RouteNativeDashboardAction(request);
+            }
+        }
+
+        private async void Start()
+        {
+            StartupResult result;
+            try
+            {
+                result = await RunStartupAsync();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("ERROR " + LogPrefix + " startup task failed: " + exception.Message);
+                return;
             }
 
-            var result = startupTask.Result;
             if (!result.ShouldComplete)
             {
                 Debug.LogWarning("WARN " + LogPrefix + " TokenForge safe bootstrap could not complete.");
-                yield break;
+                return;
             }
 
             for (var frame = 0; frame < 10; frame++)
             {
-                yield return null;
+                await Task.Yield();
             }
 
             if (Application.isBatchMode)
             {
-                yield return null;
-            }
-            else
-            {
-                yield return new WaitForEndOfFrame();
+                await Task.Yield();
             }
 
             CompleteBootstrap(result.CompletionMessage);
@@ -217,7 +241,7 @@ namespace TokenForge.Client
         {
             if (!runSafeSmokeFlowWhenEmpty && bootstrapSyncMode == BootstrapSyncMode.None)
             {
-                await RefreshDashboardAsync(loadAuthSessionOnStart);
+                await RefreshDashboardAsync(UseNativeMacDashboardShell ? false : loadAuthSessionOnStart, UseNativeMacDashboardShell);
                 return new StartupResult(true, "TokenForge bootstrap completed.");
             }
 
@@ -227,7 +251,7 @@ namespace TokenForge.Client
             {
                 if (approvedActivityAnalysis != null)
                 {
-                    await RefreshDashboardAsync(loadAuthSessionOnStart);
+                    await RefreshDashboardAsync(loadAuthSessionOnStart, false);
                 }
 
                 return new StartupResult(true, "TokenForge safe bootstrap completed.");
@@ -236,11 +260,16 @@ namespace TokenForge.Client
             return new StartupResult(false, string.Empty);
         }
 
-        private async System.Threading.Tasks.Task RefreshDashboardAsync(bool loadAuthSession)
+        private async System.Threading.Tasks.Task RefreshDashboardAsync(bool loadAuthSession, bool startupScope = false)
         {
             if (approvedActivityAnalysis == null)
             {
                 return;
+            }
+
+            if (startupScope)
+            {
+                Debug.Log("INFO [Startup] Save load begin");
             }
 
             if (loadAuthSession)
@@ -250,8 +279,17 @@ namespace TokenForge.Client
             else
             {
                 await approvedActivityAnalysis.RefreshApprovedLocationsAsync();
+                await approvedActivityAnalysis.RestoreLocalSelectionsFromApprovedLocationsAsync();
                 await approvedActivityAnalysis.RefreshRecentSessionsAsync();
-                await approvedActivityAnalysis.RefreshSafeSyncLocalStateAsync();
+                if (!startupScope)
+                {
+                    await approvedActivityAnalysis.RefreshSafeSyncLocalStateAsync();
+                }
+            }
+
+            if (startupScope)
+            {
+                Debug.Log("INFO [Startup] Save load end");
             }
 
             if (bootstrapRoot != null)
@@ -261,7 +299,16 @@ namespace TokenForge.Client
 
             if (UseNativeMacDashboardShell)
             {
+                if (startupScope)
+                {
+                    Debug.Log("INFO [Startup] State projection begin");
+                }
+
                 ApplyNativeShellState(showDashboardIfNeeded: false);
+                if (startupScope)
+                {
+                    Debug.Log("INFO [Startup] State projection end");
+                }
             }
         }
 
@@ -356,10 +403,12 @@ namespace TokenForge.Client
 
             if (nativeDashboardService == null)
             {
+                Debug.Log("INFO [Startup] Native dashboard init begin");
                 nativeDashboardService = new MacNativeDashboardService();
                 nativeDashboardService.ActionRequested -= HandleNativeDashboardAction;
                 nativeDashboardService.ActionRequested += HandleNativeDashboardAction;
                 nativeDashboardService.Install();
+                Debug.Log("INFO [Startup] Native dashboard init end");
             }
 
             if (nativeDesktopCompanionController == null)
@@ -405,8 +454,22 @@ namespace TokenForge.Client
 
             EnsureNativeDashboardShell();
             var state = BuildNativeDashboardState();
-            nativeDashboardService.UpdateDashboardState(state);
-            nativeDashboardService.SetMenuBarStatus(state);
+            var stateJson = state.ToJson();
+            var changed = !string.Equals(lastNativeDashboardStateJson, stateJson, StringComparison.Ordinal);
+            if (changed)
+            {
+                Debug.Log("INFO [DashboardState] projected changed=true");
+                lastNativeDashboardStateJson = stateJson;
+                nativeDashboardService.UpdateDashboardState(state);
+                nativeDashboardService.SetMenuBarStatus(state);
+                Debug.Log("INFO [MenuBarProjection] providersShown=" + state.statusText + " hiddenReason=" + (state.providerUsagePercentages.Any(item => item.hasSavedApprovedActivity) ? "none" : "noSavedAgentAnalysis"));
+            }
+            else if (Time.realtimeSinceStartup - lastUnchangedProjectionLogTime > 2f)
+            {
+                lastUnchangedProjectionLogTime = Time.realtimeSinceStartup;
+                Debug.Log("INFO [DashboardState] projected changed=false");
+            }
+
             nativeDesktopCompanionController?.ApplySettings(
                 approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault(),
                 approvedActivityAnalysis?.CharacterDashboard?.CompanionState ?? CompanionState.CreateDefault());
@@ -424,9 +487,15 @@ namespace TokenForge.Client
             var companion = dashboard.CompanionState ?? CompanionState.CreateDefault();
             var settings = dashboard.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault();
             var codexConnected = approvedActivityAnalysis != null
-                && approvedActivityAnalysis.Onboarding.AgentSources.Any(source => source.SourceType == ConnectedAgentSourceType.Codex && source.Selected);
-            var repositoryConnected = approvedActivityAnalysis != null
-                && (approvedActivityAnalysis.Onboarding.GitConnected || !string.IsNullOrWhiteSpace(dashboard.CurrentRepositoryHash));
+                && approvedActivityAnalysis.Onboarding.AgentSources.Any(source => source.SourceType == ConnectedAgentSourceType.Codex && IsAgentReadyForNative(source));
+            var connectedRepositories = approvedActivityAnalysis == null
+                ? new List<RepositoryCompanionDisplayItem>()
+                : (approvedActivityAnalysis.RepositoryCompanions ?? new List<RepositoryCompanionDisplayItem>())
+                    .Where(item => !item.Archived &&
+                                   !string.IsNullOrWhiteSpace(item.RepositoryHash) &&
+                                   !string.Equals(item.RepositoryHash, RepositoryCompanionProfileService.DefaultLocalRepositoryHash, StringComparison.Ordinal))
+                    .ToList();
+            var repositoryConnected = ActiveRepositoryReadyForNative();
 
             var state = NativeDashboardState.CreateDefault();
             state.connection = "local";
@@ -435,11 +504,15 @@ namespace TokenForge.Client
             state.subtitle = "Turn your development activity into companion growth.";
             state.isLocalMode = true;
             state.syncStatusText = state.sync == "connected" ? "Safe sync connected" : "Sync optional";
-            state.selectedNavItem = "dashboard";
+            state.selectedNavItem = string.IsNullOrWhiteSpace(nativeSelectedNavItem) ? "dashboard" : nativeSelectedNavItem;
             state.primaryActionEnabled = true;
-            state.pendingReviewCount = (gitAnalysisFlow != null && gitAnalysisFlow.HasPendingReview ? 1 : 0)
-                + (agentAnalysisFlow != null && agentAnalysisFlow.HasPendingReview ? 1 : 0)
-                + (approvedActivityAnalysis?.PendingNativeActivityReview != null && gitAnalysisFlow?.HasPendingReview != true && agentAnalysisFlow?.HasPendingReview != true ? 1 : 0);
+            state.isAnalysisRunning = nativeAnalysisInProgress;
+            state.actionStatusKind = string.IsNullOrWhiteSpace(nativeActionStatusKind) ? "idle" : nativeActionStatusKind;
+            state.actionStatusText = SafeNativeText(nativeActionStatusText, "Ready");
+            var pendingNativeReview = approvedActivityAnalysis?.PendingNativeActivityReview;
+            state.pendingReviewCount = pendingNativeReview != null ? 1 : 0;
+            state.hasPendingReview = pendingNativeReview != null;
+            state.pendingEstimatedXP = Math.Max(0, pendingNativeReview?.EstimatedXpDelta ?? 0);
             state.warningCount = Math.Max(0, (approvedActivityAnalysis?.RetryQueueSummary?.PendingCount ?? 0) + (approvedActivityAnalysis?.TombstoneSummary?.PendingDeleteCount ?? 0));
             state.lastRunSummary = SafeNativeText(dashboard.LatestSafeSessionSummary, "No saved growth yet. Run Analysis on a repository or AI agent log to generate your first XP.");
             state.codeStat = Math.Max(0, dashboard.Code);
@@ -455,26 +528,553 @@ namespace TokenForge.Client
             state.companion.stageIndex = (int)companion.Stage;
             state.companion.level = Math.Max(1, companion.Level);
             state.companion.xp = Math.Max(0, dashboard.CurrentLevelExp);
+            state.persistedCompanionXP = Math.Max(0, dashboard.TotalExp);
             state.companion.xpToNextLevel = Math.Max(1, companion.XpToNextStage);
             state.companion.mood = settings.IsDesktopCompanionEnabled ? "active" : "hidden";
             state.companion.skin = string.IsNullOrWhiteSpace(settings.VisualThemeId) ? "orange_cat" : settings.VisualThemeId;
             state.repository.connected = repositoryConnected;
+            state.hasActiveRepository = repositoryConnected;
+            state.repository.id = repositoryConnected ? dashboard.CurrentRepositoryHash ?? string.Empty : string.Empty;
             state.repository.name = repositoryConnected ? SafeNativeText(dashboard.CurrentRepositoryAlias, "Local Repository") : string.Empty;
-            state.repository.status = repositoryConnected ? "local_connected" : "not_selected";
-            state.repository.statusText = repositoryConnected ? "Connected locally" : "Not selected";
+            state.repository.status = repositoryConnected ? "active" : "not_selected";
+            state.repositoryStatus = state.repository.status;
+            state.repository.connectedCount = connectedRepositories.Count;
+            state.repository.statusText = repositoryConnected ? "Active repository" : "No repository connected";
+            state.repository.disabledReason = repositoryConnected ? string.Empty : "Connect an active repository first.";
+            state.repository.hasValidSource = repositoryConnected;
+            state.repository.canAnalyze = repositoryConnected && !nativeAnalysisInProgress;
+            state.repository.analyzeDisabledReason = RepositoryAnalyzeDisabledReason(repositoryConnected, nativeAnalysisInProgress);
             state.codexAgent.connected = codexConnected;
-            state.codexAgent.status = codexConnected ? "connected_locally" : AgentCodexStatus();
-            state.codexAgent.statusText = codexConnected ? "Connected locally" : AgentCodexStatusText();
+            state.codexAgent.status = AgentCodexStatus();
+            state.codexAgent.statusText = AgentCodexStatusText();
+            state.repositories = BuildNativeRepositoryItems(dashboard);
+            state.agentProviders = BuildNativeAgentProviderItems();
+            state.agents.connectedCount = state.agentProviders.Count(provider => provider.connected && provider.hasValidSource);
+            state.agents.warningCount = state.agentProviders.Sum(provider => Math.Max(0, provider.warningCount));
+            state.agents.lastProvider = state.agentProviders.FirstOrDefault(provider => provider.connected && provider.hasValidSource)?.displayName ?? "None";
+            state.agents.statusText = state.agents.connectedCount > 0
+                ? state.agents.connectedCount + " provider" + (state.agents.connectedCount == 1 ? "" : "s") + " ready"
+                : "No agents connected";
+            state.agents.privacyText = "Local aggregate only";
+            state.primaryActionEnabled = !nativeAnalysisInProgress && (state.repository.canAnalyze || state.agentProviders.Any(provider => provider.canAnalyze));
+            state.providerUsagePercentages = BuildNativeProviderUsagePercentages();
             state.activity.todaySummary = SafeNativeText(dashboard.LatestSafeSessionSummary, "No activity yet");
-            state.activity.state = state.pendingReviewCount > 0 ? "Pending review" : dashboard.HasSavedRun ? "Saved" : "No pending review";
+            state.activity.state = ActivityStateText(repositoryConnected, state.agents.connectedCount > 0, dashboard.HasSavedRun, state.pendingReviewCount > 0);
             state.activity.code = Math.Max(0, dashboard.Code);
             state.activity.focus = Math.Max(0, dashboard.Focus);
             state.activity.debug = Math.Max(0, dashboard.Debug);
             state.activity.design = Math.Max(0, dashboard.Design);
             state.activity.sync = Math.Max(0, dashboard.Sync);
-            ApplyPendingReviewState(state, approvedActivityAnalysis?.PendingNativeActivityReview);
-            state.statusText = "Cdx " + state.activity.code + "% · CI " + state.activity.focus + "% · Gem " + state.activity.design + "%";
+            state.activity.recentRunsSummary = NativeRecentRunsSummary(dashboard.HasSavedRun, dashboard.ActivityLogSummary);
+            state.activity.savedReviewsSummary = dashboard.HasSavedRun ? SafeNativeText(dashboard.RecentGrowthSummary, "Saved review available.") : "No saved reviews";
+            state.activity.repositoryActivitySummary = HasSavedRepositoryActivity() ? SafeNativeText(dashboard.LatestSafeSessionSummary, "Repository activity saved.") : "No repository activity";
+            state.activity.agentActivitySummary = NativeAgentActivitySummary();
+            state.activity.hasRecentRuns = approvedActivityAnalysis?.RecentNativeAnalysisRuns?.Count > 0;
+            state.activity.hasSavedReviews = dashboard.HasSavedRun;
+            state.activity.hasRepositoryActivity = HasSavedRepositoryActivity();
+            state.activity.hasAiAgentActivity = HasSavedAgentActivity();
+            state.activity.runningJobs = BuildNativeRunningJobs();
+            state.activity.pendingReviews = BuildNativePendingReviews(pendingNativeReview);
+            state.activity.recentRuns = BuildNativeRecentRuns();
+            state.hasSavedReviews = state.activity.hasSavedReviews;
+            state.hasRepositoryActivity = state.activity.hasRepositoryActivity;
+            state.hasAiAgentActivity = state.activity.hasAiAgentActivity;
+            ApplyPendingReviewState(state, pendingNativeReview);
+            if (pendingNativeReview != null && nativeReviewDetailVisible &&
+                string.Equals(nativeSelectedReviewId, state.review.reviewId, StringComparison.Ordinal))
+            {
+                state.review.detailVisible = true;
+                state.review.selectedReviewId = nativeSelectedReviewId;
+            }
+
+            state.canSaveGrowth = state.review.pending && state.review.canSaveGrowth;
+            state.canDiscardPendingReview = state.review.pending && state.review.canDiscard;
+            if (nativeAnalysisInProgress)
+            {
+                state.activity.state = "Analyzing";
+                state.activity.todaySummary = SafeNativeText(nativeActionStatusText, "Analyzing safe aggregate activity.");
+            }
+            else if (string.Equals(nativeActionStatusKind, "error", StringComparison.Ordinal))
+            {
+                state.activity.state = "Needs attention";
+                state.activity.todaySummary = SafeNativeText(nativeActionStatusText, "Analysis failed safely.");
+                state.repositorySafeError = NativeSafeErrorCategoryFromStatusText(nativeActionStatusText);
+            }
+            state.statusText = NativeProviderUsageStatusText(state.providerUsagePercentages, state.agents.connectedCount);
+            EnforceNativeDashboardInvariants(state);
             return state;
+        }
+
+        private NativeRepositoryListItem[] BuildNativeRepositoryItems(CharacterDashboardSummary dashboard)
+        {
+            var items = approvedActivityAnalysis?.RepositoryCompanions ?? new List<RepositoryCompanionDisplayItem>();
+            return items
+                .Where(item => !string.IsNullOrWhiteSpace(item.RepositoryHash))
+                .Where(item => !string.Equals(item.RepositoryHash, RepositoryCompanionProfileService.DefaultLocalRepositoryHash, StringComparison.Ordinal))
+                .Select(item => new NativeRepositoryListItem
+                {
+                    id = item.RepositoryHash,
+                    name = SafeNativeText(item.SafeRepositoryAlias, "Local Repository"),
+                    safePath = "Approved local folder",
+                    companion = item.Stage + " · Lv " + Math.Max(1, item.Level),
+                    lastAnalyzed = string.IsNullOrWhiteSpace(item.LastApprovedActivityBucket) ? "Not analyzed" : item.LastApprovedActivityBucket,
+                    status = item.Archived ? "archived" : item.Selected ? "active" : "connected",
+                    statusText = item.Archived ? "Archived" : item.Selected ? "Active context" : "Connected",
+                    selected = item.Selected,
+                    canAnalyze = !item.Archived && item.Selected && gitAnalysisFlow != null && gitAnalysisFlow.HasSelectedRepositoryForLocalOnlyApproval,
+                    analyzeDisabledReason = item.Archived
+                        ? "Archived repositories cannot be analyzed."
+                        : item.Selected
+                            ? RepositoryAnalyzeDisabledReason(gitAnalysisFlow != null && gitAnalysisFlow.HasSelectedRepositoryForLocalOnlyApproval, nativeAnalysisInProgress)
+                            : "Set this repository active before analysis.",
+                    canDisconnect = !item.Archived && !nativeAnalysisInProgress,
+                    canRestore = item.Archived,
+                    canDelete = item.Archived,
+                    archived = item.Archived
+                })
+                .ToArray();
+        }
+
+        private static string RepositoryAnalyzeDisabledReason(bool hasActiveRepository, bool analysisRunning)
+        {
+            if (analysisRunning)
+            {
+                return "Analysis is already running.";
+            }
+
+            return hasActiveRepository ? string.Empty : "Connect an active repository first.";
+        }
+
+        private NativeAgentProviderState[] BuildNativeAgentProviderItems()
+        {
+            if (approvedActivityAnalysis == null)
+            {
+                return new NativeAgentProviderState[0];
+            }
+
+            return approvedActivityAnalysis.Onboarding.AgentSources
+                .Select(source =>
+                {
+                    var providerType = ProviderTypeForNative(source.SourceType);
+                    var manual = source.SourceType == ConnectedAgentSourceType.OtherManualLogFolder;
+                    var hasValidSource = AgentHasValidSourceForNative(source);
+                    var ready = IsAgentReadyForNative(source);
+                    var status = AgentProviderStatusForNative(source);
+                    var disabledReason = AgentDisabledReasonForNative(source);
+                    var sourceLabel = string.IsNullOrWhiteSpace(source.SafeLabel) ? "No local source selected" : source.SafeLabel;
+                    return new NativeAgentProviderState
+                    {
+                        id = NativeProviderId(providerType),
+                        displayName = source.DisplayName,
+                        type = NativeProviderId(providerType),
+                        detectionStrategy = manual ? "manual_folder" : "auto_detect_or_manual",
+                        supportedStatus = AgentSupportedStatusForNative(source),
+                        status = status,
+                        statusText = AgentProviderStatusText(status),
+                        connected = ready,
+                        hasValidSource = hasValidSource,
+                        canAutoDetect = !manual && !nativeAnalysisInProgress && source.State != AgentSourceSetupState.DetectingLocalSource,
+                        canConnect = !nativeAnalysisInProgress && !ready && (source.State == AgentSourceSetupState.NotSelected ||
+                                                                            source.State == AgentSourceSetupState.AnalysisFailedSafely ||
+                                                                            source.State == AgentSourceSetupState.PermissionRequired),
+                        canChooseFolder = !nativeAnalysisInProgress,
+                        canAnalyze = ready && !nativeAnalysisInProgress,
+                        canDisconnect = source.Selected,
+                        warningCount = Math.Max(0, source.WarningCount),
+                        safeCandidateSummary = sourceLabel,
+                        selectedSourceLabel = sourceLabel,
+                        lastAnalyzedAt = source.LastScanTimeUtc == null ? "Not analyzed" : source.LastScanTimeUtc.Value.UtcDateTime.ToString("yyyy-MM-dd"),
+                        lastErrorSafeMessage = status == "failed" ? SafeNativeText(source.StatusLabel, "Analysis failed safely.") : string.Empty,
+                        disabledReason = ready ? string.Empty : disabledReason,
+                        unsupportedReason = ready ? string.Empty : AgentUnsupportedReasonForNative(source)
+                    };
+                })
+                .ToArray();
+        }
+
+        private static string ActivityStateText(bool repositoryConnected, bool agentConnected, bool hasSavedRun, bool hasPendingReview)
+        {
+            if (hasPendingReview)
+            {
+                return "Pending review ready";
+            }
+
+            if (hasSavedRun)
+            {
+                return "Saved growth summary";
+            }
+
+            if (!repositoryConnected && !agentConnected)
+            {
+                return "Connect a repository or AI agent source";
+            }
+
+            return "No analysis runs yet";
+        }
+
+        private string NativeRecentRunsSummary(bool hasSavedRun, string savedRunSummary)
+        {
+            var latest = approvedActivityAnalysis?.RecentNativeAnalysisRuns?.FirstOrDefault();
+            if (latest != null)
+            {
+                return SafeNativeText(latest.SafeSummary, latest.Status + " · " + latest.ErrorCode);
+            }
+
+            return hasSavedRun ? SafeNativeText(savedRunSummary, "Recent aggregate activity saved.") : "No analysis runs yet.";
+        }
+
+        private NativeActivityItem[] BuildNativeRunningJobs()
+        {
+            if (!nativeAnalysisInProgress)
+            {
+                return new NativeActivityItem[0];
+            }
+
+            return new[]
+            {
+                new NativeActivityItem
+                {
+                    id = SafeNativeText(nativeCurrentAnalysisJobId, "analysis-running"),
+                    type = string.Equals(nativeCurrentAnalysisType, "agent", StringComparison.OrdinalIgnoreCase) ? "agentAnalysis" : "repositoryAnalysis",
+                    sourceName = SafeNativeText(nativeCurrentAnalysisSourceName, "Activity source"),
+                    status = "running",
+                    createdAt = SafeNativeText(nativeCurrentAnalysisStartedAt, DateTimeOffset.UtcNow.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss")),
+                    summary = SafeNativeText(nativeActionStatusText, "Analyzing safe aggregate activity."),
+                    currentStep = SafeNativeText(nativeCurrentAnalysisStep, "validating repository"),
+                    disabledReason = "Analysis is already running."
+                }
+            };
+        }
+
+        private NativeActivityItem[] BuildNativePendingReviews(PendingNativeActivityReview pending)
+        {
+            if (pending == null)
+            {
+                return new NativeActivityItem[0];
+            }
+
+            return new[]
+            {
+                new NativeActivityItem
+                {
+                    id = SafeNativeText(pending.ReviewId, "pending-review"),
+                    type = "pendingReview",
+                    sourceName = SafeNativeText(pending.SourceKind, "activity"),
+                    status = "pendingReview",
+                    createdAt = pending.CreatedAtUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                    summary = SafeNativeText(pending.SafeSummary, "Aggregate activity ready for review."),
+                    currentStep = "review ready",
+                    actionKey = "review.saveGrowth"
+                }
+            };
+        }
+
+        private NativeActivityItem[] BuildNativeRecentRuns()
+        {
+            return (approvedActivityAnalysis?.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>())
+                .Take(8)
+                .Select(run => new NativeActivityItem
+                {
+                    id = SafeNativeText(run.RunId, "activity-run"),
+                    type = string.Equals(run.SourceKind, "agent", StringComparison.OrdinalIgnoreCase) ? "agentAnalysis" :
+                        string.Equals(run.SourceKind, "repository", StringComparison.OrdinalIgnoreCase) ? "repositoryAnalysis" :
+                        string.Equals(run.SourceKind, "reviewSaved", StringComparison.OrdinalIgnoreCase) ? "reviewSaved" : SafeNativeText(run.SourceKind, "activity"),
+                    sourceName = SafeNativeText(run.SourceKind, "activity"),
+                    status = SafeNativeText(run.Status, "completed"),
+                    createdAt = run.CreatedAtUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                    completedAt = run.CreatedAtUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                    summary = SafeNativeText(run.SafeSummary, "Activity recorded."),
+                    currentStep = string.Equals(run.Status, "failed", StringComparison.OrdinalIgnoreCase) ? SafeNativeText(run.ErrorCode, "Unknown") : "completed"
+                })
+                .ToArray();
+        }
+
+        private bool HasSavedRepositoryActivity()
+        {
+            return (approvedActivityAnalysis?.RecentSessions ?? new List<RecentSafeSessionSummary>())
+                .Any(summary => string.Equals(summary.SourceProvider, "GIT", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private bool HasSavedAgentActivity()
+        {
+            return (approvedActivityAnalysis?.RecentSessions ?? new List<RecentSafeSessionSummary>())
+                .Any(summary => IsTrackedAgentProvider(summary.AgentProviderType));
+        }
+
+        private string NativeAgentActivitySummary()
+        {
+            var agentSummaries = (approvedActivityAnalysis?.RecentSessions ?? new List<RecentSafeSessionSummary>())
+                .Where(summary => IsTrackedAgentProvider(summary.AgentProviderType))
+                .Take(3)
+                .Select(summary => BootstrapUiTextFormatter.SafeLocalSessionLabel(summary))
+                .Where(summary => !string.IsNullOrWhiteSpace(summary))
+                .ToList();
+
+            return agentSummaries.Count == 0
+                ? "No AI agent activity"
+                : string.Join("\n", agentSummaries);
+        }
+
+        private NativeProviderUsagePercentage[] BuildNativeProviderUsagePercentages()
+        {
+            var summaries = approvedActivityAnalysis?.RecentSessions ?? new List<RecentSafeSessionSummary>();
+            var counts = new Dictionary<AgentProviderType, int>
+            {
+                { AgentProviderType.Codex, 0 },
+                { AgentProviderType.ClaudeCode, 0 },
+                { AgentProviderType.GeminiCli, 0 }
+            };
+
+            foreach (var summary in summaries)
+            {
+                var provider = MacAgentSourceDetector.NormalizeProvider(summary.AgentProviderType);
+                if (counts.ContainsKey(provider))
+                {
+                    counts[provider]++;
+                }
+            }
+
+            var total = counts.Values.Sum();
+            return new[]
+            {
+                ProviderUsage("codex", "Cdx", counts[AgentProviderType.Codex], total),
+                ProviderUsage("claudeCode", "Cl", counts[AgentProviderType.ClaudeCode], total),
+                ProviderUsage("geminiCli", "Gem", counts[AgentProviderType.GeminiCli], total)
+            };
+        }
+
+        private static NativeProviderUsagePercentage ProviderUsage(string id, string label, int count, int total)
+        {
+            return new NativeProviderUsagePercentage
+            {
+                providerId = id,
+                label = label,
+                percentage = total <= 0 || count <= 0 ? 0 : (int)Math.Round(100.0 * count / total),
+                hasSavedApprovedActivity = count > 0
+            };
+        }
+
+        private static string NativeProviderUsageStatusText(NativeProviderUsagePercentage[] usage, int readyProviderCount)
+        {
+            usage = usage ?? new NativeProviderUsagePercentage[0];
+            var visibleUsage = usage
+                .Where(item => item != null && item.hasSavedApprovedActivity && item.percentage > 0)
+                .Select(item => item.label + " " + Math.Max(0, Math.Min(100, item.percentage)) + "%")
+                .ToList();
+            if (visibleUsage.Count > 0)
+            {
+                return string.Join(" · ", visibleUsage);
+            }
+
+            if (readyProviderCount <= 0)
+            {
+                return "No Agents";
+            }
+
+            return readyProviderCount == 1 ? "1 Agent Ready" : readyProviderCount + " Agents Ready";
+        }
+
+        private static bool IsTrackedAgentProvider(AgentProviderType providerType)
+        {
+            providerType = MacAgentSourceDetector.NormalizeProvider(providerType);
+            return providerType == AgentProviderType.Codex ||
+                   providerType == AgentProviderType.ClaudeCode ||
+                   providerType == AgentProviderType.GeminiCli ||
+                   providerType == AgentProviderType.Cursor ||
+                   providerType == AgentProviderType.GitHubCopilot ||
+                   providerType == AgentProviderType.Manual;
+        }
+
+        private static string NativeSafeErrorCategoryFromStatusText(string statusText)
+        {
+            statusText = statusText ?? string.Empty;
+            foreach (var category in new[]
+                     {
+                         "NoActiveRepository",
+                         "RepositoryPathMissing",
+                         "RepositoryFolderNotFound",
+                         "NotAGitRepository",
+                         "GitExecutableNotFound",
+                         "PermissionDenied",
+                         "ProcessTimeout",
+                         "GitCommandFailed",
+                         "Unknown"
+                     })
+            {
+                if (statusText.IndexOf(category, StringComparison.Ordinal) >= 0)
+                {
+                    return category;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static bool IsAgentReadyForNative(ConnectedAgentSource source)
+        {
+            return source != null &&
+                   source.Selected &&
+                   AgentHasValidSourceForNative(source) &&
+                   (source.State == AgentSourceSetupState.ReadyToAnalyze ||
+                    source.State == AgentSourceSetupState.AnalysisComplete);
+        }
+
+        private static bool AgentHasValidSourceForNative(ConnectedAgentSource source)
+        {
+            return source != null &&
+                   source.Selected &&
+                   !string.IsNullOrWhiteSpace(source.SafeLabel) &&
+                   !string.IsNullOrWhiteSpace(source.SafeLocationHash);
+        }
+
+        private static AgentProviderType ProviderTypeForNative(ConnectedAgentSourceType sourceType)
+        {
+            switch (sourceType)
+            {
+                case ConnectedAgentSourceType.Cursor: return AgentProviderType.Cursor;
+                case ConnectedAgentSourceType.ClaudeCode: return AgentProviderType.ClaudeCode;
+                case ConnectedAgentSourceType.Codex: return AgentProviderType.Codex;
+                case ConnectedAgentSourceType.GitHubCopilot: return AgentProviderType.GitHubCopilot;
+                case ConnectedAgentSourceType.GeminiCli: return AgentProviderType.GeminiCli;
+                case ConnectedAgentSourceType.OtherManualLogFolder: return AgentProviderType.Manual;
+                default: return AgentProviderType.Unknown;
+            }
+        }
+
+        private static string NativeProviderId(AgentProviderType providerType)
+        {
+            switch (MacAgentSourceDetector.NormalizeProvider(providerType))
+            {
+                case AgentProviderType.Codex: return "codex";
+                case AgentProviderType.ClaudeCode: return "claudeCode";
+                case AgentProviderType.Cursor: return "cursor";
+                case AgentProviderType.GitHubCopilot: return "githubCopilot";
+                case AgentProviderType.GeminiCli: return "geminiCli";
+                case AgentProviderType.Manual: return "manual";
+                default: return "unknown";
+            }
+        }
+
+        private static string AgentProviderStatusForNative(ConnectedAgentSource source)
+        {
+            if (source == null || !source.Selected)
+            {
+                return "notConfigured";
+            }
+
+            switch (source.State)
+            {
+                case AgentSourceSetupState.DetectingLocalSource:
+                    return "validating";
+                case AgentSourceSetupState.LocalSourceDetected:
+                    return "detected";
+                case AgentSourceSetupState.ReadyToAnalyze:
+                    return AgentHasValidSourceForNative(source) ? "connected" : "notConfigured";
+                case AgentSourceSetupState.AnalysisComplete:
+                    return AgentHasValidSourceForNative(source) ? "analyzed" : "notConfigured";
+                case AgentSourceSetupState.AnalysisFailedSafely:
+                    return "error";
+                case AgentSourceSetupState.PermissionRequired:
+                    return "warning";
+                case AgentSourceSetupState.ManualImportRequired:
+                    return "needsFolder";
+                case AgentSourceSetupState.Selected:
+                    return "detected";
+                default:
+                    return "notConfigured";
+            }
+        }
+
+        private static string AgentProviderStatusText(string status)
+        {
+            switch (status)
+            {
+                case "detected": return "Detected locally";
+                case "connected": return "Ready to analyze";
+                case "analyzed": return "Analyzed";
+                case "needsFolder": return "Needs folder";
+                case "validating": return "Validating source";
+                case "analyzing": return "Analysis running";
+                case "warning": return "Needs attention";
+                case "error": return "Analysis failed";
+                case "disconnected": return "Disconnected";
+                default: return "Not configured";
+            }
+        }
+
+        private static string AgentDisabledReasonForNative(ConnectedAgentSource source)
+        {
+            if (source == null || !source.Selected)
+            {
+                return "Connect this provider first.";
+            }
+
+            if (source.State == AgentSourceSetupState.PermissionRequired)
+            {
+                return "Folder permission is required before analysis.";
+            }
+
+            if (source.State == AgentSourceSetupState.AnalysisFailedSafely)
+            {
+                return string.IsNullOrWhiteSpace(source.StatusLabel) ? "Last analysis failed safely." : source.StatusLabel;
+            }
+
+            return "Detect or choose a folder before analyzing.";
+        }
+
+        private static string AgentSupportedStatusForNative(ConnectedAgentSource source)
+        {
+            if (source == null)
+            {
+                return "unsupported_on_this_machine";
+            }
+
+            switch (source.State)
+            {
+                case AgentSourceSetupState.ReadyToAnalyze:
+                case AgentSourceSetupState.AnalysisComplete:
+                    return AgentHasValidSourceForNative(source) ? "connected" : "notConfigured";
+                case AgentSourceSetupState.LocalSourceDetected:
+                    return source.Selected ? "available" : "available";
+                case AgentSourceSetupState.PermissionRequired:
+                    return "error";
+                case AgentSourceSetupState.AnalysisFailedSafely:
+                    return "error";
+                case AgentSourceSetupState.ManualImportRequired:
+                    return source.Selected ? "selected" : "notConfigured";
+                case AgentSourceSetupState.DetectingLocalSource:
+                    return "selected";
+                default:
+                    if (source.SourceType == ConnectedAgentSourceType.GitHubCopilot)
+                    {
+                        return source.Selected ? "selected" : "notConfigured";
+                    }
+
+                    return source.SourceType == ConnectedAgentSourceType.OtherManualLogFolder
+                        ? source.Selected ? "selected" : "notConfigured"
+                        : source.Selected ? "selected" : "notConfigured";
+            }
+        }
+
+        private static string AgentUnsupportedReasonForNative(ConnectedAgentSource source)
+        {
+            if (source == null)
+            {
+                return "Provider is unavailable.";
+            }
+
+            switch (source.State)
+            {
+                case AgentSourceSetupState.PermissionRequired:
+                case AgentSourceSetupState.ManualImportRequired:
+                    return "Choose a local folder before analyzing.";
+                case AgentSourceSetupState.AnalysisFailedSafely:
+                    return string.IsNullOrWhiteSpace(source.StatusLabel) ? "Last analysis failed safely." : source.StatusLabel;
+                case AgentSourceSetupState.DetectingLocalSource:
+                    return "Detection is running.";
+                default:
+                    return source.Selected ? "Detect or choose a folder before analyzing." : "Select or connect this provider first.";
+            }
         }
 
         private string AgentCodexStatus()
@@ -487,17 +1087,19 @@ namespace TokenForge.Client
 
             switch (source.State)
             {
+                case AgentSourceSetupState.DetectingLocalSource:
+                    return "detecting";
                 case AgentSourceSetupState.PermissionRequired:
                     return "needs_folder_access";
                 case AgentSourceSetupState.ManualImportRequired:
-                    return "no_activity_found";
+                    return "manual_folder_required";
                 case AgentSourceSetupState.AnalysisFailedSafely:
-                    return "unsupported";
+                    return "analysis_failed";
                 case AgentSourceSetupState.ReadyToAnalyze:
                 case AgentSourceSetupState.AnalysisComplete:
-                    return "connected_locally";
+                    return source.Selected ? "ready" : "not_connected";
                 default:
-                    return "not_connected";
+                    return source.Selected ? "selected" : "not_connected";
             }
         }
 
@@ -507,12 +1109,16 @@ namespace TokenForge.Client
             {
                 case "needs_folder_access":
                     return "Needs folder access";
-                case "no_activity_found":
-                    return "Unsupported / No activity found";
-                case "unsupported":
-                    return "Unsupported / No activity found";
-                case "connected_locally":
-                    return "Connected locally";
+                case "manual_folder_required":
+                    return "Manual folder required";
+                case "analysis_failed":
+                    return "Analysis failed safely";
+                case "detecting":
+                    return "Detecting";
+                case "ready":
+                    return "Ready to analyze";
+                case "selected":
+                    return "Selected. Detect or choose folder.";
                 default:
                     return "Not connected";
             }
@@ -526,9 +1132,12 @@ namespace TokenForge.Client
             }
 
             var deltas = pending.StatDeltas ?? CharacterStats.Zero();
+            state.review.reviewId = SafeNativeText(pending.ReviewId, pending.SafeSession?.SessionId ?? "pending-review");
             state.review.pending = true;
             state.review.summary = SafeNativeText(pending.SafeSummary, "Aggregate activity ready for review.");
             state.review.source = pending.SourceKind;
+            state.review.repositoryName = SafeNativeText(state.repository?.name, "No active repository");
+            state.review.providerName = PendingReviewProviderName(pending);
             state.review.confidence = pending.Confidence;
             state.review.estimatedXpDelta = Math.Max(0, pending.EstimatedXpDelta);
             state.review.codeDelta = Math.Max(0, deltas.Logic + deltas.Architecture + deltas.Velocity);
@@ -537,9 +1146,175 @@ namespace TokenForge.Client
             state.review.designDelta = Math.Max(0, deltas.Design + deltas.Creativity);
             state.review.syncDelta = 0;
             state.review.warnings = string.Join(", ", (pending.WarningIds ?? new List<string>()).Take(3));
+            state.review.canSaveGrowth = true;
+            state.review.canDiscard = true;
+            state.review.canViewDetails = true;
+            state.review.status = "pending";
+            state.review.generatedAt = pending.CreatedAtUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss");
+            state.review.selectedReviewId = state.review.reviewId;
             state.activity.state = "Pending review";
             state.activity.todaySummary = state.review.summary;
             state.lastRunSummary = state.review.summary + " Approve to apply +" + state.review.estimatedXpDelta + " XP.";
+        }
+
+        private static string PendingReviewProviderName(PendingNativeActivityReview pending)
+        {
+            var session = pending?.SafeSessions?.FirstOrDefault(item => item?.AgentActivitySummary != null) ??
+                          (pending?.SafeSession?.AgentActivitySummary != null ? pending.SafeSession : null);
+            if (session?.AgentActivitySummary == null)
+            {
+                return string.Empty;
+            }
+
+            return MacAgentSourceDetector.SafeProviderLabel(session.AgentActivitySummary.ProviderType);
+        }
+
+        private static void EnforceNativeDashboardInvariants(NativeDashboardState state)
+        {
+            if (state == null)
+            {
+                return;
+            }
+
+            var hasPendingReview = state.review != null && state.review.pending;
+            state.pendingReviewCount = hasPendingReview ? 1 : 0;
+            state.hasPendingReview = hasPendingReview;
+            if (!hasPendingReview)
+            {
+                state.review = state.review ?? NativeReviewState.CreateDefault();
+                state.review.pending = false;
+                state.review.summary = "No pending review";
+                state.review.reviewId = string.Empty;
+                state.review.source = string.Empty;
+                state.review.repositoryName = string.Empty;
+                state.review.providerName = string.Empty;
+                state.review.confidence = string.Empty;
+                state.review.estimatedXpDelta = 0;
+                state.review.codeDelta = 0;
+                state.review.focusDelta = 0;
+                state.review.debugDelta = 0;
+                state.review.designDelta = 0;
+                state.review.syncDelta = 0;
+                state.review.warnings = string.Empty;
+                state.review.canSaveGrowth = false;
+                state.review.canDiscard = false;
+                state.review.canViewDetails = false;
+                state.review.detailVisible = false;
+                state.review.selectedReviewId = string.Empty;
+                state.review.generatedAt = string.Empty;
+                state.review.status = "none";
+                state.canSaveGrowth = false;
+                state.canDiscardPendingReview = false;
+                state.pendingEstimatedXP = 0;
+                if (string.Equals(state.activity?.state, "Pending review ready", StringComparison.Ordinal) ||
+                    string.Equals(state.activity?.state, "Pending review", StringComparison.Ordinal))
+                {
+                    state.activity.state = "No pending review";
+                }
+
+                if (string.Equals(state.actionStatusKind, "success", StringComparison.Ordinal) &&
+                    (state.actionStatusText ?? string.Empty).IndexOf("Pending review is ready", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    state.actionStatusKind = "idle";
+                    state.actionStatusText = "Ready";
+                }
+            }
+            else
+            {
+                state.review.canSaveGrowth = true;
+                state.review.canDiscard = true;
+                state.review.canViewDetails = true;
+                state.canSaveGrowth = true;
+                state.canDiscardPendingReview = true;
+                state.pendingEstimatedXP = Math.Max(0, state.review.estimatedXpDelta);
+                if (string.Equals(state.review.summary, "No pending review", StringComparison.OrdinalIgnoreCase))
+                {
+                    state.review.summary = "Aggregate activity ready for review.";
+                }
+            }
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (!hasPendingReview && (state.review.canSaveGrowth || state.review.canDiscard || state.review.canViewDetails))
+            {
+                Debug.LogError("ERROR [NativeDashboard] invariant violated: pendingReview=false but review actions are enabled");
+            }
+
+            if (!hasPendingReview && (state.actionStatusText ?? string.Empty).IndexOf("Pending review is ready", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                Debug.LogError("ERROR [NativeDashboard] invariant violated: pendingReview=false but header says pending review is ready");
+            }
+
+            if (hasPendingReview && string.Equals(state.review.summary, "No pending review", StringComparison.OrdinalIgnoreCase))
+            {
+                Debug.LogError("ERROR [NativeDashboard] invariant violated: pendingReview=true but pending card says no pending review");
+            }
+
+            if (!state.hasSavedReviews && LooksLikeSampleSavedReview(state.activity?.savedReviewsSummary))
+            {
+                Debug.LogError("ERROR [NativeDashboard] invariant violated: sample saved review leaked into production projection");
+            }
+
+            if (!state.hasRepositoryActivity && LooksLikeSampleRepositoryActivity(state.activity?.repositoryActivitySummary))
+            {
+                Debug.LogError("ERROR [NativeDashboard] invariant violated: sample repository activity leaked into production projection");
+            }
+
+            if (!state.hasAiAgentActivity && LooksLikeSampleAgentActivity(state.activity?.agentActivitySummary))
+            {
+                Debug.LogError("ERROR [NativeDashboard] invariant violated: sample AI agent activity leaked into production projection");
+            }
+
+            foreach (var provider in state.agentProviders ?? new NativeAgentProviderState[0])
+            {
+                if (!provider.hasValidSource && provider.connected)
+                {
+                    Debug.LogError("ERROR [NativeDashboard] invariant violated: provider connected without valid source provider=" + provider.id);
+                }
+
+                if (!provider.hasValidSource && provider.canAnalyze)
+                {
+                    Debug.LogError("ERROR [NativeDashboard] invariant violated: provider canAnalyze without valid source provider=" + provider.id);
+                }
+            }
+
+            var claudeUsage = (state.providerUsagePercentages ?? new NativeProviderUsagePercentage[0])
+                .FirstOrDefault(item => string.Equals(item.providerId, "claudeCode", StringComparison.Ordinal));
+            if ((claudeUsage == null || claudeUsage.percentage == 0) &&
+                (state.statusText ?? string.Empty).IndexOf("Cl " + "10%", StringComparison.Ordinal) >= 0)
+            {
+                Debug.LogError("ERROR [NativeDashboard] invariant violated: status bar shows Claude usage without approved Claude activity");
+            }
+
+            if (!state.hasActiveRepository && string.Equals(state.repository?.statusText, "Active repository", StringComparison.Ordinal))
+            {
+                Debug.LogError("ERROR [NativeDashboard] invariant violated: active repository shown without active repository state");
+            }
+#endif
+        }
+
+        private static bool LooksLikeSampleSavedReview(string value)
+        {
+            value = value ?? string.Empty;
+            return value.IndexOf("sample saved review", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   value.IndexOf("+101" + " XP", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   value.IndexOf("Level 1" + " -> 1", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool LooksLikeSampleRepositoryActivity(string value)
+        {
+            value = value ?? string.Empty;
+            return value.IndexOf("sample repository activity", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   value.IndexOf("category " + "Test", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   value.IndexOf("confidence " + "Medium", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   value.IndexOf("warnings " + "2", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   value.IndexOf("sessions " + "One", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   value.IndexOf("interactions " + "Large", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool LooksLikeSampleAgentActivity(string value)
+        {
+            value = value ?? string.Empty;
+            return value.IndexOf("2 providers " + "ready", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   value.IndexOf("sample AI agent activity", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private void HandleNativeDashboardAction(NativeDashboardActionRequest request)
@@ -549,10 +1324,44 @@ namespace TokenForge.Client
                 return;
             }
 
-            Debug.Log("INFO [NativeDashboard] action received action=" + request.Action + " raw=" + request.RawAction);
+            Debug.Log("INFO [NativeAction] received action=" + request.RawAction);
+            lock (pendingNativeActionsLock)
+            {
+                pendingNativeActions.Enqueue(request);
+            }
+        }
+
+        private bool TryDequeueNativeAction(out NativeDashboardActionRequest request)
+        {
+            lock (pendingNativeActionsLock)
+            {
+                if (pendingNativeActions.Count > 0)
+                {
+                    request = pendingNativeActions.Dequeue();
+                    return true;
+                }
+            }
+
+            request = null;
+            return false;
+        }
+
+        private void RouteNativeDashboardAction(NativeDashboardActionRequest request)
+        {
+            if (Thread.CurrentThread.ManagedThreadId != unityMainThreadId)
+            {
+                Debug.LogWarning("WARN [Threading] mainThread violation action=" + request.RawAction);
+            }
+
+            Debug.Log("INFO [NativeAction] routed action=" + request.RawAction + " handler=" + request.Action);
+            Debug.Log("INFO [DashboardAction] action=" + request.RawAction + " target=" + request.Value + " enabled=true result=received");
             switch (request.Action)
             {
                 case NativeDashboardAction.Dashboard:
+                    nativeSelectedNavItem = "dashboard";
+                    RunNativeDashboardTask(RefreshAndPublishNativeDashboardAsync, request.RawAction);
+                    nativeDashboardService?.ShowDashboardWindow();
+                    break;
                 case NativeDashboardAction.ShowDashboard:
                     nativeDashboardService?.ShowDashboardWindow();
                     break;
@@ -563,53 +1372,117 @@ namespace TokenForge.Client
                     nativeDashboardService?.HideDashboardWindow();
                     break;
                 case NativeDashboardAction.Settings:
+                    nativeSelectedNavItem = "settings";
                     nativeDashboardService?.ShowSettingsWindow();
+                    RunNativeDashboardTask(RefreshAndPublishNativeDashboardAsync, request.RawAction);
                     break;
                 case NativeDashboardAction.Activity:
-                    _ = RefreshAndPublishNativeDashboardAsync();
+                    nativeSelectedNavItem = "activity";
+                    RunNativeDashboardTask(RefreshAndPublishNativeDashboardAsync, request.RawAction);
                     break;
                 case NativeDashboardAction.RunAnalysis:
-                    _ = RunNativeAnalysisAsync();
+                    RunNativeDashboardTask(() => RunNativeAnalysisAsync(), request.RawAction);
+                    break;
+                case NativeDashboardAction.RunRepositoryAnalysis:
+                    RunNativeDashboardTask(() => RunNativeAnalysisAsync(repositoryOnly: true), request.RawAction);
+                    break;
+                case NativeDashboardAction.RunAgentAnalysis:
+                    RunNativeDashboardTask(RunNativeAgentAnalysisAsync, request.RawAction);
                     break;
                 case NativeDashboardAction.ConnectRepository:
                 case NativeDashboardAction.ChangeRepository:
+                case NativeDashboardAction.ChooseRepositoryFolder:
+                    nativeSelectedNavItem = "repository";
+                    RunNativeDashboardTask(ConnectRepositoryFromNativeAsync, request.RawAction);
+                    break;
                 case NativeDashboardAction.Repository:
-                    _ = ConnectRepositoryFromNativeAsync();
+                    nativeSelectedNavItem = "repository";
+                    RunNativeDashboardTask(RefreshAndPublishNativeDashboardAsync, request.RawAction);
+                    break;
+                case NativeDashboardAction.SelectRepository:
+                    nativeSelectedNavItem = "repository";
+                    RunNativeDashboardTask(() => SelectRepositoryFromNativeAsync(request.Value), request.RawAction);
+                    break;
+                case NativeDashboardAction.AnalyzeRepository:
+                    RunNativeDashboardTask(() => RunNativeAnalysisAsync(request.Value, repositoryOnly: true), request.RawAction);
+                    break;
+                case NativeDashboardAction.DisconnectRepository:
+                    nativeSelectedNavItem = "repository";
+                    RunNativeDashboardTask(() => DisconnectRepositoryFromNativeAsync(request.Value), request.RawAction);
                     break;
                 case NativeDashboardAction.ConnectCodexAgent:
-                case NativeDashboardAction.CodexAgent:
-                    _ = ConnectCodexFromNativeAsync();
+                    nativeSelectedNavItem = "aiAgents";
+                    RunNativeDashboardTask(ConnectCodexFromNativeAsync, request.RawAction);
                     break;
+                case NativeDashboardAction.ConnectAiAgent:
+                    nativeSelectedNavItem = "aiAgents";
+                    RunNativeDashboardTask(() => ConnectAgentFromNativeAsync(string.IsNullOrWhiteSpace(request.Value) ? "codex" : request.Value), request.RawAction);
+                    break;
+                case NativeDashboardAction.CodexAgent:
+                case NativeDashboardAction.ManageAgents:
+                    nativeSelectedNavItem = "aiAgents";
+                    RunNativeDashboardTask(RefreshAndPublishNativeDashboardAsync, request.RawAction);
+                    break;
+                case NativeDashboardAction.AutoDetectAgent:
+                case NativeDashboardAction.DetectAgent:
+                    nativeSelectedNavItem = "aiAgents";
+                    RunNativeDashboardTask(() => AutoDetectAgentFromNativeAsync(request.Value), request.RawAction);
+                    break;
+                case NativeDashboardAction.ConnectAgent:
+                    nativeSelectedNavItem = "aiAgents";
+                    RunNativeDashboardTask(() => ConnectAgentFromNativeAsync(request.Value), request.RawAction);
+                    break;
+                case NativeDashboardAction.ChooseAgentFolder:
                 case NativeDashboardAction.SelectCodexLogFolder:
-                    _ = SelectCodexLogFolderFromNativeAsync();
+                    nativeSelectedNavItem = "aiAgents";
+                    RunNativeDashboardTask(() => SelectAgentFolderFromNativeAsync(request.Value), request.RawAction);
+                    break;
+                case NativeDashboardAction.AnalyzeAgent:
+                    RunNativeDashboardTask(() => RunNativeAnalysisAsync(string.Empty, request.Value), request.RawAction);
+                    break;
+                case NativeDashboardAction.DisconnectAgent:
+                    nativeSelectedNavItem = "aiAgents";
+                    RunNativeDashboardTask(() => DisconnectAgentFromNativeAsync(request.Value), request.RawAction);
                     break;
                 case NativeDashboardAction.ReviewActivity:
-                    _ = ReviewNativeActivityAsync();
+                    nativeSelectedNavItem = "activity";
+                    RunNativeDashboardTask(ReviewNativeActivityAsync, request.RawAction);
+                    break;
+                case NativeDashboardAction.ViewReviewDetails:
+                    nativeSelectedNavItem = "activity";
+                    RunNativeDashboardTask(() => ViewNativeReviewDetailsAsync(request.Value), request.RawAction);
                     break;
                 case NativeDashboardAction.ApproveReview:
-                    _ = ApproveNativeReviewAsync();
+                case NativeDashboardAction.SaveReview:
+                case NativeDashboardAction.SaveGrowth:
+                    RunNativeDashboardTask(ApproveNativeReviewAsync, request.RawAction);
+                    break;
+                case NativeDashboardAction.SafeSync:
+                    nativeActionStatusKind = "error";
+                    nativeActionStatusText = "Safe Sync needs a server session. Local analysis and Save Growth still work offline.";
+                    RunNativeDashboardTask(RefreshAndPublishNativeDashboardAsync, request.RawAction);
                     break;
                 case NativeDashboardAction.DiscardReview:
-                    _ = DiscardNativeReviewAsync();
+                    RunNativeDashboardTask(DiscardNativeReviewAsync, request.RawAction);
                     break;
                 case NativeDashboardAction.ToggleCompanionVisible:
-                    _ = SetCompanionVisibleFromNativeAsync(request.BoolValue(!(approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings?.IsDesktopCompanionEnabled ?? true)));
+                    RunNativeDashboardTask(() => SetCompanionVisibleFromNativeAsync(request.BoolValue(!(approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings?.IsDesktopCompanionEnabled ?? true))), request.RawAction);
                     break;
                 case NativeDashboardAction.SetWanderEnabled:
-                    _ = SetWanderEnabledFromNativeAsync(request.BoolValue(true));
+                    RunNativeDashboardTask(() => SetWanderEnabledFromNativeAsync(request.BoolValue(true)), request.RawAction);
                     break;
                 case NativeDashboardAction.SetClickReactionEnabled:
-                    _ = SetClickReactionEnabledFromNativeAsync(request.BoolValue(true));
+                    RunNativeDashboardTask(() => SetClickReactionEnabledFromNativeAsync(request.BoolValue(true)), request.RawAction);
                     break;
                 case NativeDashboardAction.ResetCompanionPosition:
-                    _ = ResetCompanionPositionFromNativeAsync();
+                    RunNativeDashboardTask(ResetCompanionPositionFromNativeAsync, request.RawAction);
                     break;
                 case NativeDashboardAction.ChangeCompanionSkin:
-                    _ = SetCompanionSkinFromNativeAsync(request.Value);
+                    RunNativeDashboardTask(() => SetCompanionSkinFromNativeAsync(request.Value), request.RawAction);
                     break;
                 case NativeDashboardAction.SetLaunchAtLogin:
                     Debug.Log("INFO [NativeDashboard] launch at login requested value=" + request.Value + " status=comingSoon");
-                    _ = RefreshAndPublishNativeDashboardAsync();
+                    RunNativeDashboardTask(RefreshAndPublishNativeDashboardAsync, request.RawAction);
                     break;
                 case NativeDashboardAction.Homepage:
                     Application.OpenURL("https://github.com/HwangSeokBeom/TokenForge");
@@ -624,6 +1497,31 @@ namespace TokenForge.Client
                     Debug.Log("INFO [NativeDashboard] reset local state requested status=manualRequired");
                     nativeDashboardService?.ShowDashboardWindow();
                     break;
+                case NativeDashboardAction.Unsupported:
+                    Debug.LogWarning("WARN [NativeAction] unknown action=" + request.RawAction);
+                    SetUnsupportedNativeAction("Unsupported dashboard action.");
+                    RunNativeDashboardTask(RefreshAndPublishNativeDashboardAsync, request.RawAction);
+                    break;
+            }
+        }
+
+        private async void RunNativeDashboardTask(Func<Task> taskFactory, string action)
+        {
+            Debug.Log("INFO [Threading] dispatch background action=" + action);
+            try
+            {
+                await taskFactory();
+                Debug.Log("INFO [Threading] dispatch main action=" + action);
+                Debug.Log("INFO [DashboardAction] action=" + action + " target= result=completed");
+            }
+            catch (Exception exception)
+            {
+                nativeAnalysisInProgress = false;
+                nativeActionStatusKind = "error";
+                nativeActionStatusText = "Action failed safely: " + exception.GetType().Name;
+                Debug.LogError("ERROR [NativeAction] action failed action=" + action + " reason=" + exception.Message);
+                Debug.Log("INFO [DashboardAction] action=" + action + " target= result=failed");
+                ApplyNativeShellState(showDashboardIfNeeded: false);
             }
         }
 
@@ -640,59 +1538,567 @@ namespace TokenForge.Client
                 return;
             }
 
-            await approvedActivityAnalysis.SelectLocalGitRepositoryForOnboardingAsync();
+            Debug.Log("INFO [Repository] connect begin");
+            var result = await approvedActivityAnalysis.SelectLocalGitRepositoryForOnboardingAsync();
+            var connected = result.IsSuccess && ActiveRepositoryReadyForNative();
+            nativeActionStatusKind = connected ? "success" : result.IsSuccess ? "warning" : "error";
+            nativeActionStatusText = connected
+                ? "Repository connected. Run Analysis to create a pending review."
+                : result.IsSuccess
+                    ? "Repository selection cancelled. No repository connected."
+                    : "Repository connection failed: " + SafeNativeText(result.ErrorMessage, result.ErrorCode);
+            if (!result.IsSuccess)
+            {
+                Debug.LogWarning("WARN [Repository] validate failed reason=" + result.ErrorCode);
+            }
+            Debug.Log("INFO [RepositoryState] active=" + SafeNativeText(approvedActivityAnalysis.CharacterDashboard?.CurrentRepositoryHash, "none") + " count=" + (approvedActivityAnalysis.RepositoryCompanions?.Count ?? 0) + " archived=0");
+
             await RefreshAndPublishNativeDashboardAsync();
         }
 
         private async Task ConnectCodexFromNativeAsync()
         {
+            await ConnectAgentFromNativeAsync("Codex");
+        }
+
+        private async Task SelectRepositoryFromNativeAsync(string repositoryHash)
+        {
+            if (approvedActivityAnalysis == null || string.IsNullOrWhiteSpace(repositoryHash))
+            {
+                return;
+            }
+
+            var result = await approvedActivityAnalysis.SelectRepositoryCompanionProfileAsync(repositoryHash);
+            nativeActionStatusKind = result.IsSuccess ? "success" : "error";
+            nativeActionStatusText = result.IsSuccess ? "Active repository changed." : "Repository switch failed: " + SafeNativeText(result.ErrorMessage, result.ErrorCode);
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task DisconnectRepositoryFromNativeAsync(string repositoryHash)
+        {
+            if (approvedActivityAnalysis == null || string.IsNullOrWhiteSpace(repositoryHash))
+            {
+                return;
+            }
+
+            var result = await approvedActivityAnalysis.RemoveRepositoryCompanionProfileAsync(repositoryHash);
+            if (result.IsSuccess)
+            {
+                await approvedActivityAnalysis.RefreshApprovedLocationsAsync();
+                await approvedActivityAnalysis.RestoreLocalSelectionsFromApprovedLocationsAsync();
+                if (!ActiveRepositoryReadyForNative())
+                {
+                    gitAnalysisFlow?.ClearSelection();
+                }
+            }
+
+            nativeActionStatusKind = result.IsSuccess ? "success" : "error";
+            nativeActionStatusText = result.IsSuccess ? "Repository archived. Active context moved to the next available repository." : "Repository archive failed: " + SafeNativeText(result.ErrorMessage, result.ErrorCode);
+            Debug.Log("INFO [RepositoryState] active=" + SafeNativeText(approvedActivityAnalysis.CharacterDashboard?.CurrentRepositoryHash, "none") + " count=" + (approvedActivityAnalysis.RepositoryCompanions?.Count ?? 0) + " archived=true");
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task AutoDetectAgentFromNativeAsync(string providerValue)
+        {
             if (approvedActivityAnalysis == null)
             {
                 return;
             }
 
-            var result = await approvedActivityAnalysis.DetectAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex);
+            if (!TrySourceTypeForNative(providerValue, out var sourceType))
+            {
+                SetUnsupportedNativeAction("Unsupported AI provider action.");
+                await RefreshAndPublishNativeDashboardAsync();
+                return;
+            }
+
+            var result = await approvedActivityAnalysis.DetectAgentSourceForOnboardingAsync(sourceType);
+            nativeActionStatusKind = result.IsSuccess ? "success" : "error";
+            nativeActionStatusText = result.IsSuccess ? "AI agent provider detected." : "AI agent detection needs attention: " + SafeNativeText(result.ErrorMessage, result.ErrorCode);
+            var source = approvedActivityAnalysis.Onboarding.AgentSources.FirstOrDefault(item => item.SourceType == sourceType);
+            Debug.Log("INFO [AgentState] provider=" + sourceType + " status=" + AgentProviderStatusForNative(source) + " source=" + SafeNativeText(source?.SafeLabel, "none") + " warnings=" + Math.Max(0, source?.WarningCount ?? 0));
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task ConnectAgentFromNativeAsync(string providerValue)
+        {
+            if (approvedActivityAnalysis == null)
+            {
+                return;
+            }
+
+            if (!TrySourceTypeForNative(providerValue, out var sourceType))
+            {
+                SetUnsupportedNativeAction("Unsupported AI provider action.");
+                await RefreshAndPublishNativeDashboardAsync();
+                return;
+            }
+
+            var result = await approvedActivityAnalysis.DetectAgentSourceForOnboardingAsync(sourceType);
             if (!result.IsSuccess)
             {
-                Debug.Log("WARN [NativeDashboard] Codex local auto-detect unavailable; requesting local folder selection only category=" + result.ErrorCode);
-                await approvedActivityAnalysis.SelectManualAgentLogForOnboardingAsync(ConnectedAgentSourceType.Codex);
+                result = await approvedActivityAnalysis.SelectManualAgentLogForOnboardingAsync(sourceType);
             }
 
+            var ready = IsAgentReadyForNative(approvedActivityAnalysis.Onboarding.AgentSources.FirstOrDefault(item => item.SourceType == sourceType));
+            nativeActionStatusKind = result.IsSuccess && ready ? "success" : "error";
+            nativeActionStatusText = result.IsSuccess && ready
+                ? "AI agent provider ready. Analyze it from the AI Agents screen."
+                : "AI agent connection needs a manual folder: " + SafeNativeText(result.ErrorMessage, result.ErrorCode);
+            var source = approvedActivityAnalysis.Onboarding.AgentSources.FirstOrDefault(item => item.SourceType == sourceType);
+            Debug.Log("INFO [AgentState] provider=" + sourceType + " status=" + AgentProviderStatusForNative(source) + " source=" + SafeNativeText(source?.SafeLabel, "none") + " warnings=" + Math.Max(0, source?.WarningCount ?? 0));
             await RefreshAndPublishNativeDashboardAsync();
         }
 
-        private async Task SelectCodexLogFolderFromNativeAsync()
+        private async Task SelectAgentFolderFromNativeAsync(string providerValue)
         {
             if (approvedActivityAnalysis == null)
             {
                 return;
             }
 
-            await approvedActivityAnalysis.SelectManualAgentLogForOnboardingAsync(ConnectedAgentSourceType.Codex);
+            if (!TrySourceTypeForNative(providerValue, out var sourceType))
+            {
+                SetUnsupportedNativeAction("Unsupported AI provider action.");
+                await RefreshAndPublishNativeDashboardAsync();
+                return;
+            }
+
+            var result = await approvedActivityAnalysis.SelectManualAgentLogForOnboardingAsync(sourceType);
+            var ready = IsAgentReadyForNative(approvedActivityAnalysis.Onboarding.AgentSources.FirstOrDefault(item => item.SourceType == sourceType));
+            nativeActionStatusKind = result.IsSuccess && ready ? "success" : result.IsSuccess ? "warning" : "error";
+            nativeActionStatusText = result.IsSuccess && ready
+                ? "AI agent folder selected."
+                : result.IsSuccess
+                    ? "AI agent folder selection cancelled. Existing state is unchanged."
+                    : "AI agent folder selection failed: " + SafeNativeText(result.ErrorMessage, result.ErrorCode);
             await RefreshAndPublishNativeDashboardAsync();
         }
 
-        private async Task RunNativeAnalysisAsync()
+        private async Task DisconnectAgentFromNativeAsync(string providerValue)
         {
             if (approvedActivityAnalysis == null)
             {
                 return;
             }
 
-            if (gitAnalysisFlow != null && gitAnalysisFlow.HasSelectedRepositoryForLocalOnlyApproval)
+            if (!TrySourceTypeForNative(providerValue, out var sourceType))
             {
-                await approvedActivityAnalysis.AnalyzeGitActivityAsync();
-            }
-            else if (agentAnalysisFlow != null && agentAnalysisFlow.HasSelectedAgentLogLocationForLocalOnlyApproval)
-            {
-                await approvedActivityAnalysis.AnalyzeAgentActivityAsync();
-            }
-            else
-            {
-                Debug.Log("INFO [NativeDashboard] runAnalysis requires repository or Codex connection");
+                SetUnsupportedNativeAction("Unsupported AI provider action.");
+                await RefreshAndPublishNativeDashboardAsync();
+                return;
             }
 
+            var result = await approvedActivityAnalysis.DisconnectAgentSourceForOnboardingAsync(sourceType);
+            nativeActionStatusKind = result.IsSuccess ? "success" : "error";
+            nativeActionStatusText = result.IsSuccess ? "AI agent provider disconnected." : "AI agent disconnect failed: " + SafeNativeText(result.ErrorMessage, result.ErrorCode);
             await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private static ConnectedAgentSourceType SourceTypeForNative(string providerValue)
+        {
+            return TrySourceTypeForNative(providerValue, out var sourceType) ? sourceType : ConnectedAgentSourceType.Codex;
+        }
+
+        private static bool TrySourceTypeForNative(string providerValue, out ConnectedAgentSourceType sourceType)
+        {
+            var normalizedValue = (providerValue ?? string.Empty).Trim();
+            switch (normalizedValue)
+            {
+                case "cursor":
+                    sourceType = ConnectedAgentSourceType.Cursor;
+                    return true;
+                case "claudeCode":
+                case "claude-code":
+                case "claude_code":
+                    sourceType = ConnectedAgentSourceType.ClaudeCode;
+                    return true;
+                case "codex":
+                    sourceType = ConnectedAgentSourceType.Codex;
+                    return true;
+                case "githubCopilot":
+                case "github-copilot":
+                case "github_copilot":
+                    sourceType = ConnectedAgentSourceType.GitHubCopilot;
+                    return true;
+                case "geminiCli":
+                case "gemini-cli":
+                case "gemini_cli":
+                    sourceType = ConnectedAgentSourceType.GeminiCli;
+                    return true;
+                case "manual":
+                    sourceType = ConnectedAgentSourceType.OtherManualLogFolder;
+                    return true;
+            }
+
+            switch (MacAgentSourceDetector.NormalizeProviderValue(providerValue).ToString())
+            {
+                case "Cursor":
+                    sourceType = ConnectedAgentSourceType.Cursor;
+                    return true;
+                case "ClaudeCode":
+                    sourceType = ConnectedAgentSourceType.ClaudeCode;
+                    return true;
+                case "Codex":
+                    sourceType = ConnectedAgentSourceType.Codex;
+                    return true;
+                case "GitHubCopilot":
+                    sourceType = ConnectedAgentSourceType.GitHubCopilot;
+                    return true;
+                case "GeminiCli":
+                    sourceType = ConnectedAgentSourceType.GeminiCli;
+                    return true;
+                case "Manual":
+                    sourceType = ConnectedAgentSourceType.OtherManualLogFolder;
+                    return true;
+                default:
+                    sourceType = ConnectedAgentSourceType.Codex;
+                    return false;
+            }
+        }
+
+        private bool ProviderReadyForNative(string providerValue)
+        {
+            if (!TrySourceTypeForNative(providerValue, out var sourceType) || approvedActivityAnalysis == null)
+            {
+                return false;
+            }
+
+            var source = approvedActivityAnalysis.Onboarding.AgentSources.FirstOrDefault(item => item.SourceType == sourceType);
+            return IsAgentReadyForNative(source);
+        }
+
+        private bool ActiveRepositoryReadyForNative()
+        {
+            var dashboard = approvedActivityAnalysis?.CharacterDashboard;
+            var activeHash = dashboard?.CurrentRepositoryHash ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(activeHash) ||
+                string.Equals(activeHash, RepositoryCompanionProfileService.DefaultLocalRepositoryHash, StringComparison.Ordinal) ||
+                gitAnalysisFlow == null ||
+                !gitAnalysisFlow.HasSelectedRepositoryForLocalOnlyApproval)
+            {
+                return false;
+            }
+
+            return (approvedActivityAnalysis.RepositoryCompanions ?? new List<RepositoryCompanionDisplayItem>())
+                .Any(item => item.Selected &&
+                             !item.Archived &&
+                             string.Equals(item.RepositoryHash, activeHash, StringComparison.Ordinal));
+        }
+
+        private void SetUnsupportedNativeAction(string message)
+        {
+            nativeActionStatusKind = "error";
+            nativeActionStatusText = string.IsNullOrWhiteSpace(message) ? "Unsupported action." : message;
+            Debug.LogWarning("WARN [NativeDashboard] unsupported action reason=" + nativeActionStatusText);
+        }
+
+        private async Task RunNativeAgentAnalysisAsync()
+        {
+            if (approvedActivityAnalysis == null)
+            {
+                return;
+            }
+
+            var ready = approvedActivityAnalysis.Onboarding.AgentSources
+                .FirstOrDefault(IsAgentReadyForNative);
+            if (ready == null)
+            {
+                nativeActionStatusKind = "error";
+                nativeActionStatusText = "Connect or choose a folder for an AI agent before analysis.";
+                await approvedActivityAnalysis.RecordNativeAnalysisRunAsync("agent", "failed", "agent_source_not_ready", nativeActionStatusText);
+                await RefreshAndPublishNativeDashboardAsync();
+                return;
+            }
+
+            await RunNativeAnalysisAsync(string.Empty, ProviderTypeForNative(ready.SourceType).ToString());
+        }
+
+        private async Task RunNativeAnalysisAsync(string repositoryHash = "", string providerValue = "", bool repositoryOnly = false)
+        {
+            if (approvedActivityAnalysis == null)
+            {
+                return;
+            }
+
+            Debug.Log("INFO [Analysis] run requested");
+            if (nativeAnalysisInProgress)
+            {
+                nativeActionStatusKind = "warning";
+                nativeActionStatusText = "Analysis is already running.";
+                Debug.LogWarning("WARN [Analysis] blocked reason=alreadyRunning");
+                Debug.Log("INFO [AnalysisJob] type=repository/provider status=failed id=already-running");
+                ApplyNativeShellState(showDashboardIfNeeded: false);
+                return;
+            }
+
+            await approvedActivityAnalysis.RefreshApprovedLocationsAsync();
+            await approvedActivityAnalysis.RestoreLocalSelectionsFromApprovedLocationsAsync();
+
+            if (!string.IsNullOrWhiteSpace(repositoryHash))
+            {
+                var select = await approvedActivityAnalysis.SelectRepositoryCompanionProfileAsync(repositoryHash);
+                if (!select.IsSuccess)
+                {
+                    nativeActionStatusKind = "error";
+                    nativeActionStatusText = "Repository analysis failed: " + SafeNativeText(select.ErrorMessage, select.ErrorCode);
+                    await approvedActivityAnalysis.RecordNativeAnalysisRunAsync("repository", "failed", select.ErrorCode, nativeActionStatusText);
+                    Debug.Log("INFO [AnalysisJob] type=repository status=failed id=not-started");
+                    await RefreshAndPublishNativeDashboardAsync();
+                    return;
+                }
+            }
+
+            var preliminaryHasRepository = ActiveRepositoryReadyForNative();
+            var preliminaryHasAgent = agentAnalysisFlow != null && agentAnalysisFlow.HasSelectedAgentLogLocationForLocalOnlyApproval;
+            if (repositoryOnly && !preliminaryHasRepository)
+            {
+                nativeActionStatusKind = "error";
+                nativeActionStatusText = "Analysis failed safely: NoActiveRepository - Connect an active repository first.";
+                await approvedActivityAnalysis.RecordNativeAnalysisRunAsync("repository", "failed", "NoActiveRepository", nativeActionStatusText);
+                Debug.Log("INFO [AnalysisJob] type=repository status=failed id=not-started");
+                await RefreshAndPublishNativeDashboardAsync();
+                return;
+            }
+
+            if (!repositoryOnly && !string.IsNullOrWhiteSpace(providerValue) && !ProviderReadyForNative(providerValue))
+            {
+                nativeActionStatusKind = "error";
+                nativeActionStatusText = "Analysis failed safely: agent_source_not_ready - Detect or choose a folder before analyzing.";
+                await approvedActivityAnalysis.RecordNativeAnalysisRunAsync("agent", "failed", "agent_source_not_ready", nativeActionStatusText);
+                Debug.Log("INFO [AnalysisJob] type=provider status=failed id=not-started");
+                await RefreshAndPublishNativeDashboardAsync();
+                return;
+            }
+
+            if (!repositoryOnly && string.IsNullOrWhiteSpace(providerValue) && !preliminaryHasRepository && !preliminaryHasAgent)
+            {
+                nativeActionStatusKind = "error";
+                nativeActionStatusText = "Analysis failed safely: NoActiveRepository - Connect an active repository first.";
+                await approvedActivityAnalysis.RecordNativeAnalysisRunAsync("repository", "failed", "NoActiveRepository", nativeActionStatusText);
+                Debug.Log("INFO [AnalysisJob] type=repository status=failed id=not-started");
+                await RefreshAndPublishNativeDashboardAsync();
+                return;
+            }
+
+            nativeSelectedNavItem = "activity";
+            nativeAnalysisInProgress = true;
+            nativeActionStatusKind = "running";
+            nativeCurrentAnalysisJobId = Guid.NewGuid().ToString("N");
+            nativeCurrentAnalysisType = string.IsNullOrWhiteSpace(providerValue) ? "repository" : "agent";
+            nativeCurrentAnalysisSourceName = string.IsNullOrWhiteSpace(providerValue)
+                ? SafeNativeText(approvedActivityAnalysis.CharacterDashboard?.CurrentRepositoryAlias, "Repository")
+                : SafeNativeText(providerValue, "AI agent");
+            nativeCurrentAnalysisStartedAt = DateTimeOffset.UtcNow.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss");
+            nativeCurrentAnalysisStep = "validating repository";
+            nativeActionStatusText = "Analyzing...";
+            Debug.Log("INFO [AnalysisJob] type=" + nativeCurrentAnalysisType + " status=started id=" + nativeCurrentAnalysisJobId);
+            ApplyNativeShellState(showDashboardIfNeeded: false);
+
+            var anySuccess = false;
+            var lastError = string.Empty;
+            var lastErrorMessage = string.Empty;
+            try
+            {
+                await approvedActivityAnalysis.RefreshApprovedLocationsAsync();
+                await approvedActivityAnalysis.RestoreLocalSelectionsFromApprovedLocationsAsync();
+
+                if (!string.IsNullOrWhiteSpace(repositoryHash))
+                {
+                    var select = await approvedActivityAnalysis.SelectRepositoryCompanionProfileAsync(repositoryHash);
+                    if (!select.IsSuccess)
+                    {
+                        lastError = select.ErrorCode;
+                        lastErrorMessage = select.ErrorMessage;
+                        if (repositoryOnly)
+                        {
+                            nativeActionStatusKind = "error";
+                            nativeActionStatusText = "Repository analysis failed: " + SafeNativeText(lastErrorMessage, lastError);
+                            await approvedActivityAnalysis.RecordNativeAnalysisRunAsync("repository", "failed", lastError, nativeActionStatusText);
+                            return;
+                        }
+                    }
+                }
+
+                var gitSucceeded = false;
+                var agentSucceeded = false;
+                var hasRepository = ActiveRepositoryReadyForNative();
+                var hasAgent = agentAnalysisFlow != null && agentAnalysisFlow.HasSelectedAgentLogLocationForLocalOnlyApproval;
+                if (repositoryOnly && !hasRepository)
+                {
+                    nativeActionStatusKind = "error";
+                    nativeActionStatusText = "Analysis failed safely: NoActiveRepository - Connect a repository first.";
+                    Debug.Log("INFO [Analysis] blocked reason=noRepository");
+                    await approvedActivityAnalysis.RecordNativeAnalysisRunAsync("repository", "failed", "NoActiveRepository", nativeActionStatusText);
+                    return;
+                }
+
+                if (!hasRepository && string.IsNullOrWhiteSpace(providerValue) && !hasAgent)
+                {
+                    nativeActionStatusKind = "error";
+                    nativeActionStatusText = "Analysis failed safely: NoActiveRepository - Connect a repository first.";
+                    Debug.Log("INFO [Analysis] blocked reason=noRepository");
+                    await approvedActivityAnalysis.RecordNativeAnalysisRunAsync("repository", "failed", "NoActiveRepository", nativeActionStatusText);
+                    return;
+                }
+
+                if (ActiveRepositoryReadyForNative() && string.IsNullOrWhiteSpace(providerValue))
+                {
+                    nativeActionStatusText = "Analyzing repository.";
+                    nativeCurrentAnalysisStep = "reading git stats";
+                    ApplyNativeShellState(showDashboardIfNeeded: false);
+                    Debug.Log("INFO [Analysis] begin repositoryId=" + SafeNativeText(approvedActivityAnalysis.CharacterDashboard?.CurrentRepositoryHash, "unknown"));
+                    Debug.Log("INFO [Analysis] git begin");
+                    var gitResult = await approvedActivityAnalysis.AnalyzeGitActivityAsync();
+                    if (gitResult.IsSuccess)
+                    {
+                        anySuccess = true;
+                        gitSucceeded = true;
+                        nativeCurrentAnalysisStep = "generating review";
+                        Debug.Log("INFO [Analysis] git end");
+                    }
+                    else
+                    {
+                        lastError = gitResult.ErrorCode;
+                        lastErrorMessage = gitResult.ErrorMessage;
+                        Debug.LogWarning("WARN [Analysis] failed reason=" + lastError);
+                    }
+                }
+
+                if (repositoryOnly)
+                {
+                    // Repository-only runs intentionally skip agent analysis, even if an agent source is ready.
+                }
+                else if (!string.IsNullOrWhiteSpace(providerValue))
+                {
+                    if (!TrySourceTypeForNative(providerValue, out var sourceType))
+                    {
+                        lastError = "unsupported_provider_action";
+                        lastErrorMessage = "Unsupported AI provider action.";
+                        SetUnsupportedNativeAction("Unsupported AI provider action.");
+                    }
+                    else
+                    {
+                        nativeActionStatusText = "Analyzing agent logs.";
+                        nativeCurrentAnalysisStep = "aggregating activity";
+                        ApplyNativeShellState(showDashboardIfNeeded: false);
+                        Debug.Log("INFO [Analysis] agent begin provider=" + sourceType);
+                        var agentResult = await approvedActivityAnalysis.AnalyzeAgentSourceForOnboardingAsync(sourceType);
+                        if (agentResult.IsSuccess)
+                        {
+                            anySuccess = true;
+                            agentSucceeded = true;
+                            nativeCurrentAnalysisStep = "generating review";
+                            Debug.Log("INFO [Analysis] agent end provider=" + sourceType);
+                        }
+                        else
+                        {
+                            lastError = agentResult.ErrorCode;
+                            lastErrorMessage = agentResult.ErrorMessage;
+                            Debug.LogWarning("WARN [Analysis] failed reason=" + lastError);
+                        }
+                    }
+                }
+                else if (agentAnalysisFlow != null && agentAnalysisFlow.HasSelectedAgentLogLocationForLocalOnlyApproval)
+                {
+                    nativeActionStatusText = "Analyzing agent logs.";
+                    nativeCurrentAnalysisStep = "aggregating activity";
+                    ApplyNativeShellState(showDashboardIfNeeded: false);
+                    Debug.Log("INFO [Analysis] agent begin provider=" + approvedActivityAnalysis.SelectedAgentProviderType);
+                    var agentResult = await approvedActivityAnalysis.AnalyzeAgentActivityAsync();
+                    if (agentResult.IsSuccess)
+                    {
+                        anySuccess = true;
+                        agentSucceeded = true;
+                        nativeCurrentAnalysisStep = "generating review";
+                        Debug.Log("INFO [Analysis] agent end provider=" + approvedActivityAnalysis.SelectedAgentProviderType);
+                    }
+                    else
+                    {
+                        lastError = agentResult.ErrorCode;
+                        lastErrorMessage = agentResult.ErrorMessage;
+                        Debug.LogWarning("WARN [Analysis] failed reason=" + lastError);
+                    }
+                }
+
+                if (gitSucceeded && agentSucceeded)
+                {
+                    var combined = await approvedActivityAnalysis.CombinePendingNativeReviewsFromFlowsAsync();
+                    if (!combined.IsSuccess)
+                    {
+                        lastError = combined.ErrorCode;
+                        lastErrorMessage = combined.ErrorMessage;
+                        Debug.LogWarning("WARN [NativeDashboard] combined review failed category=" + combined.ErrorCode);
+                    }
+                }
+
+                if (!anySuccess)
+                {
+                    var safeCategory = NativeSafeErrorCategory(lastError, string.IsNullOrWhiteSpace(providerValue) ? "repository" : "agent");
+                    var safeMessage = NativeSafeRecoveryMessage(safeCategory, lastErrorMessage);
+                    nativeActionStatusKind = "error";
+                    nativeActionStatusText = string.Equals(lastError, "unsupported_provider_action", StringComparison.Ordinal)
+                        ? "Unsupported AI provider action."
+                        : string.IsNullOrWhiteSpace(lastError)
+                        ? "Connect a repository or AI agent provider before running analysis."
+                        : "Analysis failed safely: " + safeCategory + " - " + safeMessage;
+                    await approvedActivityAnalysis.RecordNativeAnalysisRunAsync(
+                        string.IsNullOrWhiteSpace(providerValue) ? "repository" : "agent",
+                        "failed",
+                        string.IsNullOrWhiteSpace(lastError) ? "NoActiveRepository" : safeCategory,
+                        nativeActionStatusText);
+                    Debug.Log("INFO [NativeDashboard] runAnalysis blocked category=" + (string.IsNullOrWhiteSpace(lastError) ? "missing_activity_source" : lastError));
+                    Debug.Log("INFO [AnalysisJob] type=" + nativeCurrentAnalysisType + " status=failed id=" + nativeCurrentAnalysisJobId);
+                }
+                else
+                {
+                    await RefreshDashboardAsync(loadAuthSessionOnStart);
+                    if (approvedActivityAnalysis.PendingNativeActivityReview == null)
+                    {
+                        nativeActionStatusKind = "error";
+                        nativeActionStatusText = "Analysis failed safely: Unknown - No pending review was created.";
+                        await approvedActivityAnalysis.RecordNativeAnalysisRunAsync(
+                            gitSucceeded && agentSucceeded ? "combined" : gitSucceeded ? "repository" : "agent",
+                            "failed",
+                            "Unknown",
+                            nativeActionStatusText);
+                        Debug.LogWarning("WARN [Analysis] pendingReview missing after successful flow");
+                        Debug.Log("INFO [AnalysisJob] type=" + nativeCurrentAnalysisType + " status=failed id=" + nativeCurrentAnalysisJobId);
+                    }
+                    else
+                    {
+                        nativeActionStatusKind = "success";
+                        nativeActionStatusText = "Analysis complete. Pending review is ready in Activity. XP is unchanged until Save Growth.";
+                        nativeCurrentAnalysisStep = "completed";
+                        await approvedActivityAnalysis.RecordNativeAnalysisRunAsync(
+                            gitSucceeded && agentSucceeded ? "combined" : gitSucceeded ? "repository" : "agent",
+                            "pending_review",
+                            string.Empty,
+                            nativeActionStatusText);
+                        var pendingId = approvedActivityAnalysis.PendingNativeActivityReview.ReviewId ?? "pending";
+                        Debug.Log("INFO [Analysis] pendingReview created id=" + pendingId);
+                        Debug.Log("INFO [AnalysisJob] type=" + nativeCurrentAnalysisType + " status=completed id=" + nativeCurrentAnalysisJobId);
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                nativeActionStatusKind = "error";
+                nativeActionStatusText = "Analysis failed safely: " + exception.GetType().Name;
+                await approvedActivityAnalysis.RecordNativeAnalysisRunAsync("activity", "failed", exception.GetType().Name, nativeActionStatusText);
+                Debug.LogError("ERROR [Analysis] failed reason=" + exception.Message);
+                Debug.Log("INFO [AnalysisJob] type=" + nativeCurrentAnalysisType + " status=failed id=" + nativeCurrentAnalysisJobId);
+            }
+            finally
+            {
+                nativeAnalysisInProgress = false;
+                nativeCurrentAnalysisJobId = string.Empty;
+                nativeCurrentAnalysisType = string.Empty;
+                nativeCurrentAnalysisSourceName = string.Empty;
+                nativeCurrentAnalysisStartedAt = string.Empty;
+                nativeCurrentAnalysisStep = string.Empty;
+                await RefreshAndPublishNativeDashboardAsync();
+            }
         }
 
         private async Task ApproveNativeReviewAsync()
@@ -702,10 +2108,25 @@ namespace TokenForge.Client
                 return;
             }
 
+            var pendingXp = Math.Max(0, approvedActivityAnalysis.PendingNativeActivityReview?.EstimatedXpDelta ?? 0);
             var result = await approvedActivityAnalysis.ApprovePendingNativeReviewAsync();
             if (!result.IsSuccess)
             {
                 Debug.LogWarning("WARN [NativeDashboard] approveReview failed category=" + result.ErrorCode);
+                nativeActionStatusKind = "error";
+                nativeActionStatusText = "Save Growth failed: " + result.ErrorCode;
+                Debug.Log("INFO [ReviewState] pending=1 saved=0 appliedReviewId= result=failed");
+            }
+            else
+            {
+                nativeReviewDetailVisible = false;
+                nativeSelectedReviewId = string.Empty;
+                nativeActionStatusKind = "success";
+                nativeActionStatusText = pendingXp > 0
+                    ? "Growth saved. +" + pendingXp + " XP applied."
+                    : "Growth saved. No pending review remains.";
+                await approvedActivityAnalysis.RecordNativeAnalysisRunAsync("reviewSaved", "saved", string.Empty, nativeActionStatusText);
+                Debug.Log("INFO [ReviewState] pending=0 saved=1 appliedReviewId=saved result=success");
             }
 
             await RefreshAndPublishNativeDashboardAsync();
@@ -722,6 +2143,15 @@ namespace TokenForge.Client
             if (!result.IsSuccess)
             {
                 Debug.LogWarning("WARN [NativeDashboard] discardReview failed category=" + result.ErrorCode);
+                nativeActionStatusKind = "error";
+                nativeActionStatusText = "Discard failed: " + result.ErrorCode;
+            }
+            else
+            {
+                nativeReviewDetailVisible = false;
+                nativeSelectedReviewId = string.Empty;
+                nativeActionStatusKind = "success";
+                nativeActionStatusText = "Pending review discarded. Existing XP and stats are unchanged.";
             }
 
             await RefreshAndPublishNativeDashboardAsync();
@@ -747,6 +2177,45 @@ namespace TokenForge.Client
                 Debug.Log("INFO [NativeDashboard] reviewActivity pending=false");
             }
 
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task ViewNativeReviewDetailsAsync(string reviewId)
+        {
+            if (approvedActivityAnalysis == null)
+            {
+                return;
+            }
+
+            await approvedActivityAnalysis.RefreshRecentSessionsAsync();
+            var pending = approvedActivityAnalysis.PendingNativeActivityReview;
+            if (pending == null)
+            {
+                nativeReviewDetailVisible = false;
+                nativeSelectedReviewId = string.Empty;
+                nativeActionStatusKind = "warning";
+                nativeActionStatusText = "No pending review is available.";
+                Debug.Log("INFO [DashboardAction] action=review.viewDetails target=" + reviewId + " enabled=false result=disabled reason=noPendingReview");
+                await RefreshAndPublishNativeDashboardAsync();
+                return;
+            }
+
+            var selectedId = string.IsNullOrWhiteSpace(reviewId) ? pending.ReviewId : reviewId;
+            if (!string.IsNullOrWhiteSpace(selectedId) &&
+                !string.Equals(selectedId, pending.ReviewId, StringComparison.Ordinal))
+            {
+                nativeActionStatusKind = "error";
+                nativeActionStatusText = "Review details are unavailable for that review.";
+                Debug.LogWarning("WARN [DashboardAction] action=review.viewDetails target=" + selectedId + " result=failed reason=reviewNotFound");
+                await RefreshAndPublishNativeDashboardAsync();
+                return;
+            }
+
+            nativeSelectedReviewId = string.IsNullOrWhiteSpace(pending.ReviewId) ? pending.SafeSession?.SessionId ?? "pending-review" : pending.ReviewId;
+            nativeReviewDetailVisible = true;
+            nativeActionStatusKind = "success";
+            nativeActionStatusText = "Review details opened.";
+            Debug.Log("INFO [DashboardAction] action=review.viewDetails target=" + nativeSelectedReviewId + " enabled=true result=detailOpened");
             await RefreshAndPublishNativeDashboardAsync();
         }
 
@@ -807,6 +2276,61 @@ namespace TokenForge.Client
             value = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
             value = value.Replace('\n', ' ').Replace('\r', ' ');
             return value.Length <= 180 ? value : value.Substring(0, 180);
+        }
+
+        private static string NativeSafeErrorCategory(string errorCode, string sourceKind)
+        {
+            switch ((errorCode ?? string.Empty).Trim())
+            {
+                case "NoActiveRepository":
+                case "RepositoryPathMissing":
+                case "RepositoryFolderNotFound":
+                case "NotAGitRepository":
+                case "GitExecutableNotFound":
+                case "PermissionDenied":
+                case "ProcessTimeout":
+                case "GitCommandFailed":
+                case "Unknown":
+                    return errorCode;
+                case "missing_repository_selection":
+                case "missing_activity_source":
+                    return string.Equals(sourceKind, "agent", StringComparison.OrdinalIgnoreCase) ? "Unknown" : "NoActiveRepository";
+                case "missing_repository_path":
+                    return "RepositoryPathMissing";
+                case "path_not_found":
+                case "invalid_repository_path":
+                    return "RepositoryFolderNotFound";
+                case "not_git_repository":
+                    return "NotAGitRepository";
+                case "git_unavailable":
+                case "git_executable_not_found":
+                    return "GitExecutableNotFound";
+                case "permission_denied":
+                    return "PermissionDenied";
+                case "git_timeout":
+                case "git_cancelled":
+                    return "ProcessTimeout";
+                case "git_command_failed":
+                    return "GitCommandFailed";
+                default:
+                    return string.IsNullOrWhiteSpace(errorCode) ? "Unknown" : SafeNativeText(errorCode, "Unknown");
+            }
+        }
+
+        private static string NativeSafeRecoveryMessage(string category, string fallback)
+        {
+            switch (category)
+            {
+                case "NoActiveRepository": return "Connect a repository first.";
+                case "RepositoryPathMissing": return "Repository path is missing. Reconnect required.";
+                case "RepositoryFolderNotFound": return "Repository folder was not found. Reconnect required.";
+                case "NotAGitRepository": return "This folder is not a Git repository.";
+                case "GitExecutableNotFound": return "Git executable was not found. Install Xcode Command Line Tools or Git.";
+                case "PermissionDenied": return "Permission denied while reading repository folder.";
+                case "ProcessTimeout": return "Git command timed out.";
+                case "GitCommandFailed": return "Git command failed. Check repository state and try again.";
+                default: return SafeNativeText(fallback, "Analysis failed safely.");
+            }
         }
 
         private void EnsureSceneInfrastructure()
@@ -1184,8 +2708,8 @@ namespace TokenForge.Client
             }
 
             LogRepresentativeTextState(root.transform, "Hero Title");
-            LogRepresentativeTextState(root.transform, "Start Game/Label");
-            LogRepresentativeTextState(root.transform, "Connect Codex Agent/Label");
+            LogRepresentativeTextState(root.transform, "Run Analysis/Label");
+            LogRepresentativeTextState(root.transform, "Connect AI Agent/Label");
         }
 
         private static bool RequiredPanelExists(RectTransform content, string childName)
@@ -1637,6 +3161,7 @@ namespace TokenForge.Client
                 IsBootstrapComplete = IsVisibleUiValidated;
                 Debug.Log("INFO " + LogPrefix + " native macOS dashboard shell ready; Unity uGUI dashboard validation skipped.");
                 Debug.Log("INFO " + LogPrefix + " " + message);
+                Debug.Log("INFO [Startup] AppBootstrapper end");
                 return;
             }
 
@@ -1654,6 +3179,7 @@ namespace TokenForge.Client
                 Debug.Log("INFO " + LogPrefix + " rendered frame smoke skipped in batchmode; structure validation only.");
                 Debug.Log("INFO " + LogPrefix + " " + message);
                 IsBootstrapComplete = true;
+                Debug.Log("INFO [Startup] AppBootstrapper end");
                 return;
             }
 
@@ -1665,6 +3191,7 @@ namespace TokenForge.Client
 
             Debug.Log("INFO " + LogPrefix + " " + message);
             IsBootstrapComplete = true;
+            Debug.Log("INFO [Startup] AppBootstrapper end");
         }
 
         private static bool HasVisibleRect(RectTransform rect)

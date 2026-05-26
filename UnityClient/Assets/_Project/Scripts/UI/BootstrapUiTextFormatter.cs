@@ -243,6 +243,22 @@ namespace TokenForge.Client.UI
         {
             switch (errorCode)
             {
+                case "NoActiveRepository":
+                    return "Connect a repository first.";
+                case "RepositoryPathMissing":
+                    return "Repository path is missing. Reconnect required.";
+                case "RepositoryFolderNotFound":
+                    return "Repository folder was not found. Reconnect required.";
+                case "NotAGitRepository":
+                    return "This folder is not a Git repository.";
+                case "GitExecutableNotFound":
+                    return "Git executable was not found. Install Xcode Command Line Tools or Git.";
+                case "PermissionDenied":
+                    return "Permission denied while reading repository folder.";
+                case "ProcessTimeout":
+                    return "Git command timed out.";
+                case "GitCommandFailed":
+                    return "Git command failed. Check repository state and try again.";
                 case "missing_repository_selection":
                     return "Select a repository before analyzing.";
                 case "missing_repository_path":
@@ -350,7 +366,12 @@ namespace TokenForge.Client.UI
                 return "Unknown local session";
             }
 
-            if (session.SourceProvider == "AI_AGENT")
+            if (session.AgentProviderType != AgentProviderType.Unknown ||
+                session.SourceProvider == "AI_AGENT" ||
+                session.SourceProvider == "CODEX" ||
+                session.SourceProvider == "CLAUDE" ||
+                session.SourceProvider == "CURSOR" ||
+                session.SourceProvider == "GITHUB_COPILOT")
             {
                 return $"{session.DayBucket} | {AgentSourceLabel(session.AgentProviderType)} | category {session.WorkType} | confidence {session.Confidence} | warnings {WarningCount(session)} | +{session.ExpGained} XP{TopStatSuffix(session)} | sessions {session.AgentSessionCountBucket} | interactions {session.AgentInteractionCountBucket}";
             }
@@ -447,6 +468,8 @@ namespace TokenForge.Client.UI
                     return "Codex";
                 case AgentProviderType.GitHubCopilot:
                     return "GitHub Copilot";
+                case AgentProviderType.GeminiCli:
+                    return "Gemini CLI";
                 case AgentProviderType.Manual:
                     return "Other / Manual Log Folder";
                 default:

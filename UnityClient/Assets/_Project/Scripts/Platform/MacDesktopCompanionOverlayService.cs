@@ -269,7 +269,14 @@ namespace TokenForge.Client.Platform
         {
             if (IsAvailable)
             {
-                try { NativeDestroy(); } catch (Exception) { }
+                try
+                {
+                    NativeDestroy();
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning("WARN " + LogPrefix + " destroy failed: " + exception.GetType().Name);
+                }
             }
 
             State = IsAvailable ? CompanionDesktopOverlayState.Disabled : CompanionDesktopOverlayState.Unavailable;
@@ -336,8 +343,9 @@ namespace TokenForge.Client.Platform
             {
                 NativeRegisterDoubleClickedCallback(DoubleClickedCallback);
             }
-            catch (Exception)
+            catch (Exception exception)
             {
+                Debug.LogWarning("WARN " + LogPrefix + " double click callback unavailable: " + exception.GetType().Name);
             }
         }
 
@@ -347,8 +355,9 @@ namespace TokenForge.Client.Platform
             {
                 NativeRegisterDragEndedCallback(DragEndedCallback);
             }
-            catch (Exception)
+            catch (Exception exception)
             {
+                Debug.LogWarning("WARN " + LogPrefix + " drag callback unavailable: " + exception.GetType().Name);
             }
         }
 

@@ -17,12 +17,30 @@ namespace TokenForge.Client.Platform
         ReportIssue,
         Quit,
         RunAnalysis,
+        RunRepositoryAnalysis,
+        RunAgentAnalysis,
+        SafeSync,
         ConnectRepository,
         ChangeRepository,
+        ChooseRepositoryFolder,
         ConnectCodexAgent,
+        ConnectAiAgent,
+        ConnectAgent,
         SelectCodexLogFolder,
+        ManageAgents,
+        SelectRepository,
+        AnalyzeRepository,
+        DisconnectRepository,
+        DetectAgent,
+        AutoDetectAgent,
+        ChooseAgentFolder,
+        AnalyzeAgent,
+        DisconnectAgent,
+        SaveGrowth,
+        SaveReview,
         ApproveReview,
         DiscardReview,
+        ViewReviewDetails,
         ReviewActivity,
         ToggleCompanionVisible,
         ChangeCompanionSkin,
@@ -30,7 +48,8 @@ namespace TokenForge.Client.Platform
         SetWanderEnabled,
         SetClickReactionEnabled,
         ResetCompanionPosition,
-        ResetLocalState
+        ResetLocalState,
+        Unsupported
     }
 
     public sealed class NativeDashboardActionRequest
@@ -76,6 +95,20 @@ namespace TokenForge.Client.Platform
         public string syncStatusText = "Sync optional";
         public string selectedNavItem = "dashboard";
         public bool primaryActionEnabled = true;
+        public bool hasActiveRepository;
+        public bool isAnalysisRunning;
+        public string actionStatusKind = "idle";
+        public string actionStatusText = "Ready";
+        public string repositoryStatus = "not_selected";
+        public string repositorySafeError = string.Empty;
+        public bool hasPendingReview;
+        public bool canSaveGrowth;
+        public bool canDiscardPendingReview;
+        public bool hasSavedReviews;
+        public bool hasRepositoryActivity;
+        public bool hasAiAgentActivity;
+        public int persistedCompanionXP;
+        public int pendingEstimatedXP;
         public int pendingReviewCount;
         public int warningCount;
         public string lastRunSummary = "No saved growth yet. Run Analysis on a repository or AI agent log to generate your first XP.";
@@ -93,9 +126,13 @@ namespace TokenForge.Client.Platform
         public NativeCompanionState companion = NativeCompanionState.CreateDefault();
         public NativeRepositoryState repository = NativeRepositoryState.CreateDefault();
         public NativeCodexAgentState codexAgent = NativeCodexAgentState.CreateDefault();
+        public NativeAgentSummaryState agents = NativeAgentSummaryState.CreateDefault();
+        public NativeRepositoryListItem[] repositories = new NativeRepositoryListItem[0];
+        public NativeAgentProviderState[] agentProviders = new NativeAgentProviderState[0];
+        public NativeProviderUsagePercentage[] providerUsagePercentages = new NativeProviderUsagePercentage[0];
         public NativeActivityState activity = NativeActivityState.CreateDefault();
         public NativeReviewState review = NativeReviewState.CreateDefault();
-        public string statusText = "Cdx 0% · CI 0% · Gem 0%";
+        public string statusText = "No Agents";
 
         public static NativeDashboardState CreateDefault()
         {
@@ -130,9 +167,16 @@ namespace TokenForge.Client.Platform
     public sealed class NativeRepositoryState
     {
         public bool connected;
+        public string id = string.Empty;
         public string name = string.Empty;
         public string status = "not_selected";
         public string statusText = "Not selected";
+        public int connectedCount;
+        public string lastAnalyzedAt = string.Empty;
+        public string disabledReason = "Connect a repository first.";
+        public bool hasValidSource;
+        public bool canAnalyze;
+        public string analyzeDisabledReason = "Connect an active repository first.";
 
         public static NativeRepositoryState CreateDefault()
         {
@@ -154,6 +198,75 @@ namespace TokenForge.Client.Platform
     }
 
     [Serializable]
+    public sealed class NativeAgentSummaryState
+    {
+        public int connectedCount;
+        public string lastProvider = "None";
+        public int warningCount;
+        public string statusText = "No agents connected";
+        public string privacyText = "Local aggregate only";
+
+        public static NativeAgentSummaryState CreateDefault()
+        {
+            return new NativeAgentSummaryState();
+        }
+    }
+
+    [Serializable]
+    public sealed class NativeRepositoryListItem
+    {
+        public string id = string.Empty;
+        public string name = "Local Repository";
+        public string safePath = "Approved local folder";
+        public string companion = "Egg · Lv 1";
+        public string lastAnalyzed = "Not analyzed";
+        public string status = "connected";
+        public string statusText = "Connected";
+        public bool selected;
+        public bool canAnalyze = true;
+        public string analyzeDisabledReason = string.Empty;
+        public bool canDisconnect = true;
+        public bool canRestore;
+        public bool canDelete;
+        public bool archived;
+    }
+
+    [Serializable]
+    public sealed class NativeAgentProviderState
+    {
+        public string id = string.Empty;
+        public string displayName = string.Empty;
+        public string type = string.Empty;
+        public string detectionStrategy = "manual_folder";
+        public string supportedStatus = "manual_folder_required";
+        public string status = "notConfigured";
+        public string statusText = "Manual folder required";
+        public bool connected;
+        public bool hasValidSource;
+        public bool canAutoDetect;
+        public bool canConnect = true;
+        public bool canChooseFolder = true;
+        public bool canAnalyze;
+        public bool canDisconnect;
+        public int warningCount;
+        public string safeCandidateSummary = "No local source selected";
+        public string selectedSourceLabel = "No local source selected";
+        public string lastAnalyzedAt = "Not analyzed";
+        public string lastErrorSafeMessage = string.Empty;
+        public string disabledReason = "Detect or choose a folder before analyzing.";
+        public string unsupportedReason = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class NativeProviderUsagePercentage
+    {
+        public string providerId = string.Empty;
+        public string label = string.Empty;
+        public int percentage;
+        public bool hasSavedApprovedActivity;
+    }
+
+    [Serializable]
     public sealed class NativeActivityState
     {
         public string todaySummary = "No activity yet";
@@ -163,6 +276,17 @@ namespace TokenForge.Client.Platform
         public int debug;
         public int design;
         public int sync;
+        public string recentRunsSummary = "No recent runs";
+        public string savedReviewsSummary = "No saved reviews";
+        public string repositoryActivitySummary = "No repository activity";
+        public string agentActivitySummary = "No AI agent activity";
+        public NativeActivityItem[] runningJobs = new NativeActivityItem[0];
+        public NativeActivityItem[] pendingReviews = new NativeActivityItem[0];
+        public NativeActivityItem[] recentRuns = new NativeActivityItem[0];
+        public bool hasRecentRuns;
+        public bool hasSavedReviews;
+        public bool hasRepositoryActivity;
+        public bool hasAiAgentActivity;
 
         public static NativeActivityState CreateDefault()
         {
@@ -173,9 +297,12 @@ namespace TokenForge.Client.Platform
     [Serializable]
     public sealed class NativeReviewState
     {
+        public string reviewId = string.Empty;
         public bool pending;
         public string summary = "No pending review";
         public string source = string.Empty;
+        public string repositoryName = string.Empty;
+        public string providerName = string.Empty;
         public string confidence = string.Empty;
         public int estimatedXpDelta;
         public int codeDelta;
@@ -184,10 +311,33 @@ namespace TokenForge.Client.Platform
         public int designDelta;
         public int syncDelta;
         public string warnings = string.Empty;
+        public bool canSaveGrowth;
+        public bool canDiscard;
+        public bool canViewDetails;
+        public bool detailVisible;
+        public string selectedReviewId = string.Empty;
+        public string generatedAt = string.Empty;
+        public string status = "none";
+        public string privacyNote = "Raw prompt, code, file content, and command logs are not stored.";
 
         public static NativeReviewState CreateDefault()
         {
             return new NativeReviewState();
         }
+    }
+
+    [Serializable]
+    public sealed class NativeActivityItem
+    {
+        public string id = string.Empty;
+        public string type = string.Empty;
+        public string sourceName = string.Empty;
+        public string status = string.Empty;
+        public string createdAt = string.Empty;
+        public string completedAt = string.Empty;
+        public string summary = string.Empty;
+        public string currentStep = string.Empty;
+        public string actionKey = string.Empty;
+        public string disabledReason = string.Empty;
     }
 }

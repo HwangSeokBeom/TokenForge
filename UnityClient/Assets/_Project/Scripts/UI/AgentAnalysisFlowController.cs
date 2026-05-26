@@ -133,7 +133,7 @@ namespace TokenForge.Client.UI
             ErrorCategory = string.Empty;
             UserMessage = "Analyzing safe aggregate agent activity.";
 
-            var result = await provider.AnalyzeSessionAsync(pendingInput, cancellationToken);
+            var result = await Task.Run(() => provider.AnalyzeSessionAsync(pendingInput, cancellationToken), cancellationToken);
             if (!result.IsSuccess)
             {
                 var failure = Fail(result.ErrorCode, "Agent analysis failed with a safe error category. " + result.ErrorMessage);

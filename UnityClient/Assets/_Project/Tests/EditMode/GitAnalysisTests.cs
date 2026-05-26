@@ -170,7 +170,7 @@ namespace TokenForge.Client.Tests
             }, CancellationToken.None));
 
             Assert.IsFalse(result.IsSuccess);
-            Assert.AreEqual("invalid_repository_path", result.ErrorCode);
+            Assert.AreEqual("RepositoryFolderNotFound", result.ErrorCode);
             Assert.AreEqual(0, runner.Commands.Count);
         }
 

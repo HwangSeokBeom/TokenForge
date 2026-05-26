@@ -196,6 +196,7 @@ namespace TokenForge.Client.Domain
                 case AgentProviderType.GitHubCopilot:
                     profile.CopilotProviderCount += 1;
                     break;
+                case AgentProviderType.GeminiCli:
                 case AgentProviderType.Manual:
                     profile.ManualProviderCount += 1;
                     break;
@@ -343,6 +344,17 @@ namespace TokenForge.Client.Domain
                     if (action.DurationBucket == DurationBucket.Under5Minutes || action.DurationBucket == DurationBucket.FiveTo15Minutes)
                     {
                         profile.BurstScore += 2;
+                    }
+
+                    break;
+                case AgentProviderType.GeminiCli:
+                    if (session.WorkType == WorkType.Research || session.WorkType == WorkType.Docs)
+                    {
+                        profile.ExplorationScore += 3;
+                    }
+                    else if (HasMeaningfulLocalActivity(git, action))
+                    {
+                        profile.ImplementationScore += 2;
                     }
 
                     break;
@@ -587,6 +599,10 @@ namespace TokenForge.Client.Domain
                 case "GITHUBCOPILOT":
                 case "COPILOT":
                     provider = AgentProviderType.GitHubCopilot;
+                    return true;
+                case "GEMINI":
+                case "GEMINICLI":
+                    provider = AgentProviderType.GeminiCli;
                     return true;
                 case "MANUAL":
                 case "OTHER":

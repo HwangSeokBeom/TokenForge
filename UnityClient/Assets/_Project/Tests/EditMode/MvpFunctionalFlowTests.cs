@@ -75,8 +75,8 @@ namespace TokenForge.Client.Tests
             var result = RunAsync(() => fixture.ViewModel.AnalyzeGitActivityAsync());
 
             Assert.IsFalse(result.IsSuccess);
-            Assert.AreEqual("missing_repository_selection", result.ErrorCode);
-            Assert.That(BootstrapUiTextFormatter.FriendlyGitStatus(fixture.ViewModel), Does.Contain("Select a repository"));
+            Assert.AreEqual("NoActiveRepository", result.ErrorCode);
+            Assert.That(BootstrapUiTextFormatter.FriendlyGitStatus(fixture.ViewModel), Does.Contain("Connect a repository"));
             AssertNoForbiddenText(fixture.ViewModel.GitFlow);
         }
 

@@ -22,7 +22,8 @@ namespace TokenForge.Client.Persistence
         Cursor = 4,
         ClaudeCode = 5,
         GitHubCopilot = 6,
-        Manual = 7
+        Manual = 7,
+        GeminiCli = 8
     }
 
     [Serializable]
@@ -400,6 +401,7 @@ namespace TokenForge.Client.Persistence
                 case ApprovedLocationSourceType.Cursor: return AgentProviderType.Cursor;
                 case ApprovedLocationSourceType.Codex: return AgentProviderType.Codex;
                 case ApprovedLocationSourceType.GitHubCopilot: return AgentProviderType.GitHubCopilot;
+                case ApprovedLocationSourceType.GeminiCli: return AgentProviderType.GeminiCli;
                 case ApprovedLocationSourceType.Manual: return AgentProviderType.Manual;
                 default: return AgentProviderType.Unknown;
             }
@@ -414,6 +416,7 @@ namespace TokenForge.Client.Persistence
                 case AgentProviderType.Cursor: return ApprovedLocationSourceType.Cursor;
                 case AgentProviderType.Codex: return ApprovedLocationSourceType.Codex;
                 case AgentProviderType.GitHubCopilot: return ApprovedLocationSourceType.GitHubCopilot;
+                case AgentProviderType.GeminiCli: return ApprovedLocationSourceType.GeminiCli;
                 case AgentProviderType.Manual: return ApprovedLocationSourceType.Manual;
                 default: return ApprovedLocationSourceType.UnknownAuto;
             }

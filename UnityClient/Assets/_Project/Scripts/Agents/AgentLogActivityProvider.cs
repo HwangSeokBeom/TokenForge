@@ -61,8 +61,8 @@ namespace TokenForge.Client.Agents
                 GitChangeSummary = GitChangeSummary.Empty(),
                 AgentActivitySummary = summary,
                 ResultStatus = summary.ConfidenceLevel == ConfidenceLevel.Low ? ResultStatus.PartiallySucceeded : ResultStatus.Succeeded,
-                SourceProvider = SourceProviderId,
-                SourceProviders = { SourceProviderId },
+                SourceProvider = ToSourceProvider(summary.ProviderType),
+                SourceProviders = { ToSourceProvider(summary.ProviderType) },
                 ParserVersion = summary.AnalyzerVersion,
                 Confidence = ToProviderConfidence(summary.ConfidenceLevel),
                 Warnings = (summary.WarningIds ?? Enumerable.Empty<string>()).Take(12).ToList(),
@@ -71,6 +71,21 @@ namespace TokenForge.Client.Agents
 
             session.DeduplicationKey = $"{summary.SourceIdentifierHash}:{summary.DayBucket}:provider{(int)summary.ProviderType}:{summary.SessionCountBucket}:{summary.InteractionCountBucket}";
             return session;
+        }
+
+        private static string ToSourceProvider(AgentProviderType providerType)
+        {
+            switch (providerType)
+            {
+                case AgentProviderType.Codex: return "CODEX";
+                case AgentProviderType.Cursor: return "CURSOR";
+                case AgentProviderType.Claude:
+                case AgentProviderType.ClaudeCode: return "CLAUDE";
+                case AgentProviderType.GitHubCopilot: return "GITHUB_COPILOT";
+                case AgentProviderType.GeminiCli:
+                case AgentProviderType.Manual: return "MANUAL";
+                default: return SourceProviderId;
+            }
         }
 
         private static AgentActionSummary ToActionSummary(AgentActivitySummary summary)
@@ -116,6 +131,7 @@ namespace TokenForge.Client.Agents
                 case AgentProviderType.ClaudeCode: return AgentType.ClaudeCode;
                 case AgentProviderType.Codex: return AgentType.Codex;
                 case AgentProviderType.GitHubCopilot: return AgentType.GitHubCopilot;
+                case AgentProviderType.GeminiCli: return AgentType.ManualFallback;
                 case AgentProviderType.Manual: return AgentType.ManualFallback;
                 default: return AgentType.Unknown;
             }

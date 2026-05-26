@@ -303,8 +303,10 @@ namespace TokenForge.Client.Domain
         public string RepositoryHash { get; set; } = string.Empty;
         public string SafeRepositoryAlias { get; set; } = "Local Repository";
         public CompanionState CompanionState { get; set; } = CompanionState.CreateDefault();
+        public DesktopCompanionSettings DesktopCompanionSettings { get; set; } = DesktopCompanionSettings.CreateDefault();
         public List<SourceProviderMixEntry> SourceProviderMix { get; set; } = new List<SourceProviderMixEntry>();
         public string LastApprovedActivityBucket { get; set; } = string.Empty;
+        public DateTimeOffset? ArchivedAtUtc { get; set; }
         public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
         public DateTimeOffset UpdatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
     }

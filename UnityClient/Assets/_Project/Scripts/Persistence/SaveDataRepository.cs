@@ -188,11 +188,19 @@ namespace TokenForge.Client.Persistence
                 }
             }
             saveData.GrowthHistory = saveData.GrowthHistory ?? new System.Collections.Generic.List<CharacterGrowthResult>();
+            saveData.AppliedNativeReviewIds = saveData.AppliedNativeReviewIds ?? new System.Collections.Generic.List<string>();
             if (saveData.PendingNativeActivityReview != null)
             {
                 saveData.PendingNativeActivityReview.StatDeltas = saveData.PendingNativeActivityReview.StatDeltas ?? CharacterStats.Zero();
                 saveData.PendingNativeActivityReview.WarningIds = saveData.PendingNativeActivityReview.WarningIds ?? new System.Collections.Generic.List<string>();
+                saveData.PendingNativeActivityReview.SafeSessions = saveData.PendingNativeActivityReview.SafeSessions ?? new System.Collections.Generic.List<AgentWorkSession>();
+                saveData.PendingNativeActivityReview.GrowthResults = saveData.PendingNativeActivityReview.GrowthResults ?? new System.Collections.Generic.List<CharacterGrowthResult>();
             }
+            saveData.RecentNativeAnalysisRuns = (saveData.RecentNativeAnalysisRuns ?? new System.Collections.Generic.List<NativeAnalysisRunRecord>())
+                .Where(run => run != null && !string.IsNullOrWhiteSpace(run.RunId))
+                .OrderByDescending(run => run.CreatedAtUtc)
+                .Take(20)
+                .ToList();
             saveData.ConnectedProjects = saveData.ConnectedProjects ?? new System.Collections.Generic.List<ConnectedProject>();
             saveData.ProviderSettings = saveData.ProviderSettings ?? new System.Collections.Generic.List<ProviderSettings>();
             saveData.SyncState = saveData.SyncState ?? new SyncState();

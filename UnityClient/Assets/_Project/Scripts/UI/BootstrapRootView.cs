@@ -344,13 +344,13 @@ namespace TokenForge.Client.UI
             SetText(onboardingStepIndicatorLabel, "Turn your coding activity into a growing desktop companion.");
             SetText(startCharacterLabel, CompanionStatusLine(dashboard) + "\n" + ProgressLine(dashboard));
             SetText(startStatsLabel, "Repository\n" + RepositoryStatus());
-            SetText(startGrowthLabel, hasPendingReview ? "Review Activity\nA summary is ready for approval." : "Activity\nAdd a repository or connect Codex to begin.");
-            SetText(startRecentSessionsLabel, "Codex Agent\n" + CodexStatus());
+            SetText(startGrowthLabel, hasPendingReview ? "Review Activity\nA summary is ready for approval." : "Activity\nAdd a repository or connect an AI agent to begin.");
+            SetText(startRecentSessionsLabel, "AI Agents\n" + CodexStatus());
             SetText(startPrivacySummaryLabel, PrivacyCopy);
             SetText(startRunStatusLabel, "Sync optional");
-            SetButtonLabel(startGameButton, "Start Game");
+            SetButtonLabel(startGameButton, "Run Analysis");
             SetButtonLabel(startAnalyzeRepositoryButton, "Add Repository");
-            SetButtonLabel(startAnalyzeAgentLogsButton, "Connect Codex Agent");
+            SetButtonLabel(startAnalyzeAgentLogsButton, "Connect AI Agent");
             SetButtonLabel(startReviewAnalysisButton, "Review Activity");
             SetButtonLabel(startSyncProgressButton, "Sync optional");
             SetButton(startGameButton, true);
@@ -371,18 +371,18 @@ namespace TokenForge.Client.UI
             SetText(dashboardGrowthStepReviewLabel, "Review Activity\n" + (hasPendingReview ? "Ready" : "Nothing pending"));
             SetText(dashboardGrowthStepSaveLabel, "Approve Growth\n" + (hasPendingReview ? "XP can be applied" : "Locked until review"));
             SetText(dashboardConnectedSourcesLabel, "Repository\n" + RepositoryStatus());
-            SetText(dashboardPendingReviewLabel, "Codex Agent\n" + CodexStatus());
+            SetText(dashboardPendingReviewLabel, "AI Agents\n" + CodexStatus());
             SetText(dashboardSyncReasonLabel, "Settings\n" + PrivacyCopy);
             RenderCompanionControls(dashboard);
             SetButtonLabel(dashboardAnalyzeRepositoryButton, "Add Repository");
             SetButtonLabel(dashboardSourcesAddRepositoryButton, "Add Repository");
-            SetButtonLabel(dashboardSourcesConnectAgentButton, "Connect Codex Agent");
+            SetButtonLabel(dashboardSourcesConnectAgentButton, "Connect AI Agent");
             SetButtonLabel(dashboardSaveSessionButton, hasPendingReview ? "Approve Growth" : "Review Activity");
             SetButtonLabel(dashboardDiscardReviewButton, "Discard");
             SetButtonLabel(dashboardSyncButton, "Sync optional");
-            SetButtonLabel(dashboardHistoryButton, "Connect Codex Agent");
+            SetButtonLabel(dashboardHistoryButton, "Connect AI Agent");
             SetButtonLabel(dashboardSettingsButton, "Settings");
-            SetButtonLabel(dashboardBackButton, "Start Game");
+            SetButtonLabel(dashboardBackButton, "Dashboard");
             SetButton(dashboardAnalyzeRepositoryButton, true);
             SetButton(dashboardSourcesAddRepositoryButton, true);
             SetButton(dashboardSourcesConnectAgentButton, true);
@@ -396,17 +396,17 @@ namespace TokenForge.Client.UI
 
         private void RenderAddRepository(CharacterDashboardSummary dashboard, bool hasPendingReview)
         {
-            SetText(runAnalysisTitleLabel, currentScreen == ScreenMode.ConnectCodex ? "Connect Codex Agent" : "Add Repository");
+            SetText(runAnalysisTitleLabel, currentScreen == ScreenMode.ConnectCodex ? "Connect AI Agent" : "Add Repository");
             SetText(onboardingGitStatusLabel, "Repository\n" + RepositoryStatus() + "\nChoose a local repository, start analysis, then approve the summary.");
             SetText(onboardingReadySummaryLabel, hasPendingReview
                 ? "Analysis result\nReview Activity is ready. Approve Growth to apply XP."
                 : "Analysis result\nNo approved summary yet.");
-            SetText(onboardingAiAgentsStatusLabel, "Codex Agent\n" + CodexStatus() + "\nChoose a log folder or detect local activity.");
+            SetText(onboardingAiAgentsStatusLabel, "AI Agents\n" + CodexStatus() + "\nChoose a log folder or detect local activity.");
             SetButtonLabel(onboardingSelectLocalRepositoryButton, "Choose Repository");
             SetButtonLabel(onboardingConnectGitAccountButton, "Start Analysis");
             SetButtonLabel(onboardingSkipGitButton, "Back");
             SetButtonLabel(onboardingClearLocalRepositoryButton, "Clear Repository");
-            SetButtonLabel(codexAgentConnectButton, "Connect Codex");
+            SetButtonLabel(codexAgentConnectButton, "Connect AI Agent");
             SetButtonLabel(otherAgentSelectLogFolderButton, "Choose Log Folder");
             SetButtonLabel(runAnalysisBackButton, "Back");
             SetButtonLabel(runAnalysisSettingsButton, "Settings");
@@ -422,7 +422,7 @@ namespace TokenForge.Client.UI
 
         private void RenderSettings(CharacterDashboardSummary dashboard)
         {
-            SetText(settingsSummaryLabel, "Settings\n" + PrivacyCopy + "\nRepository: " + RepositoryStatus() + "\nCodex Agent: " + CodexStatus());
+            SetText(settingsSummaryLabel, "Settings\n" + PrivacyCopy + "\nRepository: " + RepositoryStatus() + "\nAI Agents: " + CodexStatus());
             SetText(settingsSyncConflictLabel, "Optional sync\n" + (viewModel != null && viewModel.AuthState == AuthState.LoggedIn ? "Connected" : "Local mode"));
             SetText(settingsDesktopCompanionStatusLabel, "Companion window\n" + CompanionOverlayStatus(dashboard));
             SetButtonLabel(settingsBackButton, "Back");
@@ -569,7 +569,7 @@ namespace TokenForge.Client.UI
 
         private bool HasAnalysisSourceReady()
         {
-            return viewModel != null && (viewModel.Onboarding.GitConnected || viewModel.Onboarding.AgentSources.Any(source => source.Selected));
+            return viewModel != null && (viewModel.Onboarding.GitConnected || viewModel.Onboarding.AgentSources.Any(IsAgentReady));
         }
 
         private static string CompanionStatusLine(CharacterDashboardSummary dashboard)
@@ -598,12 +598,21 @@ namespace TokenForge.Client.UI
                 dashboard.CompanionState.Archetype,
                 dashboard.CompanionState.Level,
                 dashboard.CurrentRepositoryAlias,
-                IsAgentSelected(ConnectedAgentSourceType.Codex) ? "Codex connected" : "No agent connected",
+                IsAgentReady(FindAgentSource(ConnectedAgentSourceType.Codex)) ? "Codex ready" : "No agent connected",
                 viewModel != null && viewModel.AuthState == AuthState.LoggedIn ? "Connected" : "Local only",
                 dashboard.DesktopCompanionSettings != null && dashboard.DesktopCompanionSettings.IsDesktopCompanionEnabled,
                 dashboard.DesktopCompanionSettings != null && dashboard.DesktopCompanionSettings.IsClickThroughEnabled,
                 HasAnalysisSourceReady() || hasPendingReview,
                 false);
+        }
+
+        private static bool IsAgentReady(ConnectedAgentSource source)
+        {
+            return source != null &&
+                   source.Selected &&
+                   (source.State == AgentSourceSetupState.ReadyToAnalyze ||
+                    source.State == AgentSourceSetupState.AnalysisComplete ||
+                    source.State == AgentSourceSetupState.LocalSourceDetected);
         }
 
         private void HandleApplicationMenuAction(ApplicationMenuAction action)

@@ -812,6 +812,16 @@ namespace TokenForge.Client.Sync
         private static string ToBackendSourceProvider(AgentWorkSession session)
         {
             var candidates = new List<string>();
+            if (session?.AgentActivitySummary != null && session.AgentActivitySummary.ProviderType != AgentProviderType.Unknown)
+            {
+                candidates.Add(session.AgentActivitySummary.ProviderType.ToString());
+            }
+
+            if (session != null && session.AgentType != AgentType.Unknown)
+            {
+                candidates.Add(session.AgentType.ToString());
+            }
+
             if (!string.IsNullOrWhiteSpace(session?.SourceProvider))
             {
                 candidates.Add(session.SourceProvider);
@@ -820,11 +830,6 @@ namespace TokenForge.Client.Sync
             if (session?.SourceProviders != null)
             {
                 candidates.AddRange(session.SourceProviders);
-            }
-
-            if (session != null)
-            {
-                candidates.Add(session.AgentType.ToString());
             }
 
             foreach (var candidate in candidates)

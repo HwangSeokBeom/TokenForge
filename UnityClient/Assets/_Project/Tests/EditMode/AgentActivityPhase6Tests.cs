@@ -95,8 +95,8 @@ namespace TokenForge.Client.Tests
 
             AssertNoRawAgentData(saveData);
             AssertNoRawAgentData(payload);
-            Assert.AreEqual("AI_AGENT", session.SourceProvider);
-            Assert.AreEqual("AI_AGENT", payload.SessionSummary.Sessions[0].SourceProvider);
+            Assert.AreEqual("CLAUDE", session.SourceProvider);
+            Assert.AreEqual("CLAUDE", payload.SessionSummary.Sessions[0].SourceProvider);
             Assert.AreEqual(AgentProviderType.ClaudeCode, payload.SessionSummary.Sessions[0].AgentProviderType);
             Assert.IsTrue(new PrivacySanitizer().ValidateSafeSaveData(saveData).IsSuccess);
             Assert.IsTrue(new SyncPayloadSanitizer().ValidatePayload(payload).IsSafe);

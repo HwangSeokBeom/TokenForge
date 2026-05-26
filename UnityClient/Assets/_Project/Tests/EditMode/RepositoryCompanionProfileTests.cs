@@ -20,7 +20,7 @@ namespace TokenForge.Client.Tests
 
             Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
             Assert.IsNotEmpty(result.Value.RepositoryHash);
-            Assert.AreEqual("Local Repository", result.Value.SafeRepositoryAlias);
+            Assert.AreEqual(Path.GetFileName(repo), result.Value.SafeRepositoryAlias);
             Assert.AreEqual(result.Value.RepositoryHash, saveData.SelectedRepositoryHash);
             Assert.IsFalse(result.Value.SafeRepositoryAlias.Contains(repo));
             Assert.IsTrue(new PrivacySanitizer().ValidateSafeSaveData(saveData).IsSuccess);
@@ -40,6 +40,38 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(firstResult.Value.RepositoryHash, repeatResult.Value.RepositoryHash);
             Assert.AreNotEqual(firstResult.Value.RepositoryHash, secondResult.Value.RepositoryHash);
             Assert.AreEqual(2, saveData.RepositoryCompanionProfiles.Count);
+        }
+
+        [Test]
+        public void MultipleRepositoriesEachHaveExactlyOneActiveCompanion()
+        {
+            var saveData = SaveData.CreateDefault();
+            var repositories = new[] { CreateGitRepository(), CreateGitRepository(), CreateGitRepository() };
+
+            foreach (var repository in repositories)
+            {
+                RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repository);
+            }
+
+            var activeProfiles = saveData.RepositoryCompanionProfiles.Where(profile => profile.ArchivedAtUtc == null).ToList();
+            Assert.AreEqual(3, activeProfiles.Count);
+            Assert.AreEqual(3, activeProfiles.Select(profile => profile.RepositoryHash).Distinct().Count());
+            Assert.IsTrue(activeProfiles.All(profile => profile.CompanionState != null));
+        }
+
+        [Test]
+        public void DisconnectArchivesCompanionInsteadOfDeletingByDefault()
+        {
+            var saveData = SaveData.CreateDefault();
+            var first = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, CreateGitRepository()).Value;
+            var second = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, CreateGitRepository()).Value;
+
+            var result = RepositoryCompanionProfileService.RemoveProfile(saveData, first.RepositoryHash);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.IsNotNull(first.ArchivedAtUtc);
+            Assert.AreEqual(second.RepositoryHash, saveData.SelectedRepositoryHash);
+            Assert.Contains(first, saveData.RepositoryCompanionProfiles);
         }
 
         [Test]
@@ -74,6 +106,39 @@ namespace TokenForge.Client.Tests
             Assert.IsNotNull(pending);
             Assert.AreEqual(before, profile.CompanionState.TotalXp);
             Assert.AreEqual(0, saveData.GrowthHistory.Count);
+        }
+
+        [Test]
+        public void RepositoryCompanionProfilesKeepIndependentDesktopPositions()
+        {
+            var saveData = SaveData.CreateDefault();
+            var repoA = CreateGitRepository();
+            var repoB = CreateGitRepository();
+            var profileA = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repoA).Value;
+            var settingsA = RepositoryCompanionProfileService.GetSelectedDesktopCompanionSettings(saveData);
+            settingsA.HasSavedOverlayPosition = true;
+            settingsA.LastOverlayPositionX = 321f;
+            settingsA.LastOverlayPositionY = 222f;
+            RepositoryCompanionProfileService.SetSelectedDesktopCompanionSettings(saveData, settingsA);
+
+            var profileB = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repoB).Value;
+            var settingsB = RepositoryCompanionProfileService.GetSelectedDesktopCompanionSettings(saveData);
+            settingsB.HasSavedOverlayPosition = true;
+            settingsB.LastOverlayPositionX = 48f;
+            settingsB.LastOverlayPositionY = 96f;
+            RepositoryCompanionProfileService.SetSelectedDesktopCompanionSettings(saveData, settingsB);
+
+            RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repoA);
+            var restoredA = RepositoryCompanionProfileService.GetSelectedDesktopCompanionSettings(saveData);
+            RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repoB);
+            var restoredB = RepositoryCompanionProfileService.GetSelectedDesktopCompanionSettings(saveData);
+
+            Assert.AreEqual(profileA.RepositoryHash, RepositoryCompanionProfileService.HashRepositoryPath(repoA));
+            Assert.AreEqual(profileB.RepositoryHash, RepositoryCompanionProfileService.HashRepositoryPath(repoB));
+            Assert.AreEqual(321f, restoredA.LastOverlayPositionX);
+            Assert.AreEqual(222f, restoredA.LastOverlayPositionY);
+            Assert.AreEqual(48f, restoredB.LastOverlayPositionX);
+            Assert.AreEqual(96f, restoredB.LastOverlayPositionY);
         }
 
         [Test]

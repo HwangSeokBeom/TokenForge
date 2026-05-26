@@ -91,6 +91,7 @@ namespace TokenForge.Client.Auth
 
             try
             {
+                using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
                 using (var process = Process.Start(startInfo))
                 {
                     if (process == null)
@@ -98,9 +99,20 @@ namespace TokenForge.Client.Auth
                         return new SecurityResult(false, string.Empty);
                     }
 
+                    timeout.CancelAfter(TimeSpan.FromSeconds(10));
                     var outputTask = process.StandardOutput.ReadToEndAsync();
-                    await Task.Run(() => process.WaitForExit(), cancellationToken);
+                    var errorTask = process.StandardError.ReadToEndAsync();
+                    var exitTask = WaitForExitAsync(process, timeout.Token);
+                    var completed = await Task.WhenAny(exitTask, Task.Delay(TimeSpan.FromSeconds(10), timeout.Token));
+                    if (completed != exitTask)
+                    {
+                        TryKill(process);
+                        return new SecurityResult(false, string.Empty);
+                    }
+
                     var output = await outputTask;
+                    await errorTask;
+                    await exitTask;
                     if (process.ExitCode != 0 && !allowFailure)
                     {
                         return new SecurityResult(false, string.Empty);
@@ -112,6 +124,55 @@ namespace TokenForge.Client.Auth
             catch
             {
                 return new SecurityResult(false, string.Empty);
+            }
+        }
+
+        private static Task<int> WaitForExitAsync(Process process, CancellationToken cancellationToken)
+        {
+            if (process.HasExited)
+            {
+                return Task.FromResult(process.ExitCode);
+            }
+
+            var completion = new TaskCompletionSource<int>();
+            process.EnableRaisingEvents = true;
+            process.Exited += (sender, args) =>
+            {
+                try
+                {
+                    completion.TrySetResult(process.ExitCode);
+                }
+                catch (InvalidOperationException exception)
+                {
+                    completion.TrySetException(exception);
+                }
+            };
+
+            if (cancellationToken.CanBeCanceled)
+            {
+                cancellationToken.Register(() => completion.TrySetCanceled());
+            }
+
+            if (process.HasExited)
+            {
+                completion.TrySetResult(process.ExitCode);
+            }
+
+            return completion.Task;
+        }
+
+        private static void TryKill(Process process)
+        {
+            try
+            {
+                if (process != null && !process.HasExited)
+                {
+                    process.Kill();
+                }
+            }
+            catch
+            {
+                // Process cleanup is best effort; caller receives a safe failure.
             }
         }
 

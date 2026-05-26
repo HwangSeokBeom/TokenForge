@@ -38,7 +38,7 @@ namespace TokenForge.Client.Git
             var available = await IsAvailableAsync(context, cancellationToken);
             if (!available)
             {
-                return AgentProviderResult.Failure(ProviderId, "not_git_repository", "Project folder is not a Git repository.");
+                return AgentProviderResult.Failure(ProviderId, "NotAGitRepository", "This folder is not a Git repository.");
             }
 
             var statusResult = await commandRunner.RunAsync(context.ProjectRootPath, "status --short", cancellationToken);

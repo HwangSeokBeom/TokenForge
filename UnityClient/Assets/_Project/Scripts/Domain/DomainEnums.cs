@@ -28,7 +28,8 @@ namespace TokenForge.Client.Domain
         Cursor = 3,
         ClaudeCode = 4,
         GitHubCopilot = 5,
-        Manual = 6
+        Manual = 6,
+        GeminiCli = 7
     }
 
     public enum AgentSourceKind

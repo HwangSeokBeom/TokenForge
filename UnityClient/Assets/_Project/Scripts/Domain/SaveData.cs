@@ -37,6 +37,11 @@ namespace TokenForge.Client.Domain
     {
         public string ProviderId { get; set; } = string.Empty;
         public bool Enabled { get; set; } = true;
+        public bool Selected { get; set; }
+        public bool Detected { get; set; }
+        public bool ManualFolderApproved { get; set; }
+        public string ConnectionState { get; set; } = string.Empty;
+        public string SafeLocationHash { get; set; } = string.Empty;
         public DateTimeOffset? LastScanAt { get; set; }
         public string ParserVersion { get; set; } = string.Empty;
         public int PollingIntervalSeconds { get; set; } = 300;
@@ -105,6 +110,19 @@ namespace TokenForge.Client.Domain
         public List<string> WarningIds { get; set; } = new List<string>();
         public AgentWorkSession SafeSession { get; set; }
         public CharacterGrowthResult GrowthResult { get; set; }
+        public List<AgentWorkSession> SafeSessions { get; set; } = new List<AgentWorkSession>();
+        public List<CharacterGrowthResult> GrowthResults { get; set; } = new List<CharacterGrowthResult>();
+        public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    }
+
+    [Serializable]
+    public sealed class NativeAnalysisRunRecord
+    {
+        public string RunId { get; set; } = Guid.NewGuid().ToString("N");
+        public string SourceKind { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string ErrorCode { get; set; } = string.Empty;
+        public string SafeSummary { get; set; } = string.Empty;
         public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
     }
 
@@ -124,7 +142,9 @@ namespace TokenForge.Client.Domain
         public DesktopCompanionSettings DesktopCompanionSettings { get; set; } = DesktopCompanionSettings.CreateDefault();
         public List<AgentWorkSession> WorkSessionSummaries { get; set; } = new List<AgentWorkSession>();
         public List<CharacterGrowthResult> GrowthHistory { get; set; } = new List<CharacterGrowthResult>();
+        public List<string> AppliedNativeReviewIds { get; set; } = new List<string>();
         public PendingNativeActivityReview PendingNativeActivityReview { get; set; }
+        public List<NativeAnalysisRunRecord> RecentNativeAnalysisRuns { get; set; } = new List<NativeAnalysisRunRecord>();
         public List<ConnectedProject> ConnectedProjects { get; set; } = new List<ConnectedProject>();
         public List<ProviderSettings> ProviderSettings { get; set; } = new List<ProviderSettings>();
         public SyncState SyncState { get; set; } = new SyncState();

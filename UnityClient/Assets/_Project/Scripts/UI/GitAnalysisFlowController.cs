@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -139,25 +140,24 @@ namespace TokenForge.Client.UI
 
         public Result SelectDevelopmentRepositoryPath(string repositoryRootPath)
         {
-            return SelectLocalOnlyApprovedRepositoryPath(repositoryRootPath);
+            return Fail("async_repository_selection_required", "Repository selection must run asynchronously.");
         }
 
-        public Result SelectLocalOnlyApprovedRepositoryPath(string repositoryRootPath)
+        public Task<Result> SelectDevelopmentRepositoryPathAsync(string repositoryRootPath, CancellationToken cancellationToken = default)
         {
-            logger?.Info("Git repository selection started");
-            if (string.IsNullOrWhiteSpace(repositoryRootPath))
-            {
-                return Fail("missing_repository_path", "Repository folder is required.");
-            }
+            return SelectLocalOnlyApprovedRepositoryPathAsync(repositoryRootPath, cancellationToken);
+        }
 
-            return SelectLocalOnlyApprovedRepositoryPathAsync(repositoryRootPath, CancellationToken.None).GetAwaiter().GetResult();
+        public Task<Result> SelectLocalOnlyApprovedRepositoryPathAsync(string repositoryRootPath, CancellationToken cancellationToken = default)
+        {
+            return SelectLocalOnlyApprovedRepositoryPathInternalAsync(repositoryRootPath, cancellationToken);
         }
 
         public async Task<Result<GitAnalysisReviewModel>> AnalyzeAsync(CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(selectedRepositoryRootPath))
             {
-                var failure = Fail("missing_repository_selection", "Select a repository before analyzing.");
+                var failure = Fail("NoActiveRepository", "Connect a repository first.");
                 return Result<GitAnalysisReviewModel>.Failure(failure.ErrorCode, failure.ErrorMessage);
             }
 
@@ -167,10 +167,10 @@ namespace TokenForge.Client.UI
             logger?.Info("Git analysis flow analysis started");
 
             var input = Settings.ToInput(selectedRepositoryRootPath);
-            var analysisResult = await analyzer.AnalyzeAsync(input, cancellationToken);
+            var analysisResult = await Task.Run(() => analyzer.AnalyzeAsync(input, cancellationToken), cancellationToken);
             if (!analysisResult.IsSuccess)
             {
-                var failure = Fail(analysisResult.ErrorCode, "Analysis failed with a safe error category.");
+                var failure = Fail(analysisResult.ErrorCode, SafeGitFailureMessage(analysisResult.ErrorCode, analysisResult.ErrorMessage));
                 return Result<GitAnalysisReviewModel>.Failure(failure.ErrorCode, failure.ErrorMessage);
             }
 
@@ -347,21 +347,38 @@ namespace TokenForge.Client.UI
                 : Result<RepositoryCompanionProfile>.Failure(saveResult.ErrorCode, saveResult.ErrorMessage);
         }
 
-        private async Task<Result> SelectLocalOnlyApprovedRepositoryPathAsync(string repositoryRootPath, CancellationToken cancellationToken)
+        private async Task<Result> SelectLocalOnlyApprovedRepositoryPathInternalAsync(string repositoryRootPath, CancellationToken cancellationToken)
         {
             logger?.Info("Git repository selection started");
             if (string.IsNullOrWhiteSpace(repositoryRootPath))
             {
-                return Fail("missing_repository_path", "Repository folder is required.");
+                return Fail("RepositoryPathMissing", "Repository path is missing. Reconnect required.");
             }
 
-            var profileResult = await PersistSelectedRepositoryProfileAsync(repositoryRootPath, cancellationToken);
+            if (!Directory.Exists(repositoryRootPath))
+            {
+                return Fail("RepositoryFolderNotFound", "Repository folder was not found. Reconnect required.");
+            }
+
+            var validation = await analyzer.ValidateRepositoryRootAsync(repositoryRootPath, cancellationToken);
+            if (!validation.IsSuccess)
+            {
+                return Fail(validation.ErrorCode, SafeGitFailureMessage(validation.ErrorCode, validation.ErrorMessage));
+            }
+
+            var canonicalRoot = (validation.Output ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(canonicalRoot) || !Directory.Exists(canonicalRoot))
+            {
+                return Fail("RepositoryFolderNotFound", "Repository folder was not found. Reconnect required.");
+            }
+
+            var profileResult = await PersistSelectedRepositoryProfileAsync(canonicalRoot, cancellationToken);
             if (!profileResult.IsSuccess)
             {
                 return Fail(profileResult.ErrorCode, profileResult.ErrorMessage);
             }
 
-            selectedRepositoryRootPath = repositoryRootPath;
+            selectedRepositoryRootPath = canonicalRoot;
             Review = null;
             pendingSession = null;
             State = GitAnalysisFlowState.Selected;
@@ -380,6 +397,34 @@ namespace TokenForge.Client.UI
             if (growthResult.EvolutionProgressDelta != EvolutionType.Unknown)
             {
                 profile.CurrentEvolutionType = growthResult.EvolutionProgressDelta;
+            }
+        }
+
+        private static string SafeGitFailureMessage(string errorCode, string errorMessage)
+        {
+            switch (errorCode)
+            {
+                case "ProcessTimeout":
+                case "git_timeout": return "Git command timed out.";
+                case "NotAGitRepository":
+                case "not_git_repository": return "This folder is not a Git repository.";
+                case "RepositoryFolderNotFound":
+                case "path_not_found":
+                case "invalid_repository_path": return "Repository folder was not found. Reconnect required.";
+                case "PermissionDenied":
+                case "permission_denied": return "Permission denied while reading repository folder.";
+                case "git_unavailable":
+                case "GitExecutableNotFound":
+                case "git_executable_not_found": return "Git executable was not found. Install Xcode Command Line Tools or Git.";
+                case "git_cancelled": return "Git command timed out.";
+                case "GitCommandFailed":
+                case "git_command_failed": return "Git command failed. Check repository state and try again.";
+                case "RepositoryPathMissing":
+                case "missing_repository_path":
+                case "NoActiveRepository":
+                case "missing_repository_selection": return "Connect a repository first.";
+                default:
+                    return string.IsNullOrWhiteSpace(errorMessage) ? "Analysis failed safely." : errorMessage;
             }
         }
     }

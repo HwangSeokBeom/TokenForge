@@ -1,9 +1,13 @@
 using System.Threading;
 using System.Threading.Tasks;
 using System.IO;
-
+using System;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
+using TokenForge.Client.Git;
+using UnityEngine;
+using Debug = UnityEngine.Debug;
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -35,8 +39,8 @@ namespace TokenForge.Client.Platform
             {
                 IsSuccess = !string.IsNullOrWhiteSpace(repositoryRootPath),
                 RepositoryRootPath = repositoryRootPath ?? string.Empty,
-                ErrorCode = string.IsNullOrWhiteSpace(repositoryRootPath) ? "missing_repository_path" : string.Empty,
-                ErrorMessage = string.IsNullOrWhiteSpace(repositoryRootPath) ? "Repository folder is required." : string.Empty
+                ErrorCode = string.IsNullOrWhiteSpace(repositoryRootPath) ? "RepositoryPathMissing" : string.Empty,
+                ErrorMessage = string.IsNullOrWhiteSpace(repositoryRootPath) ? "Repository path is missing. Reconnect required." : string.Empty
             };
         }
 
@@ -63,8 +67,17 @@ namespace TokenForge.Client.Platform
         {
             return new RepositoryPickerResult
             {
-                ErrorCode = "not_git_repository",
+                ErrorCode = "NotAGitRepository",
                 ErrorMessage = "This folder is not a Git repository."
+            };
+        }
+
+        public static RepositoryPickerResult Failure(string errorCode, string errorMessage)
+        {
+            return new RepositoryPickerResult
+            {
+                ErrorCode = string.IsNullOrWhiteSpace(errorCode) ? "Unknown" : errorCode,
+                ErrorMessage = string.IsNullOrWhiteSpace(errorMessage) ? "Repository selection failed safely." : errorMessage
             };
         }
     }
@@ -110,18 +123,18 @@ namespace TokenForge.Client.Platform
 
     public sealed class MacOSRepositoryPicker : IRepositoryPicker
     {
-        public Task<RepositoryPickerResult> PickRepositoryAsync(CancellationToken cancellationToken = default)
+        public async Task<RepositoryPickerResult> PickRepositoryAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
 #if UNITY_EDITOR
             var selectedPath = EditorUtility.OpenFolderPanel("Select Git Repository", string.Empty, string.Empty);
-            return Task.FromResult(GitRepositoryPathValidator.ToPickerResult(selectedPath));
+            return await GitRepositoryPathValidator.ToPickerResultAsync(selectedPath, cancellationToken);
 #elif UNITY_STANDALONE_OSX
-            var selectedPath = MacOSFolderDialog.PickFolder("Select Git Repository");
-            return Task.FromResult(GitRepositoryPathValidator.ToPickerResult(selectedPath));
+            var selectedPath = await MacOSFolderDialog.PickFolderAsync("Select Git Repository", cancellationToken);
+            return await GitRepositoryPathValidator.ToPickerResultAsync(selectedPath, cancellationToken);
 #else
-            return Task.FromResult(RepositoryPickerResult.Unavailable());
+            return RepositoryPickerResult.Unavailable();
 #endif
         }
     }
@@ -135,10 +148,27 @@ namespace TokenForge.Client.Platform
                 return RepositoryPickerResult.Cancelled();
             }
 
-            var root = ResolveRepositoryRoot(selectedPath);
-            return string.IsNullOrWhiteSpace(root)
-                ? RepositoryPickerResult.InvalidGitRepository()
-                : RepositoryPickerResult.Selected(root);
+            if (!Directory.Exists(selectedPath))
+            {
+                return RepositoryPickerResult.InvalidGitRepository();
+            }
+
+            return Directory.Exists(Path.Combine(selectedPath, ".git")) || File.Exists(Path.Combine(selectedPath, ".git"))
+                ? RepositoryPickerResult.Selected(selectedPath)
+                : RepositoryPickerResult.InvalidGitRepository();
+        }
+
+        public static async Task<RepositoryPickerResult> ToPickerResultAsync(string selectedPath, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(selectedPath))
+            {
+                return RepositoryPickerResult.Cancelled();
+            }
+
+            var validation = await ResolveRepositoryRootResultAsync(selectedPath, cancellationToken);
+            return validation.IsSuccess
+                ? RepositoryPickerResult.Selected(validation.Output.Trim())
+                : RepositoryPickerResult.Failure(validation.ErrorCode, validation.ErrorMessage);
         }
 
         public static string ResolveRepositoryRoot(string selectedPath)
@@ -148,59 +178,72 @@ namespace TokenForge.Client.Platform
                 return string.Empty;
             }
 
-            if (!Directory.Exists(Path.Combine(selectedPath, ".git")) && !File.Exists(Path.Combine(selectedPath, ".git")))
+            return Directory.Exists(Path.Combine(selectedPath, ".git")) || File.Exists(Path.Combine(selectedPath, ".git"))
+                ? selectedPath
+                : string.Empty;
+        }
+
+        public static async Task<string> ResolveRepositoryRootAsync(string selectedPath, CancellationToken cancellationToken = default)
+        {
+            var result = await ResolveRepositoryRootResultAsync(selectedPath, cancellationToken);
+            return result.IsSuccess ? result.Output.Trim() : string.Empty;
+        }
+
+        public static async Task<GitCommandResult> ResolveRepositoryRootResultAsync(string selectedPath, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(selectedPath))
             {
-                return string.Empty;
+                return GitCommandResult.Failure("RepositoryPathMissing", "Repository path is missing. Reconnect required.");
+            }
+
+            if (!Directory.Exists(selectedPath))
+            {
+                return GitCommandResult.Failure("RepositoryFolderNotFound", "Repository folder was not found. Reconnect required.");
             }
 
             try
             {
-                var startInfo = new ProcessStartInfo
+                Debug.Log("INFO [Repository] validate begin");
+                var result = await new SystemGitCommandRunner(TimeSpan.FromSeconds(5))
+                    .RunAsync(selectedPath, "rev-parse --show-toplevel", cancellationToken)
+                    .ConfigureAwait(false);
+                var root = (result.Output ?? string.Empty).Trim();
+                if (result.IsSuccess && Directory.Exists(root))
                 {
-                    FileName = "git",
-                    Arguments = "rev-parse --show-toplevel",
-                    WorkingDirectory = selectedPath,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    StandardOutputEncoding = Encoding.UTF8,
-                    StandardErrorEncoding = Encoding.UTF8,
-                    CreateNoWindow = true
-                };
-
-                using (var process = Process.Start(startInfo))
-                {
-                    if (process == null)
-                    {
-                        return string.Empty;
-                    }
-
-                    var output = process.StandardOutput.ReadToEnd();
-                    if (!process.WaitForExit(5000) || process.ExitCode != 0)
-                    {
-                        return string.Empty;
-                    }
-
-                    var root = (output ?? string.Empty).Trim();
-                    return Directory.Exists(root) ? root : string.Empty;
+                    Debug.Log("INFO [Repository] validate success");
+                    return GitCommandResult.Success(root + "\n", result.ExitCode);
                 }
+
+                if (result.IsSuccess)
+                {
+                    return GitCommandResult.Failure("RepositoryFolderNotFound", "Repository folder was not found. Reconnect required.");
+                }
+
+                Debug.LogWarning("WARN [Repository] validate failed reason=" + result.ErrorCode);
+                return result;
             }
-            catch
+            catch (OperationCanceledException)
             {
-                return string.Empty;
+                Debug.LogWarning("WARN [Repository] validate failed reason=cancelled");
+                return GitCommandResult.Failure("ProcessTimeout", "Repository validation timed out.");
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("WARN [Repository] validate failed reason=" + exception.GetType().Name);
+                return GitCommandResult.Failure("Unknown", "Repository validation failed safely.");
             }
         }
     }
 
     public sealed class MacOSAgentLogLocationPicker : IAgentLogLocationPicker
     {
-        public Task<AgentLogLocationPickerResult> PickAgentLogLocationAsync(CancellationToken cancellationToken = default)
+        public async Task<AgentLogLocationPickerResult> PickAgentLogLocationAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
 #if UNITY_EDITOR
             var choice = EditorUtility.DisplayDialogComplex(
-                "Select Codex Agent Log Location",
+                "Select AI Agent Log Location",
                 "Select an approved Codex activity log folder or a single supported local log file for this analysis.",
                 "Folder",
                 "Cancel",
@@ -208,7 +251,7 @@ namespace TokenForge.Client.Platform
 
             if (choice == 1)
             {
-                return Task.FromResult(AgentLogLocationPickerResult.Cancelled());
+                return AgentLogLocationPickerResult.Cancelled();
             }
 
             var selectedPath = choice == 2
@@ -218,16 +261,16 @@ namespace TokenForge.Client.Platform
                     new[] { "Agent logs", "json,jsonl,log,txt,ndjson", "All files", "*" })
                 : EditorUtility.OpenFolderPanel("Select Codex Log Folder", string.Empty, string.Empty);
 
-            return Task.FromResult(string.IsNullOrWhiteSpace(selectedPath)
+            return string.IsNullOrWhiteSpace(selectedPath)
                 ? AgentLogLocationPickerResult.Cancelled()
-                : AgentLogLocationPickerResult.Selected(selectedPath));
+                : AgentLogLocationPickerResult.Selected(selectedPath);
 #elif UNITY_STANDALONE_OSX
-            var selectedPath = MacOSFolderDialog.PickFolder("Select Codex log folder");
-            return Task.FromResult(string.IsNullOrWhiteSpace(selectedPath)
+            var selectedPath = await MacOSFolderDialog.PickFolderAsync("Select AI Agent Log Folder", cancellationToken);
+            return string.IsNullOrWhiteSpace(selectedPath)
                 ? AgentLogLocationPickerResult.Cancelled()
-                : AgentLogLocationPickerResult.Selected(selectedPath));
+                : AgentLogLocationPickerResult.Selected(selectedPath);
 #else
-            return Task.FromResult(AgentLogLocationPickerResult.Unavailable());
+            return AgentLogLocationPickerResult.Unavailable();
 #endif
         }
     }
@@ -235,63 +278,36 @@ namespace TokenForge.Client.Platform
 #if UNITY_STANDALONE_OSX && !UNITY_EDITOR
     internal static class MacOSFolderDialog
     {
-        public static string PickFolder(string prompt)
+        public static Task<string> PickFolderAsync(string prompt, CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var script = "POSIX path of (choose folder with prompt " + Quote(prompt) + ")";
-                var startInfo = new ProcessStartInfo
+                var buffer = new StringBuilder(4096);
+                var selected = NativePickFolder(prompt ?? "Select Folder", buffer, buffer.Capacity);
+                var path = selected ? buffer.ToString() : string.Empty;
+                if (!string.IsNullOrWhiteSpace(path))
                 {
-                    FileName = "/usr/bin/osascript",
-                    Arguments = "-e " + Quote(script),
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    StandardOutputEncoding = Encoding.UTF8,
-                    StandardErrorEncoding = Encoding.UTF8,
-                    CreateNoWindow = true
-                };
-
-                using (var process = Process.Start(startInfo))
-                {
-                    if (process == null)
-                    {
-                        return string.Empty;
-                    }
-
-                    var output = process.StandardOutput.ReadToEnd();
-                    if (!process.WaitForExit(120000))
-                    {
-                        try
-                        {
-                            process.Kill();
-                        }
-                        catch
-                        {
-                            // Best effort cleanup; selection simply fails closed.
-                        }
-
-                        return string.Empty;
-                    }
-
-                    if (process.ExitCode != 0)
-                    {
-                        return string.Empty;
-                    }
-
-                    return (output ?? string.Empty).Trim();
+                    Debug.Log("INFO [Repository] path selected=" + SafePathForLog(path));
                 }
+
+                return Task.FromResult(path);
             }
-            catch
+            catch (Exception exception)
             {
-                return string.Empty;
+                Debug.LogWarning("WARN [Repository] path selection failed reason=" + exception.GetType().Name);
+                return Task.FromResult(string.Empty);
             }
         }
 
-        private static string Quote(string value)
+        private static string SafePathForLog(string value)
         {
-            return "\"" + (value ?? string.Empty).Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+            value = string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+            return value.Length <= 160 ? value : value.Substring(0, 160);
         }
+
+        [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_PickFolder")]
+        private static extern bool NativePickFolder(string prompt, StringBuilder selectedPath, int selectedPathCapacity);
     }
 #endif
 }

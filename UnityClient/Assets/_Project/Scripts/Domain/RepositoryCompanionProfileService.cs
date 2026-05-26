@@ -60,26 +60,54 @@ namespace TokenForge.Client.Domain
             }
 
             if (string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash) ||
-                saveData.RepositoryCompanionProfiles.All(profile => !string.Equals(profile.RepositoryHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal)))
+                saveData.RepositoryCompanionProfiles.All(profile => profile.ArchivedAtUtc != null || !string.Equals(profile.RepositoryHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal)))
             {
-                saveData.SelectedRepositoryHash = saveData.RepositoryCompanionProfiles[0].RepositoryHash;
+                saveData.SelectedRepositoryHash = (saveData.RepositoryCompanionProfiles.FirstOrDefault(profile => profile.ArchivedAtUtc == null) ??
+                                                   saveData.RepositoryCompanionProfiles[0]).RepositoryHash;
             }
 
-            var selected = saveData.RepositoryCompanionProfiles.FirstOrDefault(profile => string.Equals(profile.RepositoryHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal)) ??
+            var selected = saveData.RepositoryCompanionProfiles.FirstOrDefault(profile => profile.ArchivedAtUtc == null && string.Equals(profile.RepositoryHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal)) ??
+                           saveData.RepositoryCompanionProfiles.FirstOrDefault(profile => profile.ArchivedAtUtc == null) ??
                            saveData.RepositoryCompanionProfiles.FirstOrDefault();
             if (selected != null)
             {
+                if (ShouldMigrateLegacyDesktopSettings(selected.DesktopCompanionSettings, saveData.DesktopCompanionSettings))
+                {
+                    selected.DesktopCompanionSettings = CloneDesktopCompanionSettings(saveData.DesktopCompanionSettings);
+                }
+
                 saveData.CompanionState = CompanionProgressionRules.Normalize(selected.CompanionState);
+                saveData.DesktopCompanionSettings = CloneDesktopCompanionSettings(selected.DesktopCompanionSettings);
             }
 
             return saveData;
+        }
+
+        public static DesktopCompanionSettings GetSelectedDesktopCompanionSettings(SaveData saveData)
+        {
+            saveData = Normalize(saveData);
+            var selected = GetSelectedProfile(saveData);
+            return CloneDesktopCompanionSettings(selected?.DesktopCompanionSettings ?? saveData.DesktopCompanionSettings);
+        }
+
+        public static void SetSelectedDesktopCompanionSettings(SaveData saveData, DesktopCompanionSettings settings)
+        {
+            saveData = Normalize(saveData);
+            var selected = GetSelectedProfile(saveData);
+            var normalized = CloneDesktopCompanionSettings(settings);
+            saveData.DesktopCompanionSettings = CloneDesktopCompanionSettings(normalized);
+            if (selected != null)
+            {
+                selected.DesktopCompanionSettings = CloneDesktopCompanionSettings(normalized);
+                selected.UpdatedAtUtc = DateTimeOffset.UtcNow;
+            }
         }
 
         public static Result<RepositoryCompanionProfile> SelectOrCreateProfile(SaveData saveData, string repositoryRootPath)
         {
             if (!IsGitRepository(repositoryRootPath))
             {
-                return Result<RepositoryCompanionProfile>.Failure("not_git_repository", "Select a valid Git repository.");
+                return Result<RepositoryCompanionProfile>.Failure("NotAGitRepository", "This folder is not a Git repository.");
             }
 
             var hash = HashRepositoryPath(repositoryRootPath);
@@ -99,20 +127,20 @@ namespace TokenForge.Client.Domain
                 {
                     profile = defaultProfile;
                     profile.RepositoryHash = hash;
-                    profile.SafeRepositoryAlias = string.IsNullOrWhiteSpace(profile.SafeRepositoryAlias)
-                        ? "Local Repository"
-                        : profile.SafeRepositoryAlias;
+                    profile.SafeRepositoryAlias = SafeRepositoryAlias(repositoryRootPath, "Local Repository");
                 }
                 else
                 {
-                    profile = CreateProfile(hash, NextRepositoryAlias(saveData));
+                    profile = CreateProfile(hash, SafeRepositoryAlias(repositoryRootPath, NextRepositoryAlias(saveData)));
                     saveData.RepositoryCompanionProfiles.Add(profile);
                 }
             }
 
+            profile.ArchivedAtUtc = null;
             profile.UpdatedAtUtc = DateTimeOffset.UtcNow;
             saveData.SelectedRepositoryHash = profile.RepositoryHash;
             saveData.CompanionState = CompanionProgressionRules.Normalize(profile.CompanionState);
+            saveData.DesktopCompanionSettings = CloneDesktopCompanionSettings(profile.DesktopCompanionSettings);
             return Result<RepositoryCompanionProfile>.Success(profile);
         }
 
@@ -124,7 +152,8 @@ namespace TokenForge.Client.Domain
                 Normalize(saveData);
             }
 
-            return saveData.RepositoryCompanionProfiles.FirstOrDefault(profile => string.Equals(profile.RepositoryHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal)) ??
+            return saveData.RepositoryCompanionProfiles.FirstOrDefault(profile => profile.ArchivedAtUtc == null && string.Equals(profile.RepositoryHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal)) ??
+                   saveData.RepositoryCompanionProfiles.FirstOrDefault(profile => profile.ArchivedAtUtc == null) ??
                    saveData.RepositoryCompanionProfiles.FirstOrDefault();
         }
 
@@ -155,6 +184,7 @@ namespace TokenForge.Client.Domain
             profile.UpdatedAtUtc = DateTimeOffset.UtcNow;
             IncrementProviderMix(profile, SafeProvider(session));
             saveData.CompanionState = CompanionProgressionRules.Normalize(profile.CompanionState);
+            saveData.DesktopCompanionSettings = CloneDesktopCompanionSettings(profile.DesktopCompanionSettings);
             return profile;
         }
 
@@ -166,19 +196,24 @@ namespace TokenForge.Client.Domain
                 return Result.Failure("missing_repository_hash", "Repository profile is required.");
             }
 
-            var removed = saveData.RepositoryCompanionProfiles.RemoveAll(profile => string.Equals(profile.RepositoryHash, repositoryHash, StringComparison.Ordinal));
-            if (removed == 0)
+            var profile = saveData.RepositoryCompanionProfiles.FirstOrDefault(item => string.Equals(item.RepositoryHash, repositoryHash, StringComparison.Ordinal));
+            if (profile == null)
             {
                 return Result.Failure("repository_profile_not_found", "Repository profile was not found.");
             }
 
-            if (saveData.RepositoryCompanionProfiles.Count == 0)
+            profile.ArchivedAtUtc = DateTimeOffset.UtcNow;
+            profile.UpdatedAtUtc = DateTimeOffset.UtcNow;
+            var nextActive = saveData.RepositoryCompanionProfiles.FirstOrDefault(item => item.ArchivedAtUtc == null);
+            if (nextActive == null)
             {
-                saveData.RepositoryCompanionProfiles.Add(CreateProfile(DefaultLocalRepositoryHash, "Local Repository"));
+                nextActive = CreateProfile(DefaultLocalRepositoryHash, "Local Repository");
+                saveData.RepositoryCompanionProfiles.Add(nextActive);
             }
 
-            saveData.SelectedRepositoryHash = saveData.RepositoryCompanionProfiles[0].RepositoryHash;
-            saveData.CompanionState = CompanionProgressionRules.Normalize(saveData.RepositoryCompanionProfiles[0].CompanionState);
+            saveData.SelectedRepositoryHash = nextActive.RepositoryHash;
+            saveData.CompanionState = CompanionProgressionRules.Normalize(nextActive.CompanionState);
+            saveData.DesktopCompanionSettings = CloneDesktopCompanionSettings(nextActive.DesktopCompanionSettings);
             return Result.Success();
         }
 
@@ -201,6 +236,7 @@ namespace TokenForge.Client.Domain
                 RepositoryHash = repositoryHash ?? string.Empty,
                 SafeRepositoryAlias = string.IsNullOrWhiteSpace(alias) ? "Local Repository" : alias.Trim(),
                 CompanionState = CompanionProgressionRules.Normalize(companionState),
+                DesktopCompanionSettings = CloneDesktopCompanionSettings(null),
                 SourceProviderMix = new List<SourceProviderMixEntry>(),
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now
@@ -220,15 +256,71 @@ namespace TokenForge.Client.Domain
                 ? "Local Repository"
                 : profile.SafeRepositoryAlias.Trim();
             profile.CompanionState = CompanionProgressionRules.Normalize(profile.CompanionState);
+            profile.DesktopCompanionSettings = CloneDesktopCompanionSettings(profile.DesktopCompanionSettings);
             profile.SourceProviderMix = profile.SourceProviderMix ?? new List<SourceProviderMixEntry>();
             profile.CreatedAtUtc = profile.CreatedAtUtc == default(DateTimeOffset) ? DateTimeOffset.UtcNow : profile.CreatedAtUtc;
             profile.UpdatedAtUtc = profile.UpdatedAtUtc == default(DateTimeOffset) ? profile.CreatedAtUtc : profile.UpdatedAtUtc;
+        }
+
+        public static DesktopCompanionSettings CloneDesktopCompanionSettings(DesktopCompanionSettings settings)
+        {
+            settings = settings ?? DesktopCompanionSettings.CreateDefault();
+            return new DesktopCompanionSettings
+            {
+                SchemaVersion = 2,
+                IsDesktopCompanionEnabled = settings.IsDesktopCompanionEnabled,
+                MotionMode = Enum.IsDefined(typeof(CompanionDesktopMotionMode), settings.MotionMode)
+                    ? settings.MotionMode
+                    : CompanionDesktopMotionMode.Normal,
+                IsClickThroughEnabled = settings.IsClickThroughEnabled,
+                LastOverlayPositionXBucket = settings.LastOverlayPositionXBucket,
+                LastOverlayPositionYBucket = settings.LastOverlayPositionYBucket,
+                LastOverlayPositionX = settings.LastOverlayPositionX,
+                LastOverlayPositionY = settings.LastOverlayPositionY,
+                HasSavedOverlayPosition = settings.HasSavedOverlayPosition && settings.LastOverlayPositionX >= 0f && settings.LastOverlayPositionY >= 0f,
+                VisualThemeId = string.IsNullOrWhiteSpace(settings.VisualThemeId) ? "pixel-default" : settings.VisualThemeId.Trim()
+            };
+        }
+
+        private static bool ShouldMigrateLegacyDesktopSettings(DesktopCompanionSettings profileSettings, DesktopCompanionSettings legacySettings)
+        {
+            if (legacySettings == null || profileSettings == null)
+            {
+                return false;
+            }
+
+            return legacySettings.HasSavedOverlayPosition &&
+                   !profileSettings.HasSavedOverlayPosition &&
+                   legacySettings.LastOverlayPositionX >= 0f &&
+                   legacySettings.LastOverlayPositionY >= 0f;
         }
 
         private static string NextRepositoryAlias(SaveData saveData)
         {
             var count = Math.Max(1, (saveData?.RepositoryCompanionProfiles?.Count ?? 0) + 1);
             return "Repository " + count;
+        }
+
+        private static string SafeRepositoryAlias(string repositoryRootPath, string fallback)
+        {
+            var alias = string.Empty;
+            try
+            {
+                alias = Path.GetFileName((repositoryRootPath ?? string.Empty).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            }
+            catch (ArgumentException)
+            {
+                alias = string.Empty;
+            }
+
+            alias = string.IsNullOrWhiteSpace(alias) ? fallback : alias.Trim();
+            alias = new string(alias.Where(character => char.IsLetterOrDigit(character) || character == '-' || character == '_' || character == ' ').Take(48).ToArray()).Trim();
+            if (string.IsNullOrWhiteSpace(alias) || new ForbiddenFieldDetector().ContainsSensitiveString(alias))
+            {
+                alias = string.IsNullOrWhiteSpace(fallback) ? "Local Repository" : fallback;
+            }
+
+            return alias;
         }
 
         private static string LastActivityBucket(AgentWorkSession session)
