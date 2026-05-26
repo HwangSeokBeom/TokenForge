@@ -66,6 +66,7 @@ namespace TokenForge.Client.UI
         public bool CanSync => syncService != null;
         public bool HasPendingReview => pendingSession != null && Review != null;
         public bool HasSelectedRepositoryForLocalOnlyApproval => !string.IsNullOrWhiteSpace(selectedRepositoryRootPath);
+        public AgentWorkSession PendingSessionForLocalOnlyApproval => pendingSession;
 
         public string GetSelectedRepositoryPathForLocalOnlyApproval()
         {

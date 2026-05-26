@@ -90,6 +90,25 @@ namespace TokenForge.Client.Domain
     }
 
     [Serializable]
+    public sealed class PendingNativeActivityReview
+    {
+        public string ReviewId { get; set; } = string.Empty;
+        public string SourceKind { get; set; } = string.Empty;
+        public string RepositoryHash { get; set; } = string.Empty;
+        public string SafeSummary { get; set; } = string.Empty;
+        public string ActivityCategory { get; set; } = string.Empty;
+        public string Confidence { get; set; } = string.Empty;
+        public CountBucket CommitCountBucket { get; set; } = CountBucket.Unknown;
+        public CountBucket ChangedFileCountBucket { get; set; } = CountBucket.Unknown;
+        public int EstimatedXpDelta { get; set; }
+        public CharacterStats StatDeltas { get; set; } = CharacterStats.Zero();
+        public List<string> WarningIds { get; set; } = new List<string>();
+        public AgentWorkSession SafeSession { get; set; }
+        public CharacterGrowthResult GrowthResult { get; set; }
+        public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    }
+
+    [Serializable]
     public sealed class SaveData
     {
         public const int CurrentSchemaVersion = 1;
@@ -105,6 +124,7 @@ namespace TokenForge.Client.Domain
         public DesktopCompanionSettings DesktopCompanionSettings { get; set; } = DesktopCompanionSettings.CreateDefault();
         public List<AgentWorkSession> WorkSessionSummaries { get; set; } = new List<AgentWorkSession>();
         public List<CharacterGrowthResult> GrowthHistory { get; set; } = new List<CharacterGrowthResult>();
+        public PendingNativeActivityReview PendingNativeActivityReview { get; set; }
         public List<ConnectedProject> ConnectedProjects { get; set; } = new List<ConnectedProject>();
         public List<ProviderSettings> ProviderSettings { get; set; } = new List<ProviderSettings>();
         public SyncState SyncState { get; set; } = new SyncState();

@@ -8,6 +8,7 @@ namespace TokenForge.Client.Platform
         Dashboard,
         ShowDashboard,
         HideDashboard,
+        ToggleDashboard,
         Repository,
         CodexAgent,
         Activity,
@@ -17,7 +18,11 @@ namespace TokenForge.Client.Platform
         Quit,
         RunAnalysis,
         ConnectRepository,
+        ChangeRepository,
         ConnectCodexAgent,
+        SelectCodexLogFolder,
+        ApproveReview,
+        DiscardReview,
         ReviewActivity,
         ToggleCompanionVisible,
         ChangeCompanionSkin,
@@ -89,6 +94,7 @@ namespace TokenForge.Client.Platform
         public NativeRepositoryState repository = NativeRepositoryState.CreateDefault();
         public NativeCodexAgentState codexAgent = NativeCodexAgentState.CreateDefault();
         public NativeActivityState activity = NativeActivityState.CreateDefault();
+        public NativeReviewState review = NativeReviewState.CreateDefault();
         public string statusText = "Cdx 0% · CI 0% · Gem 0%";
 
         public static NativeDashboardState CreateDefault()
@@ -107,6 +113,7 @@ namespace TokenForge.Client.Platform
     {
         public string name = "Token";
         public string stage = "Egg";
+        public int stageIndex;
         public int level = 1;
         public int xp;
         public int xpToNextLevel = 250;
@@ -160,6 +167,27 @@ namespace TokenForge.Client.Platform
         public static NativeActivityState CreateDefault()
         {
             return new NativeActivityState();
+        }
+    }
+
+    [Serializable]
+    public sealed class NativeReviewState
+    {
+        public bool pending;
+        public string summary = "No pending review";
+        public string source = string.Empty;
+        public string confidence = string.Empty;
+        public int estimatedXpDelta;
+        public int codeDelta;
+        public int focusDelta;
+        public int debugDelta;
+        public int designDelta;
+        public int syncDelta;
+        public string warnings = string.Empty;
+
+        public static NativeReviewState CreateDefault()
+        {
+            return new NativeReviewState();
         }
     }
 }

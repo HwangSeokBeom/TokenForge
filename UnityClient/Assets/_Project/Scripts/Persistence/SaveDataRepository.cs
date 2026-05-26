@@ -188,6 +188,11 @@ namespace TokenForge.Client.Persistence
                 }
             }
             saveData.GrowthHistory = saveData.GrowthHistory ?? new System.Collections.Generic.List<CharacterGrowthResult>();
+            if (saveData.PendingNativeActivityReview != null)
+            {
+                saveData.PendingNativeActivityReview.StatDeltas = saveData.PendingNativeActivityReview.StatDeltas ?? CharacterStats.Zero();
+                saveData.PendingNativeActivityReview.WarningIds = saveData.PendingNativeActivityReview.WarningIds ?? new System.Collections.Generic.List<string>();
+            }
             saveData.ConnectedProjects = saveData.ConnectedProjects ?? new System.Collections.Generic.List<ConnectedProject>();
             saveData.ProviderSettings = saveData.ProviderSettings ?? new System.Collections.Generic.List<ProviderSettings>();
             saveData.SyncState = saveData.SyncState ?? new SyncState();

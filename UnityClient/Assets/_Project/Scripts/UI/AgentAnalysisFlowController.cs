@@ -60,6 +60,7 @@ namespace TokenForge.Client.UI
         public string UserMessage { get; private set; } = "Select an approved agent log location to begin.";
         public bool HasPendingReview => pendingSession != null && Review != null;
         public bool HasSelectedAgentLogLocationForLocalOnlyApproval => pendingInput != null && !string.IsNullOrWhiteSpace(pendingInput.SelectedLocationPath);
+        public AgentWorkSession PendingSessionForLocalOnlyApproval => pendingSession;
 
         public void SetSelectedRepositoryHash(string repositoryHash)
         {

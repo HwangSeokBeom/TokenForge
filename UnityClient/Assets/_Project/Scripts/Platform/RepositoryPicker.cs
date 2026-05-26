@@ -1,10 +1,9 @@
 using System.Threading;
 using System.Threading.Tasks;
+using System.IO;
 
-#if UNITY_STANDALONE_OSX && !UNITY_EDITOR
 using System.Diagnostics;
 using System.Text;
-#endif
 
 #if UNITY_EDITOR
 using UnityEditor;
@@ -59,6 +58,15 @@ namespace TokenForge.Client.Platform
                 ErrorMessage = "Repository picker is not available on this platform."
             };
         }
+
+        public static RepositoryPickerResult InvalidGitRepository()
+        {
+            return new RepositoryPickerResult
+            {
+                ErrorCode = "not_git_repository",
+                ErrorMessage = "This folder is not a Git repository."
+            };
+        }
     }
 
     public sealed class AgentLogLocationPickerResult
@@ -108,17 +116,79 @@ namespace TokenForge.Client.Platform
 
 #if UNITY_EDITOR
             var selectedPath = EditorUtility.OpenFolderPanel("Select Git Repository", string.Empty, string.Empty);
-            return Task.FromResult(string.IsNullOrWhiteSpace(selectedPath)
-                ? RepositoryPickerResult.Cancelled()
-                : RepositoryPickerResult.Selected(selectedPath));
+            return Task.FromResult(GitRepositoryPathValidator.ToPickerResult(selectedPath));
 #elif UNITY_STANDALONE_OSX
             var selectedPath = MacOSFolderDialog.PickFolder("Select Git Repository");
-            return Task.FromResult(string.IsNullOrWhiteSpace(selectedPath)
-                ? RepositoryPickerResult.Cancelled()
-                : RepositoryPickerResult.Selected(selectedPath));
+            return Task.FromResult(GitRepositoryPathValidator.ToPickerResult(selectedPath));
 #else
             return Task.FromResult(RepositoryPickerResult.Unavailable());
 #endif
+        }
+    }
+
+    public static class GitRepositoryPathValidator
+    {
+        public static RepositoryPickerResult ToPickerResult(string selectedPath)
+        {
+            if (string.IsNullOrWhiteSpace(selectedPath))
+            {
+                return RepositoryPickerResult.Cancelled();
+            }
+
+            var root = ResolveRepositoryRoot(selectedPath);
+            return string.IsNullOrWhiteSpace(root)
+                ? RepositoryPickerResult.InvalidGitRepository()
+                : RepositoryPickerResult.Selected(root);
+        }
+
+        public static string ResolveRepositoryRoot(string selectedPath)
+        {
+            if (string.IsNullOrWhiteSpace(selectedPath) || !Directory.Exists(selectedPath))
+            {
+                return string.Empty;
+            }
+
+            if (!Directory.Exists(Path.Combine(selectedPath, ".git")) && !File.Exists(Path.Combine(selectedPath, ".git")))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = "git",
+                    Arguments = "rev-parse --show-toplevel",
+                    WorkingDirectory = selectedPath,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    StandardOutputEncoding = Encoding.UTF8,
+                    StandardErrorEncoding = Encoding.UTF8,
+                    CreateNoWindow = true
+                };
+
+                using (var process = Process.Start(startInfo))
+                {
+                    if (process == null)
+                    {
+                        return string.Empty;
+                    }
+
+                    var output = process.StandardOutput.ReadToEnd();
+                    if (!process.WaitForExit(5000) || process.ExitCode != 0)
+                    {
+                        return string.Empty;
+                    }
+
+                    var root = (output ?? string.Empty).Trim();
+                    return Directory.Exists(root) ? root : string.Empty;
+                }
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
     }
 
@@ -130,8 +200,8 @@ namespace TokenForge.Client.Platform
 
 #if UNITY_EDITOR
             var choice = EditorUtility.DisplayDialogComplex(
-                "Select AI Agent Log Location",
-                "Select an approved AI agent log folder or a single log file for this analysis.",
+                "Select Codex Agent Log Location",
+                "Select an approved Codex activity log folder or a single supported local log file for this analysis.",
                 "Folder",
                 "Cancel",
                 "File");
@@ -143,16 +213,16 @@ namespace TokenForge.Client.Platform
 
             var selectedPath = choice == 2
                 ? EditorUtility.OpenFilePanelWithFilters(
-                    "Select AI Agent Log File",
+                    "Select Codex Log File",
                     string.Empty,
                     new[] { "Agent logs", "json,jsonl,log,txt,ndjson", "All files", "*" })
-                : EditorUtility.OpenFolderPanel("Select AI Agent Log Folder", string.Empty, string.Empty);
+                : EditorUtility.OpenFolderPanel("Select Codex Log Folder", string.Empty, string.Empty);
 
             return Task.FromResult(string.IsNullOrWhiteSpace(selectedPath)
                 ? AgentLogLocationPickerResult.Cancelled()
                 : AgentLogLocationPickerResult.Selected(selectedPath));
 #elif UNITY_STANDALONE_OSX
-            var selectedPath = MacOSFolderDialog.PickFolder("Select AI Agent Log Folder");
+            var selectedPath = MacOSFolderDialog.PickFolder("Select Codex log folder");
             return Task.FromResult(string.IsNullOrWhiteSpace(selectedPath)
                 ? AgentLogLocationPickerResult.Cancelled()
                 : AgentLogLocationPickerResult.Selected(selectedPath));

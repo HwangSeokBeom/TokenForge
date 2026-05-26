@@ -100,6 +100,7 @@ namespace TokenForge.Client
         public string LastBootstrapRootSource { get; private set; } = string.Empty;
         public string LastBootstrapRootPrefabPath { get; private set; } = string.Empty;
         public string LastBootstrapRootUiVersion { get; private set; } = string.Empty;
+        public int LastRemovedStaleUnityDashboardRootCount { get; private set; }
 
         private static bool UseNativeMacDashboardShell
         {
@@ -144,6 +145,7 @@ namespace TokenForge.Client
 
             if (UseNativeMacDashboardShell)
             {
+                Debug.Log("INFO [Bootstrap] uiMode=nativeAppKit");
                 Debug.Log("INFO [NativeDashboard] mode=macOSPlayer source=AppKit");
                 Debug.Log("INFO [BootstrapRoot] productUI=disabled reason=nativeShell");
                 EnsureNativeDashboardShell();
@@ -164,6 +166,7 @@ namespace TokenForge.Client
             }
             else
             {
+                Debug.Log("INFO [Bootstrap] uiMode=unityFallback");
                 if (!prefabUiUnavailableLogged)
                 {
                     Debug.LogError("ERROR " + LogPrefix + " BootstrapRootView missing");
@@ -365,7 +368,32 @@ namespace TokenForge.Client
                 DontDestroyOnLoad(controllerObject);
                 nativeDesktopCompanionController = controllerObject.AddComponent<DesktopCompanionOverlayController>();
                 nativeDesktopCompanionController.Initialize(null, lifecycleService);
+                nativeDesktopCompanionController.PositionChanged -= HandleNativeCompanionPositionChanged;
+                nativeDesktopCompanionController.PositionChanged += HandleNativeCompanionPositionChanged;
+                nativeDesktopCompanionController.DashboardRestoreRequested -= HandleNativeCompanionDashboardRestoreRequested;
+                nativeDesktopCompanionController.DashboardRestoreRequested += HandleNativeCompanionDashboardRestoreRequested;
             }
+        }
+
+        private void HandleNativeCompanionDashboardRestoreRequested()
+        {
+            nativeDashboardService?.ToggleDashboardWindow();
+        }
+
+        private void HandleNativeCompanionPositionChanged(Vector2 position)
+        {
+            if (approvedActivityAnalysis == null)
+            {
+                return;
+            }
+
+            _ = SaveNativeCompanionPositionAsync(position);
+        }
+
+        private async Task SaveNativeCompanionPositionAsync(Vector2 position)
+        {
+            await approvedActivityAnalysis.SaveDesktopCompanionPositionAsync(position.x, position.y);
+            ApplyNativeShellState(showDashboardIfNeeded: false);
         }
 
         private void ApplyNativeShellState(bool showDashboardIfNeeded)
@@ -410,7 +438,8 @@ namespace TokenForge.Client
             state.selectedNavItem = "dashboard";
             state.primaryActionEnabled = true;
             state.pendingReviewCount = (gitAnalysisFlow != null && gitAnalysisFlow.HasPendingReview ? 1 : 0)
-                + (agentAnalysisFlow != null && agentAnalysisFlow.HasPendingReview ? 1 : 0);
+                + (agentAnalysisFlow != null && agentAnalysisFlow.HasPendingReview ? 1 : 0)
+                + (approvedActivityAnalysis?.PendingNativeActivityReview != null && gitAnalysisFlow?.HasPendingReview != true && agentAnalysisFlow?.HasPendingReview != true ? 1 : 0);
             state.warningCount = Math.Max(0, (approvedActivityAnalysis?.RetryQueueSummary?.PendingCount ?? 0) + (approvedActivityAnalysis?.TombstoneSummary?.PendingDeleteCount ?? 0));
             state.lastRunSummary = SafeNativeText(dashboard.LatestSafeSessionSummary, "No saved growth yet. Run Analysis on a repository or AI agent log to generate your first XP.");
             state.codeStat = Math.Max(0, dashboard.Code);
@@ -423,6 +452,7 @@ namespace TokenForge.Client
             state.clickReactionEnabled = !settings.IsClickThroughEnabled;
             state.companion.name = string.IsNullOrWhiteSpace(dashboard.CharacterName) ? "Token" : dashboard.CharacterName;
             state.companion.stage = companion.Stage.ToString();
+            state.companion.stageIndex = (int)companion.Stage;
             state.companion.level = Math.Max(1, companion.Level);
             state.companion.xp = Math.Max(0, dashboard.CurrentLevelExp);
             state.companion.xpToNextLevel = Math.Max(1, companion.XpToNextStage);
@@ -433,8 +463,8 @@ namespace TokenForge.Client
             state.repository.status = repositoryConnected ? "local_connected" : "not_selected";
             state.repository.statusText = repositoryConnected ? "Connected locally" : "Not selected";
             state.codexAgent.connected = codexConnected;
-            state.codexAgent.status = codexConnected ? "connected" : "not_connected";
-            state.codexAgent.statusText = codexConnected ? "Connected" : "Not connected";
+            state.codexAgent.status = codexConnected ? "connected_locally" : AgentCodexStatus();
+            state.codexAgent.statusText = codexConnected ? "Connected locally" : AgentCodexStatusText();
             state.activity.todaySummary = SafeNativeText(dashboard.LatestSafeSessionSummary, "No activity yet");
             state.activity.state = state.pendingReviewCount > 0 ? "Pending review" : dashboard.HasSavedRun ? "Saved" : "No pending review";
             state.activity.code = Math.Max(0, dashboard.Code);
@@ -442,8 +472,74 @@ namespace TokenForge.Client
             state.activity.debug = Math.Max(0, dashboard.Debug);
             state.activity.design = Math.Max(0, dashboard.Design);
             state.activity.sync = Math.Max(0, dashboard.Sync);
+            ApplyPendingReviewState(state, approvedActivityAnalysis?.PendingNativeActivityReview);
             state.statusText = "Cdx " + state.activity.code + "% · CI " + state.activity.focus + "% · Gem " + state.activity.design + "%";
             return state;
+        }
+
+        private string AgentCodexStatus()
+        {
+            var source = approvedActivityAnalysis?.Onboarding.AgentSources.FirstOrDefault(item => item.SourceType == ConnectedAgentSourceType.Codex);
+            if (source == null)
+            {
+                return "not_connected";
+            }
+
+            switch (source.State)
+            {
+                case AgentSourceSetupState.PermissionRequired:
+                    return "needs_folder_access";
+                case AgentSourceSetupState.ManualImportRequired:
+                    return "no_activity_found";
+                case AgentSourceSetupState.AnalysisFailedSafely:
+                    return "unsupported";
+                case AgentSourceSetupState.ReadyToAnalyze:
+                case AgentSourceSetupState.AnalysisComplete:
+                    return "connected_locally";
+                default:
+                    return "not_connected";
+            }
+        }
+
+        private string AgentCodexStatusText()
+        {
+            switch (AgentCodexStatus())
+            {
+                case "needs_folder_access":
+                    return "Needs folder access";
+                case "no_activity_found":
+                    return "Unsupported / No activity found";
+                case "unsupported":
+                    return "Unsupported / No activity found";
+                case "connected_locally":
+                    return "Connected locally";
+                default:
+                    return "Not connected";
+            }
+        }
+
+        private static void ApplyPendingReviewState(NativeDashboardState state, PendingNativeActivityReview pending)
+        {
+            if (state == null || pending == null)
+            {
+                return;
+            }
+
+            var deltas = pending.StatDeltas ?? CharacterStats.Zero();
+            state.review.pending = true;
+            state.review.summary = SafeNativeText(pending.SafeSummary, "Aggregate activity ready for review.");
+            state.review.source = pending.SourceKind;
+            state.review.confidence = pending.Confidence;
+            state.review.estimatedXpDelta = Math.Max(0, pending.EstimatedXpDelta);
+            state.review.codeDelta = Math.Max(0, deltas.Logic + deltas.Architecture + deltas.Velocity);
+            state.review.focusDelta = Math.Max(0, deltas.Efficiency + deltas.Stability);
+            state.review.debugDelta = Math.Max(0, deltas.Debug);
+            state.review.designDelta = Math.Max(0, deltas.Design + deltas.Creativity);
+            state.review.syncDelta = 0;
+            state.review.warnings = string.Join(", ", (pending.WarningIds ?? new List<string>()).Take(3));
+            state.activity.state = "Pending review";
+            state.activity.todaySummary = state.review.summary;
+            state.lastRunSummary = state.review.summary + " Approve to apply +" + state.review.estimatedXpDelta + " XP.";
         }
 
         private void HandleNativeDashboardAction(NativeDashboardActionRequest request)
@@ -460,6 +556,9 @@ namespace TokenForge.Client
                 case NativeDashboardAction.ShowDashboard:
                     nativeDashboardService?.ShowDashboardWindow();
                     break;
+                case NativeDashboardAction.ToggleDashboard:
+                    nativeDashboardService?.ToggleDashboardWindow();
+                    break;
                 case NativeDashboardAction.HideDashboard:
                     nativeDashboardService?.HideDashboardWindow();
                     break;
@@ -473,6 +572,7 @@ namespace TokenForge.Client
                     _ = RunNativeAnalysisAsync();
                     break;
                 case NativeDashboardAction.ConnectRepository:
+                case NativeDashboardAction.ChangeRepository:
                 case NativeDashboardAction.Repository:
                     _ = ConnectRepositoryFromNativeAsync();
                     break;
@@ -480,8 +580,17 @@ namespace TokenForge.Client
                 case NativeDashboardAction.CodexAgent:
                     _ = ConnectCodexFromNativeAsync();
                     break;
+                case NativeDashboardAction.SelectCodexLogFolder:
+                    _ = SelectCodexLogFolderFromNativeAsync();
+                    break;
                 case NativeDashboardAction.ReviewActivity:
                     _ = ReviewNativeActivityAsync();
+                    break;
+                case NativeDashboardAction.ApproveReview:
+                    _ = ApproveNativeReviewAsync();
+                    break;
+                case NativeDashboardAction.DiscardReview:
+                    _ = DiscardNativeReviewAsync();
                     break;
                 case NativeDashboardAction.ToggleCompanionVisible:
                     _ = SetCompanionVisibleFromNativeAsync(request.BoolValue(!(approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings?.IsDesktopCompanionEnabled ?? true)));
@@ -542,7 +651,24 @@ namespace TokenForge.Client
                 return;
             }
 
-            await approvedActivityAnalysis.DetectAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex);
+            var result = await approvedActivityAnalysis.DetectAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex);
+            if (!result.IsSuccess)
+            {
+                Debug.Log("WARN [NativeDashboard] Codex local auto-detect unavailable; requesting local folder selection only category=" + result.ErrorCode);
+                await approvedActivityAnalysis.SelectManualAgentLogForOnboardingAsync(ConnectedAgentSourceType.Codex);
+            }
+
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task SelectCodexLogFolderFromNativeAsync()
+        {
+            if (approvedActivityAnalysis == null)
+            {
+                return;
+            }
+
+            await approvedActivityAnalysis.SelectManualAgentLogForOnboardingAsync(ConnectedAgentSourceType.Codex);
             await RefreshAndPublishNativeDashboardAsync();
         }
 
@@ -564,6 +690,38 @@ namespace TokenForge.Client
             else
             {
                 Debug.Log("INFO [NativeDashboard] runAnalysis requires repository or Codex connection");
+            }
+
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task ApproveNativeReviewAsync()
+        {
+            if (approvedActivityAnalysis == null)
+            {
+                return;
+            }
+
+            var result = await approvedActivityAnalysis.ApprovePendingNativeReviewAsync();
+            if (!result.IsSuccess)
+            {
+                Debug.LogWarning("WARN [NativeDashboard] approveReview failed category=" + result.ErrorCode);
+            }
+
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task DiscardNativeReviewAsync()
+        {
+            if (approvedActivityAnalysis == null)
+            {
+                return;
+            }
+
+            var result = await approvedActivityAnalysis.DiscardPendingNativeReviewAsync();
+            if (!result.IsSuccess)
+            {
+                Debug.LogWarning("WARN [NativeDashboard] discardReview failed category=" + result.ErrorCode);
             }
 
             await RefreshAndPublishNativeDashboardAsync();
@@ -655,6 +813,9 @@ namespace TokenForge.Client
         {
             if (UseNativeMacDashboardShell)
             {
+                LastRemovedStaleUnityDashboardRootCount = RemoveStaleUnityDashboardRoots();
+                Debug.Log("INFO [Bootstrap] removedStaleUnityDashboardRoot count=" + LastRemovedStaleUnityDashboardRootCount);
+                Debug.Log("INFO [Bootstrap] uiMode=nativeAppKit");
                 Debug.Log("INFO [NativeDashboard] mode=macOSPlayer source=AppKit");
                 Debug.Log("INFO [BootstrapRoot] productUI=disabled reason=nativeShell");
                 Debug.Log("INFO " + LogPrefix + " native macOS dashboard shell active; Unity BootstrapRoot UI is disabled for product runtime.");
@@ -662,8 +823,10 @@ namespace TokenForge.Client
             }
 
 #if UNITY_EDITOR
+            Debug.Log("INFO [Bootstrap] uiMode=unityFallback");
             Debug.Log("INFO [NativeDashboard] mode=UnityEditor source=BootstrapRootFallback productUI=debugFallback");
 #else
+            Debug.Log("INFO [Bootstrap] uiMode=unityFallback");
             Debug.Log("INFO [NativeDashboard] mode=NonMacPlayer source=BootstrapRootFallback productUI=fallback");
 #endif
             EnsureEventSystem();
@@ -680,6 +843,35 @@ namespace TokenForge.Client
                     Debug.LogError("ERROR " + LogPrefix + " BootstrapRootView missing");
                 }
             }
+        }
+
+        private int RemoveStaleUnityDashboardRoots()
+        {
+            var removed = 0;
+            foreach (var root in FindSceneObjects<BootstrapRootView>())
+            {
+                if (root == null)
+                {
+                    continue;
+                }
+
+                DestroySceneObjectImmediate(root.gameObject);
+                removed++;
+            }
+
+            foreach (var canvas in FindSceneObjects<Canvas>())
+            {
+                if (canvas == null)
+                {
+                    continue;
+                }
+
+                DestroySceneObjectImmediate(canvas.gameObject);
+                removed++;
+            }
+
+            bootstrapRoot = null;
+            return removed;
         }
 
         private void EnsureEventSystem()

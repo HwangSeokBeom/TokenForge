@@ -173,19 +173,30 @@ namespace TokenForge.Client.Platform
                 case "dashboard":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.Dashboard, rawAction, value);
                     return true;
+                case "toggleDashboard":
+                case "toggle_dashboard":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.ToggleDashboard, rawAction, value);
+                    return true;
                 case "show_dashboard":
+                case "showDashboard":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ShowDashboard, rawAction, value);
                     return true;
                 case "hide_dashboard":
+                case "hideDashboard":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.HideDashboard, rawAction, value);
                     return true;
                 case "repository":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.Repository, rawAction, value);
                     return true;
                 case "connectRepository":
+                case "changeRepository":
                 case "connect_repository":
+                case "change_repository":
                 case "add_repository":
-                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.ConnectRepository, rawAction, value);
+                    parsed = new NativeDashboardActionRequest(
+                        action == "changeRepository" || action == "change_repository" ? NativeDashboardAction.ChangeRepository : NativeDashboardAction.ConnectRepository,
+                        rawAction,
+                        value);
                     return true;
                 case "codexAgent":
                 case "codex_agent":
@@ -195,6 +206,10 @@ namespace TokenForge.Client.Platform
                 case "connect_codex_agent":
                 case "connect_ai_agent":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ConnectCodexAgent, rawAction, value);
+                    return true;
+                case "selectCodexLogFolder":
+                case "select_codex_log_folder":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.SelectCodexLogFolder, rawAction, value);
                     return true;
                 case "activity":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.Activity, rawAction, value);
@@ -209,6 +224,14 @@ namespace TokenForge.Client.Platform
                 case "reviewActivity":
                 case "review_activity":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ReviewActivity, rawAction, value);
+                    return true;
+                case "approveReview":
+                case "approve_review":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.ApproveReview, rawAction, value);
+                    return true;
+                case "discardReview":
+                case "discard_review":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.DiscardReview, rawAction, value);
                     return true;
                 case "settings":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.Settings, rawAction, value);

@@ -163,6 +163,7 @@ namespace TokenForge.Client.UI
             overlayService?.TriggerReaction(
                 visualProfile?.ReactionProfile?.PrimaryClickReaction ?? CompanionReaction.Tap,
                 visualProfile?.ReactionProfile?.DefaultSpeech ?? "Ready to grow!");
+            DashboardRestoreRequested?.Invoke();
         }
 
         public void OnDesktopCompanionDoubleClicked()
