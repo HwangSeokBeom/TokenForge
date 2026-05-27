@@ -71,6 +71,10 @@ namespace TokenForge.Client.Platform
             }
         }
 
+        public void SetVisualTheme(string visualThemeId)
+        {
+        }
+
         public void SetVisualState(CompanionStage stage, CompanionArchetype archetype, CompanionAnimationState animationState, bool facingLeft)
         {
             visualState.Stage = stage;

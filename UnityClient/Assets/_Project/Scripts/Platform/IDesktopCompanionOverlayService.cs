@@ -19,6 +19,7 @@ namespace TokenForge.Client.Platform
         void Hide();
         void SetPosition(Vector2 position);
         void SetSize(Vector2 size);
+        void SetVisualTheme(string visualThemeId);
         void SetVisualState(CompanionStage stage, CompanionArchetype archetype, CompanionAnimationState animationState, bool facingLeft);
         void SetMotionProfile(CompanionVisualProfile profile);
         void TriggerReaction(CompanionReaction reaction, string speechText);

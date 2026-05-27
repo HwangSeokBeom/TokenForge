@@ -531,7 +531,7 @@ namespace TokenForge.Client
             state.persistedCompanionXP = Math.Max(0, dashboard.TotalExp);
             state.companion.xpToNextLevel = Math.Max(1, companion.XpToNextStage);
             state.companion.mood = settings.IsDesktopCompanionEnabled ? "active" : "hidden";
-            state.companion.skin = string.IsNullOrWhiteSpace(settings.VisualThemeId) ? "orange_cat" : settings.VisualThemeId;
+            state.companion.skin = CompanionSkinCatalog.Normalize(settings.VisualThemeId);
             state.repository.connected = repositoryConnected;
             state.hasActiveRepository = repositoryConnected;
             state.repository.id = repositoryConnected ? dashboard.CurrentRepositoryHash ?? string.Empty : string.Empty;

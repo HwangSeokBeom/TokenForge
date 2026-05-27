@@ -175,6 +175,14 @@ namespace TokenForge.Client.Platform
             }
         }
 
+        public void SetVisualTheme(string visualThemeId)
+        {
+            if (IsAvailable)
+            {
+                try { NativeSetVisualTheme(CompanionSkinCatalog.Normalize(visualThemeId)); } catch (Exception exception) { StatusMessage = "Native overlay theme update failed: " + exception.GetType().Name; }
+            }
+        }
+
         public void SetVisualState(CompanionStage stage, CompanionArchetype archetype, CompanionAnimationState animationState, bool facingLeft)
         {
             if (IsAvailable)
@@ -412,6 +420,9 @@ namespace TokenForge.Client.Platform
         [DllImport("DesktopCompanionOverlay", EntryPoint = "SetCompanionOverlayVisualState")]
         private static extern void NativeSetVisualState(int stage, int archetype, int animationState, bool facingLeft);
 
+        [DllImport("DesktopCompanionOverlay", EntryPoint = "SetCompanionOverlayVisualTheme")]
+        private static extern void NativeSetVisualTheme(string visualThemeId);
+
         [DllImport("DesktopCompanionOverlay", EntryPoint = "SetCompanionOverlayMotionProfile")]
         private static extern void NativeSetMotionProfile(int motionMode, float idleRadius, float wanderRadius, float wanderSpeed, float decisionIntervalSeconds, bool allowsWandering, float reactionCooldownSeconds);
 
@@ -448,6 +459,7 @@ namespace TokenForge.Client.Platform
         private static void NativeSetPosition(float x, float y) { }
         private static void NativeSetSize(float width, float height) { }
         private static void NativeSetVisualState(int stage, int archetype, int animationState, bool facingLeft) { }
+        private static void NativeSetVisualTheme(string visualThemeId) { }
         private static void NativeSetMotionProfile(int motionMode, float idleRadius, float wanderRadius, float wanderSpeed, float decisionIntervalSeconds, bool allowsWandering, float reactionCooldownSeconds) { }
         private static void NativeTriggerReaction(int reaction, string speechText) { }
         private static void NativeResetPosition() { }

@@ -278,7 +278,7 @@ namespace TokenForge.Client.Domain
                 LastOverlayPositionX = settings.LastOverlayPositionX,
                 LastOverlayPositionY = settings.LastOverlayPositionY,
                 HasSavedOverlayPosition = settings.HasSavedOverlayPosition && settings.LastOverlayPositionX >= 0f && settings.LastOverlayPositionY >= 0f,
-                VisualThemeId = string.IsNullOrWhiteSpace(settings.VisualThemeId) ? "pixel-default" : settings.VisualThemeId.Trim()
+                VisualThemeId = CompanionSkinCatalog.Normalize(settings.VisualThemeId)
             };
         }
 

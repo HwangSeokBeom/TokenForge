@@ -229,9 +229,7 @@ namespace TokenForge.Client.Persistence
                 settings.MotionMode = CompanionDesktopMotionMode.Normal;
             }
 
-            settings.VisualThemeId = string.IsNullOrWhiteSpace(settings.VisualThemeId)
-                ? "pixel-default"
-                : settings.VisualThemeId.Trim();
+            settings.VisualThemeId = CompanionSkinCatalog.Normalize(settings.VisualThemeId);
             if (settings.LastOverlayPositionX < 0f || settings.LastOverlayPositionY < 0f)
             {
                 settings.HasSavedOverlayPosition = false;

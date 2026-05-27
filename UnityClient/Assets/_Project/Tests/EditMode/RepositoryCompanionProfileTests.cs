@@ -142,6 +142,33 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void RepositoryCompanionProfilesKeepIndependentDesktopSkins()
+        {
+            var saveData = SaveData.CreateDefault();
+            var repoA = CreateGitRepository();
+            var repoB = CreateGitRepository();
+            var profileA = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repoA).Value;
+            var settingsA = RepositoryCompanionProfileService.GetSelectedDesktopCompanionSettings(saveData);
+            settingsA.VisualThemeId = "black_cat";
+            RepositoryCompanionProfileService.SetSelectedDesktopCompanionSettings(saveData, settingsA);
+
+            var profileB = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repoB).Value;
+            var settingsB = RepositoryCompanionProfileService.GetSelectedDesktopCompanionSettings(saveData);
+            settingsB.VisualThemeId = "runner";
+            RepositoryCompanionProfileService.SetSelectedDesktopCompanionSettings(saveData, settingsB);
+
+            RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repoA);
+            var restoredA = RepositoryCompanionProfileService.GetSelectedDesktopCompanionSettings(saveData);
+            RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repoB);
+            var restoredB = RepositoryCompanionProfileService.GetSelectedDesktopCompanionSettings(saveData);
+
+            Assert.AreEqual(profileA.RepositoryHash, RepositoryCompanionProfileService.HashRepositoryPath(repoA));
+            Assert.AreEqual(profileB.RepositoryHash, RepositoryCompanionProfileService.HashRepositoryPath(repoB));
+            Assert.AreEqual("black_cat", restoredA.VisualThemeId);
+            Assert.AreEqual("runner", restoredB.VisualThemeId);
+        }
+
+        [Test]
         public void LegacySingleCompanionMigratesIntoDefaultLocalProfile()
         {
             var saveData = SaveData.CreateDefault();

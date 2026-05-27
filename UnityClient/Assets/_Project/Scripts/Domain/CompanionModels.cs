@@ -95,11 +95,37 @@ namespace TokenForge.Client.Domain
         public float LastOverlayPositionX { get; set; } = -1f;
         public float LastOverlayPositionY { get; set; } = -1f;
         public bool HasSavedOverlayPosition { get; set; }
-        public string VisualThemeId { get; set; } = "pixel-default";
+        public string VisualThemeId { get; set; } = CompanionSkinCatalog.DefaultSkinId;
 
         public static DesktopCompanionSettings CreateDefault()
         {
             return new DesktopCompanionSettings();
+        }
+    }
+
+    public static class CompanionSkinCatalog
+    {
+        public const string DefaultSkinId = "orange_cat";
+
+        private static readonly HashSet<string> KnownSkinIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "orange_cat",
+            "white_cat",
+            "calico",
+            "black_cat",
+            "retriever",
+            "runner"
+        };
+
+        public static string Normalize(string skinId)
+        {
+            skinId = string.IsNullOrWhiteSpace(skinId) ? DefaultSkinId : skinId.Trim();
+            if (string.Equals(skinId, "pixel-default", StringComparison.OrdinalIgnoreCase))
+            {
+                return DefaultSkinId;
+            }
+
+            return KnownSkinIds.Contains(skinId) ? skinId.ToLowerInvariant() : DefaultSkinId;
         }
     }
 

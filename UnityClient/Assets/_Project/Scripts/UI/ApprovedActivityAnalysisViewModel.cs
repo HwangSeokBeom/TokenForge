@@ -1127,7 +1127,7 @@ namespace TokenForge.Client.UI
 
         public async Task<Result<DesktopCompanionSettings>> SetDesktopCompanionVisualThemeAsync(string visualThemeId, CancellationToken cancellationToken = default)
         {
-            visualThemeId = string.IsNullOrWhiteSpace(visualThemeId) ? "orange_cat" : visualThemeId.Trim();
+            visualThemeId = CompanionSkinCatalog.Normalize(visualThemeId);
             return await UpdateDesktopCompanionSettingsAsync(settings => settings.VisualThemeId = visualThemeId, cancellationToken);
         }
 

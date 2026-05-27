@@ -105,6 +105,40 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void NativeDesktopCompanionSettingsPersistAndRestore()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName());
+            var saveRepository = new SaveDataRepository(directory);
+            var viewModel = CreateNativeReviewViewModel(saveRepository);
+
+            Assert.IsTrue(viewModel.SetDesktopCompanionEnabledAsync(false).GetAwaiter().GetResult().IsSuccess);
+            Assert.IsTrue(viewModel.SetDesktopCompanionMotionModeAsync(CompanionDesktopMotionMode.Calm).GetAwaiter().GetResult().IsSuccess);
+            Assert.IsTrue(viewModel.SetDesktopCompanionClickThroughAsync(true).GetAwaiter().GetResult().IsSuccess);
+            Assert.IsTrue(viewModel.SetDesktopCompanionVisualThemeAsync("black_cat").GetAwaiter().GetResult().IsSuccess);
+
+            var restored = new SaveDataRepository(directory).LoadAsync().GetAwaiter().GetResult();
+            var settings = RepositoryCompanionProfileService.GetSelectedDesktopCompanionSettings(restored);
+
+            Assert.IsFalse(settings.IsDesktopCompanionEnabled);
+            Assert.AreEqual(CompanionDesktopMotionMode.Calm, settings.MotionMode);
+            Assert.IsTrue(settings.IsClickThroughEnabled);
+            Assert.AreEqual("black_cat", settings.VisualThemeId);
+        }
+
+        [Test]
+        public void NativeDesktopCompanionSettingsNormalizeLegacySkinIds()
+        {
+            var settings = DesktopCompanionSettings.CreateDefault();
+            settings.VisualThemeId = "pixel-default";
+
+            var clone = RepositoryCompanionProfileService.CloneDesktopCompanionSettings(settings);
+
+            Assert.AreEqual("orange_cat", DesktopCompanionSettings.CreateDefault().VisualThemeId);
+            Assert.AreEqual("orange_cat", clone.VisualThemeId);
+            Assert.AreEqual("orange_cat", CompanionSkinCatalog.Normalize("unknown_skin"));
+        }
+
+        [Test]
         public void TryParseAction_RejectsUnknownActionWithoutThrowing()
         {
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("unknown_action", out var request));
@@ -441,12 +475,19 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("agentProviderRow", source);
             StringAssert.Contains("activityScreenWithActivity", source);
             StringAssert.Contains("TokenForge Settings", source);
+            StringAssert.Contains("TokenForgeSettingsSwitchRow", source);
+            StringAssert.Contains("NSSwitch", source);
+            StringAssert.Contains("Click anywhere in this row", source);
+            StringAssert.Contains("Available in a signed release build.", source);
+            StringAssert.Contains("skinTileWithId", source);
+            StringAssert.Contains("SetCompanionOverlayVisualTheme", source);
             StringAssert.Contains("repository.add", source);
             StringAssert.Contains("repository.analyze", source);
             StringAssert.Contains("review.saveGrowth", source);
             StringAssert.Contains("review.viewDetails", source);
             StringAssert.Contains("agent.autoDetect", source);
             StringAssert.Contains("No Agents", source);
+            Assert.IsFalse(source.Contains("Native shell preferences"));
         }
 
         [Test]

@@ -116,6 +116,7 @@ namespace TokenForge.Client.UI
             overlayService.SetClickEnabled(true);
             overlayService.SetClickThrough(settings.IsClickThroughEnabled);
             overlayService.SetSize(SizeFor(companionState.Stage));
+            overlayService.SetVisualTheme(settings.VisualThemeId);
             overlayService.SetVisualState(companionState.Stage, companionState.Archetype, visualProfile.IdleAnimation, false);
             overlayService.SetMotionProfile(visualProfile);
             if (settings.HasSavedOverlayPosition || hasPendingDragPosition)

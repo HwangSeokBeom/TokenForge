@@ -65,6 +65,7 @@ namespace TokenForge.Client.UI
             {
                 var profile = CompanionVisualProfileResolver.Resolve(companionState, settings.MotionMode);
                 overlayService.SetClickThrough(settings.IsClickThroughEnabled);
+                overlayService.SetVisualTheme(settings.VisualThemeId);
                 overlayService.SetMotionProfile(profile);
                 overlayService.SetVisualState(companionState.Stage, companionState.Archetype, profile.IdleAnimation, false);
                 return;
@@ -114,6 +115,7 @@ namespace TokenForge.Client.UI
             overlayService.SetSize(size);
             overlayService.SetPosition(visualPosition);
             overlayService.SetClickThrough(settings.IsClickThroughEnabled);
+            overlayService.SetVisualTheme(settings.VisualThemeId);
             overlayService.SetVisualState(
                 companionState.Stage,
                 companionState.Archetype,

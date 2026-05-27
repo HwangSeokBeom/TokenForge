@@ -33,6 +33,7 @@ namespace TokenForge.Client.Tests
             var settings = DesktopCompanionSettings.CreateDefault();
             settings.IsDesktopCompanionEnabled = true;
             settings.MotionMode = CompanionDesktopMotionMode.Playful;
+            settings.VisualThemeId = "runner";
             service.Create();
             service.Show();
 
@@ -42,6 +43,7 @@ namespace TokenForge.Client.Tests
             Assert.Greater(service.VisualSetCount, 0);
             Assert.AreEqual(CompanionStage.Baby, service.LastStage);
             Assert.AreEqual(CompanionArchetype.Builder, service.LastArchetype);
+            Assert.AreEqual("runner", service.LastVisualThemeId);
             Assert.IsFalse(service.LastClickThrough);
         }
 
@@ -342,6 +344,7 @@ namespace TokenForge.Client.Tests
             public int MotionProfileSetCount { get; private set; }
             public CompanionStage LastStage { get; private set; }
             public CompanionArchetype LastArchetype { get; private set; }
+            public string LastVisualThemeId { get; private set; }
 
             public bool Create()
             {
@@ -379,6 +382,11 @@ namespace TokenForge.Client.Tests
 
             public void SetSize(Vector2 size)
             {
+            }
+
+            public void SetVisualTheme(string visualThemeId)
+            {
+                LastVisualThemeId = visualThemeId;
             }
 
             public void SetVisualState(CompanionStage stage, CompanionArchetype archetype, CompanionAnimationState animationState, bool facingLeft)
