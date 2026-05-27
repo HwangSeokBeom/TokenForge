@@ -11,19 +11,77 @@ namespace TokenForge.Client.Tests
     public sealed class RepositoryCompanionProfileTests
     {
         [Test]
+        public void FreshSaveDoesNotCreateConnectedLocalRepository()
+        {
+            var saveData = SaveData.CreateDefault();
+
+            RepositoryCompanionProfileService.Normalize(saveData);
+
+            Assert.AreEqual(0, saveData.RepositoryCompanionProfiles.Count(profile => profile.ArchivedAtUtc == null));
+            Assert.IsTrue(string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash));
+        }
+
+        [Test]
         public void ConnectingRepositoryCreatesProfileWithHashAndSafeAlias()
         {
             var saveData = SaveData.CreateDefault();
-            var repo = CreateGitRepository();
+            var repo = CreateGitRepository("TokenForgeCoreServer");
 
             var result = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repo);
 
             Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
             Assert.IsNotEmpty(result.Value.RepositoryHash);
-            Assert.AreEqual(Path.GetFileName(repo), result.Value.SafeRepositoryAlias);
+            Assert.AreEqual("TokenForgeCoreServer", result.Value.SafeRepositoryAlias);
             Assert.AreEqual(result.Value.RepositoryHash, saveData.SelectedRepositoryHash);
             Assert.IsFalse(result.Value.SafeRepositoryAlias.Contains(repo));
             Assert.IsTrue(new PrivacySanitizer().ValidateSafeSaveData(saveData).IsSuccess);
+        }
+
+        [Test]
+        public void LegacyLocalRepositoryMigrationArchivesFallbackAndClearsActiveSelection()
+        {
+            var saveData = SaveData.CreateDefault();
+            saveData.SelectedRepositoryHash = RepositoryCompanionProfileService.DefaultLocalRepositoryHash;
+            saveData.RepositoryCompanionProfiles.Add(new RepositoryCompanionProfile
+            {
+                RepositoryHash = RepositoryCompanionProfileService.DefaultLocalRepositoryHash,
+                SafeRepositoryAlias = "Local Repository",
+                ConnectionSource = "debugFallback",
+                ApprovedAtUtc = null
+            });
+            saveData.ConnectedProjects.Add(new ConnectedProject
+            {
+                DisplayName = "Local Repository",
+                ConnectionSource = "userSelected",
+                IsActive = true
+            });
+
+            RepositoryCompanionProfileService.Normalize(saveData);
+
+            Assert.AreEqual(0, saveData.RepositoryCompanionProfiles.Count(profile => profile.ArchivedAtUtc == null));
+            Assert.IsTrue(string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash));
+            Assert.IsTrue(saveData.ConnectedProjects.All(project => !project.IsActive));
+            Assert.IsTrue(saveData.ConnectedProjects.All(project => project.IsArchived));
+        }
+
+        [Test]
+        public void TokenForgeNamedRepositoryWithoutUserApprovalIsNotActive()
+        {
+            var saveData = SaveData.CreateDefault();
+            saveData.SelectedRepositoryHash = "tokenforge-auto";
+            saveData.RepositoryCompanionProfiles.Add(new RepositoryCompanionProfile
+            {
+                RepositoryHash = "tokenforge-auto",
+                SafeRepositoryAlias = "TokenForge",
+                ConnectionSource = "userSelected",
+                ApprovedAtUtc = null,
+                CompanionState = new CompanionState { TotalLifetimeXp = 1200, CurrentXp = 1200 }
+            });
+
+            RepositoryCompanionProfileService.Normalize(saveData);
+
+            Assert.AreEqual(0, saveData.RepositoryCompanionProfiles.Count(profile => profile.ArchivedAtUtc == null));
+            Assert.IsTrue(string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash));
         }
 
         [Test]
@@ -92,6 +150,70 @@ namespace TokenForge.Client.Tests
 
             Assert.Greater(profileA.CompanionState.TotalXp, 0);
             Assert.AreEqual(0, profileB.CompanionState.TotalXp);
+        }
+
+        [Test]
+        public void CompanionLevelUpConsumesOneLevelRequirementAndCarriesOverflow()
+        {
+            var state = CompanionProgressionRules.Normalize(new CompanionState
+            {
+                Level = 2,
+                CurrentXp = 1200,
+                TotalLifetimeXp = 1200
+            });
+
+            Assert.IsTrue(state.CanLevelUp);
+            Assert.AreEqual(419, state.XpRequiredForNextLevel);
+            Assert.IsTrue(CompanionProgressionRules.TryLevelUpOnce(state));
+
+            Assert.AreEqual(3, state.Level);
+            Assert.AreEqual(781, state.CurrentXp);
+        }
+
+        [Test]
+        public void MotionIntensityIncreasesWithGitActivity()
+        {
+            var low = CompanionMotionStateResolver.Resolve(new CompanionMotionSignal
+            {
+                RecentGitChangedFiles = CountBucket.One,
+                AddedLines = LineChangeBucket.Small
+            });
+            var high = CompanionMotionStateResolver.Resolve(new CompanionMotionSignal
+            {
+                RecentGitChangedFiles = CountBucket.Large,
+                CommitCount = CountBucket.Large,
+                AddedLines = LineChangeBucket.Huge,
+                RecentRepositoryXp = 500
+            });
+
+            Assert.Less(low.MovementSpeed, high.MovementSpeed);
+            Assert.AreEqual(CompanionActivityLevel.High, high.ActivityLevel);
+        }
+
+        [Test]
+        public void MotionIntensityRespondsToAiTokenActivityAndPendingReview()
+        {
+            var ai = CompanionMotionStateResolver.Resolve(new CompanionMotionSignal
+            {
+                AiAgentSessionCount = CountBucket.Medium,
+                AiAgentInteractionCount = CountBucket.Large,
+                EstimatedTokenActivity = TokenUsageBucket.Huge,
+                AiAgentXp = 400
+            });
+            var pending = CompanionMotionStateResolver.Resolve(new CompanionMotionSignal { HasPendingReview = true });
+
+            Assert.Greater(ai.PulseFrequency, 0.9f);
+            Assert.IsTrue(ai.Reaction == CompanionMotionReaction.TokenPulse || ai.Reaction == CompanionMotionReaction.AiPulse);
+            Assert.AreEqual(CompanionMotionReaction.ReadyToReview, pending.Reaction);
+        }
+
+        [Test]
+        public void MotionIntensityPrioritizesLevelUpReady()
+        {
+            var ready = CompanionMotionStateResolver.Resolve(new CompanionMotionSignal { CanLevelUp = true });
+
+            Assert.AreEqual(CompanionActivityLevel.ReadyToEvolve, ready.ActivityLevel);
+            Assert.AreEqual(CompanionMotionReaction.EvolvePulse, ready.Reaction);
         }
 
         [Test]
@@ -169,16 +291,16 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
-        public void LegacySingleCompanionMigratesIntoDefaultLocalProfile()
+        public void LegacySingleCompanionDoesNotAutoConnectDefaultLocalProfile()
         {
             var saveData = SaveData.CreateDefault();
             saveData.CompanionState.TotalXp = 700;
 
             RepositoryCompanionProfileService.Normalize(saveData);
 
-            Assert.AreEqual(1, saveData.RepositoryCompanionProfiles.Count);
-            Assert.AreEqual(700, saveData.RepositoryCompanionProfiles[0].CompanionState.TotalXp);
-            Assert.AreEqual(saveData.RepositoryCompanionProfiles[0].RepositoryHash, saveData.SelectedRepositoryHash);
+            Assert.AreEqual(0, saveData.RepositoryCompanionProfiles.Count(profile => profile.ArchivedAtUtc == null));
+            Assert.IsTrue(string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash));
+            Assert.AreEqual(0, saveData.CompanionState.TotalLifetimeXp);
         }
 
         [Test]
@@ -197,9 +319,10 @@ namespace TokenForge.Client.Tests
             Assert.IsTrue(new PrivacySanitizer().ValidateNoForbiddenFields(dto).IsSuccess);
         }
 
-        private static string CreateGitRepository()
+        private static string CreateGitRepository(string directoryName = "")
         {
-            var path = Path.Combine(Path.GetTempPath(), "TokenForgeRepoTests", Guid.NewGuid().ToString("N"));
+            var parent = Path.Combine(Path.GetTempPath(), "TokenForgeRepoTests", Guid.NewGuid().ToString("N"));
+            var path = Path.Combine(parent, string.IsNullOrWhiteSpace(directoryName) ? "Repository" : directoryName);
             Directory.CreateDirectory(Path.Combine(path, ".git"));
             return path;
         }

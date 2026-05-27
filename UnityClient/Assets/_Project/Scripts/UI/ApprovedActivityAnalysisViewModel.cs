@@ -65,11 +65,19 @@ namespace TokenForge.Client.UI
     public sealed class RepositoryCompanionDisplayItem
     {
         public string RepositoryHash { get; set; } = string.Empty;
-        public string SafeRepositoryAlias { get; set; } = "Local Repository";
+        public string SafeRepositoryAlias { get; set; } = "Repository";
         public CompanionStage Stage { get; set; } = CompanionStage.Egg;
         public CompanionArchetype Archetype { get; set; } = CompanionArchetype.Unknown;
         public int Level { get; set; } = 1;
         public int TotalXp { get; set; }
+        public int CurrentXp { get; set; }
+        public int XpRequiredForNextLevel { get; set; } = 250;
+        public bool CanLevelUp { get; set; }
+        public string RecentGrowthSource { get; set; } = "None";
+        public string Skin { get; set; } = CompanionSkinCatalog.DefaultSkinId;
+        public CompanionMotionState MotionState { get; set; } = CompanionMotionState.Idle(string.Empty);
+        public bool ApprovedByUser { get; set; }
+        public DateTimeOffset? ApprovedAtUtc { get; set; }
         public string LastApprovedActivityBucket { get; set; } = string.Empty;
         public bool Selected { get; set; }
         public bool Archived { get; set; }
@@ -84,7 +92,7 @@ namespace TokenForge.Client.UI
         public int ExpForNextLevel { get; set; } = 1000;
         public string RankTitle { get; set; } = "Local Apprentice";
         public string CurrentRepositoryHash { get; set; } = string.Empty;
-        public string CurrentRepositoryAlias { get; set; } = "Local Repository";
+        public string CurrentRepositoryAlias { get; set; } = string.Empty;
         public int Code { get; set; }
         public int Focus { get; set; }
         public int Debug { get; set; }
@@ -94,6 +102,7 @@ namespace TokenForge.Client.UI
         public CompanionState CompanionState { get; set; } = CompanionState.CreateDefault();
         public DesktopCompanionSettings DesktopCompanionSettings { get; set; } = DesktopCompanionSettings.CreateDefault();
         public CompanionDesktopOverlayState DesktopOverlayState { get; set; } = CompanionDesktopOverlayState.Disabled;
+        public CompanionMotionState MotionState { get; set; } = CompanionMotionState.Idle(string.Empty);
         public string LatestSafeSessionSummary { get; set; } = "No saved growth yet. Run Analysis on a repository or AI agent log to generate your first XP.";
         public string RecentGrowthSummary { get; set; } = "No growth recorded yet.";
         public string QuestSummary { get; set; } = "Analyze repository: open | Save session: open | Sync progress: login required";
@@ -429,32 +438,20 @@ namespace TokenForge.Client.UI
             if (candidate != null && result.HasUsableCandidate)
             {
                 approvedAgentCandidates[sourceType] = candidate;
-                source.State = AgentSourceSetupState.ReadyToAnalyze;
+                source.Selected = false;
+                source.State = AgentSourceSetupState.LocalSourceDetected;
                 source.SafeLabel = candidate.SafeAlias;
                 source.SafeLocationHash = SafeHashUtility.ComputeProjectPathHash(candidate.LocalPath, "TokenForge.AgentLogLocation.v1");
                 source.Confidence = candidate.Confidence;
                 source.WarningCount += candidate.WarningIds?.Count ?? 0;
-                SelectedAgentProviderType = providerType;
-                var selection = AgentSettings.ToInput(candidate.LocalPath, providerType);
-                selection.SourceKind = candidate.SourceKind;
-                selection.SafeSourceAlias = candidate.SafeAlias;
-                var selectResult = AgentFlow.SelectApprovedLogLocation(selection);
-                source.StatusLabel = selectResult.IsSuccess
-                    ? source.DisplayName + " local source detected | Ready to analyze | " + candidate.SafeAlias + " | confidence " + candidate.Confidence
-                    : "Analysis failed safely";
-                if (!selectResult.IsSuccess)
-                {
-                    source.State = AgentSourceSetupState.AnalysisFailedSafely;
-                    await PersistProviderConnectionStateAsync(source, cancellationToken);
-                    return selectResult;
-                }
-
+                source.StatusLabel = "Detected source found. Connect to approve " + candidate.SafeAlias + ".";
                 await PersistProviderConnectionStateAsync(source, cancellationToken);
                 return Result.Success();
             }
 
             if (result.AccessState == AgentSourceAccessState.PermissionRequired)
             {
+                source.Selected = false;
                 source.State = AgentSourceSetupState.PermissionRequired;
                 source.StatusLabel = "Permission required";
                 AgentPickerErrorCategory = "agent_source_permission_required";
@@ -462,11 +459,51 @@ namespace TokenForge.Client.UI
                 return Result.Failure(AgentPickerErrorCategory, "Local source requires permission.");
             }
 
+            source.Selected = false;
             source.State = AgentSourceSetupState.ManualImportRequired;
             source.StatusLabel = source.DisplayName + " manual import required";
             AgentPickerErrorCategory = "agent_source_manual_import_required";
             await PersistProviderConnectionStateAsync(source, cancellationToken);
             return Result.Failure(AgentPickerErrorCategory, "Local source was not detected. Choose a folder to analyze safe aggregates.");
+        }
+
+        public async Task<Result> ApproveDetectedAgentSourceForOnboardingAsync(ConnectedAgentSourceType sourceType, CancellationToken cancellationToken = default)
+        {
+            var source = Onboarding.AgentSources.FirstOrDefault(item => item.SourceType == sourceType);
+            if (source == null)
+            {
+                return Result.Failure("agent_source_unknown", "Agent source is unavailable.");
+            }
+
+            if (!approvedAgentCandidates.TryGetValue(sourceType, out var candidate) || candidate == null || string.IsNullOrWhiteSpace(candidate.LocalPath))
+            {
+                return Result.Failure("agent_source_no_detected_candidate", "Run Auto Detect or choose a folder before connecting this provider.");
+            }
+
+            var providerType = ToAgentProviderType(sourceType);
+            SelectedAgentProviderType = providerType;
+            var selection = AgentSettings.ToInput(candidate.LocalPath, providerType);
+            selection.SourceKind = candidate.SourceKind;
+            selection.SafeSourceAlias = candidate.SafeAlias;
+            var selectResult = AgentFlow.SelectApprovedLogLocation(selection);
+            if (!selectResult.IsSuccess)
+            {
+                source.Selected = false;
+                source.State = AgentSourceSetupState.AnalysisFailedSafely;
+                source.StatusLabel = "Analysis failed safely";
+                await PersistProviderConnectionStateAsync(source, cancellationToken);
+                return selectResult;
+            }
+
+            source.Selected = true;
+            source.State = AgentSourceSetupState.ReadyToAnalyze;
+            source.StatusLabel = "Connected. Ready to analyze.";
+            source.SafeLabel = candidate.SafeAlias;
+            source.SafeLocationHash = SafeHashUtility.ComputeProjectPathHash(candidate.LocalPath, "TokenForge.AgentLogLocation.v1");
+            source.Confidence = candidate.Confidence;
+            await AddCurrentAgentSelectionToApprovedLocationsAsync(candidate.SafeAlias, cancellationToken);
+            await PersistProviderConnectionStateAsync(source, cancellationToken);
+            return Result.Success();
         }
 
         public async Task<Result<AgentAnalysisReviewModel>> AnalyzeAgentSourceForOnboardingAsync(ConnectedAgentSourceType sourceType, CancellationToken cancellationToken = default)
@@ -508,7 +545,7 @@ namespace TokenForge.Client.UI
             source.State = AgentSourceSetupState.DetectingLocalSource;
             source.StatusLabel = "Analysis running";
             await PersistProviderConnectionStateAsync(source, cancellationToken);
-            var result = await AnalyzeSelectedAgentActivityAsync(cancellationToken);
+            var result = await AnalyzeAgentActivityAsync(cancellationToken);
             if (result.IsSuccess)
             {
                 source.State = AgentSourceSetupState.AnalysisComplete;
@@ -610,8 +647,10 @@ namespace TokenForge.Client.UI
                 var saveData = await repository.LoadAsync(cancellationToken);
                 RepositoryCompanionProfileService.Normalize(saveData);
                 var selected = RepositoryCompanionProfileService.GetSelectedProfile(saveData);
-                Onboarding.GitSafeAlias = selected?.SafeRepositoryAlias ?? "Local Repository";
+                Onboarding.GitSafeAlias = selected?.SafeRepositoryAlias ?? "Git repository";
                 AgentFlow.SetSelectedRepositoryHash(saveData.SelectedRepositoryHash);
+                UpsertRepositoryConnection(saveData, selected, GitFlow.GetSelectedRepositoryPathForLocalOnlyApproval());
+                await repository.SaveAsync(saveData, cancellationToken);
                 await AddCurrentGitSelectionToApprovedLocationsAsync(Onboarding.GitSafeAlias, cancellationToken);
                 RefreshCharacterDashboard(saveData, RecentSessions);
             }
@@ -726,6 +765,36 @@ namespace TokenForge.Client.UI
             return result;
         }
 
+        private static void UpsertRepositoryConnection(SaveData saveData, RepositoryCompanionProfile profile, string selectedPath)
+        {
+            if (saveData == null || profile == null)
+            {
+                return;
+            }
+
+            saveData.ConnectedProjects = saveData.ConnectedProjects ?? new List<ConnectedProject>();
+            var pathHash = string.IsNullOrWhiteSpace(selectedPath) ? profile.RepositoryHash : RepositoryCompanionProfileService.HashRepositoryPath(selectedPath);
+            var connection = saveData.ConnectedProjects.FirstOrDefault(item => string.Equals(item.PathHash, pathHash, StringComparison.Ordinal) ||
+                                                                               string.Equals(item.ProjectPathHash, pathHash, StringComparison.Ordinal));
+            if (connection == null)
+            {
+                connection = new ConnectedProject();
+                saveData.ConnectedProjects.Add(connection);
+            }
+
+            connection.Id = string.IsNullOrWhiteSpace(connection.Id) ? Guid.NewGuid().ToString("N") : connection.Id;
+            connection.DisplayName = profile.SafeRepositoryAlias;
+            connection.ApprovedAt = profile.ApprovedAtUtc ?? DateTimeOffset.UtcNow;
+            connection.ConnectionSource = "userSelected";
+            connection.PathHash = pathHash;
+            connection.ProjectPathHash = pathHash;
+            connection.ProjectAlias = profile.SafeRepositoryAlias;
+            connection.IsGitRepository = true;
+            connection.IsActive = string.Equals(saveData.SelectedRepositoryHash, profile.RepositoryHash, StringComparison.Ordinal);
+            connection.IsArchived = profile.ArchivedAtUtc != null;
+            connection.CompanionId = profile.CompanionId;
+        }
+
         private async Task<Result> PersistProviderConnectionStateAsync(ConnectedAgentSource source, CancellationToken cancellationToken)
         {
             if (source == null)
@@ -754,8 +823,27 @@ namespace TokenForge.Client.UI
             settings.Detected = source.State == AgentSourceSetupState.LocalSourceDetected ||
                                 source.State == AgentSourceSetupState.ReadyToAnalyze ||
                                 source.State == AgentSourceSetupState.AnalysisComplete;
-            settings.ManualFolderApproved = settings.Detected && source.SourceType != ConnectedAgentSourceType.OtherManualLogFolder && source.Confidence == ConfidenceLevel.Medium;
+            settings.ManualFolderApproved = source.Selected &&
+                                            (source.State == AgentSourceSetupState.ReadyToAnalyze ||
+                                             source.State == AgentSourceSetupState.AnalysisComplete);
             settings.ConnectionState = source.State.ToString();
+            settings.Status = source.Selected && (source.State == AgentSourceSetupState.ReadyToAnalyze || source.State == AgentSourceSetupState.AnalysisComplete)
+                ? "connected"
+                : source.State == AgentSourceSetupState.LocalSourceDetected
+                    ? "detected"
+                    : source.State == AgentSourceSetupState.PermissionRequired
+                        ? "warning"
+                        : source.State == AgentSourceSetupState.AnalysisFailedSafely
+                            ? "warning"
+                            : "notConfigured";
+            settings.DetectedSources = string.IsNullOrWhiteSpace(source.SafeLabel)
+                ? new List<string>()
+                : new List<string> { source.SafeLabel };
+            settings.ApprovedSource = source.Selected ? source.SafeLabel ?? string.Empty : string.Empty;
+            settings.Warnings = string.IsNullOrWhiteSpace(source.StatusLabel) || settings.Status == "connected"
+                ? new List<string>()
+                : new List<string> { source.StatusLabel };
+            settings.Confidence = source.Confidence.ToString();
             settings.SafeLocationHash = source.SafeLocationHash ?? string.Empty;
             settings.LastScanAt = source.LastScanTimeUtc;
             settings.ParserVersion = ParserVersionFor(providerType);
@@ -874,6 +962,16 @@ namespace TokenForge.Client.UI
                 return result;
             }
 
+            foreach (var project in saveData.ConnectedProjects ?? new List<ConnectedProject>())
+            {
+                if (string.Equals(project.PathHash, repositoryHash, StringComparison.Ordinal) ||
+                    string.Equals(project.ProjectPathHash, repositoryHash, StringComparison.Ordinal))
+                {
+                    project.IsActive = false;
+                    project.IsArchived = true;
+                }
+            }
+
             var validation = privacySanitizer.ValidateSafeSaveData(saveData);
             if (!validation.IsSuccess)
             {
@@ -895,14 +993,15 @@ namespace TokenForge.Client.UI
             var result = await AgentFlow.AnalyzeAsync(cancellationToken);
             if (result.IsSuccess)
             {
+                var providerLabel = MacAgentSourceDetector.SafeProviderLabel(SelectedAgentProviderType);
                 var persist = await PersistPendingNativeReviewAsync(
-                    MacAgentSourceDetector.SafeProviderLabel(SelectedAgentProviderType),
+                    "aiAgent",
                     AgentFlow.PendingSessionForLocalOnlyApproval,
                     result.Value.DerivedExpGained,
                     result.Value.DerivedStatDeltas,
                     result.Value.ConfidenceLevel.ToString(),
                     result.Value.WarningIds,
-                    MacAgentSourceDetector.SafeProviderLabel(SelectedAgentProviderType) + " aggregate activity ready for review.",
+                    providerLabel + " session activity analyzed. Review the estimated XP before saving growth.",
                     cancellationToken);
                 if (!persist.IsSuccess)
                 {
@@ -989,7 +1088,7 @@ namespace TokenForge.Client.UI
                 ReviewId = Guid.NewGuid().ToString("N"),
                 SourceKind = "combined",
                 RepositoryHash = saveData.SelectedRepositoryHash,
-                SafeSummary = "Repository and Codex/agent aggregate activity ready for review.",
+                SafeSummary = "Repository and AI agent activity analyzed together. Review the XP breakdown before saving growth.",
                 ActivityCategory = "Combined",
                 Confidence = CombinedConfidence(GitFlow.Review?.ConfidenceLevel ?? ConfidenceLevel.Unknown, AgentFlow.Review?.ConfidenceLevel ?? ConfidenceLevel.Unknown),
                 CommitCountBucket = GitFlow.Review?.CommitCountBucket ?? CountBucket.Unknown,
@@ -1010,6 +1109,7 @@ namespace TokenForge.Client.UI
                 GrowthResults = growthResults,
                 CreatedAtUtc = DateTimeOffset.UtcNow
             };
+            UpsertActivityReview(saveData, saveData.PendingNativeActivityReview, "pending", null);
 
             var validation = privacySanitizer.ValidateSafeSaveData(saveData);
             if (!validation.IsSuccess)
@@ -1039,7 +1139,7 @@ namespace TokenForge.Client.UI
                     result.Value.DerivedStatDeltas,
                     result.Value.ConfidenceLevel.ToString(),
                     result.Value.PrivacyWarningCategories,
-                    "Repository aggregate activity ready for review.",
+                    (CharacterDashboard?.CurrentRepositoryAlias ?? "Repository") + " Git changes analyzed. Review the XP breakdown before saving growth.",
                     cancellationToken);
                 if (!persist.IsSuccess)
                 {
@@ -1264,18 +1364,37 @@ namespace TokenForge.Client.UI
             saveData.CharacterProfile.Level = Math.Max(saveData.CharacterProfile.Level, 1 + Math.Max(0, saveData.CharacterProfile.TotalExp) / 1000);
 
             RepositoryCompanionProfileService.Normalize(saveData);
-            var repositorySessionIds = saveData.WorkSessionSummaries
-                .Where(session => string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), saveData.SelectedRepositoryHash, StringComparison.Ordinal))
-                .Select(session => session.SessionId)
-                .ToList();
-            var profileSession = pendingSessions.LastOrDefault(session => string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), saveData.SelectedRepositoryHash, StringComparison.Ordinal)) ??
-                                 pendingSessions.LastOrDefault() ??
-                                 pending.SafeSession;
-            RepositoryCompanionProfileService.ApplyApprovedGrowth(
-                saveData,
-                profileSession,
-                saveData.WorkSessionSummaries.Where(session => repositorySessionIds.Contains(session.SessionId)).ToList(),
-                saveData.GrowthHistory.Where(growth => repositorySessionIds.Contains(growth.SessionId)).ToList());
+            var hasSelectedRepository = !string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash) &&
+                                        RepositoryCompanionProfileService.GetSelectedProfile(saveData) != null;
+            if (hasSelectedRepository)
+            {
+                var repositorySessionIds = saveData.WorkSessionSummaries
+                    .Where(session => string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), saveData.SelectedRepositoryHash, StringComparison.Ordinal))
+                    .Select(session => session.SessionId)
+                    .ToList();
+                var profileSession = pendingSessions.LastOrDefault(session => string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), saveData.SelectedRepositoryHash, StringComparison.Ordinal)) ??
+                                     pendingSessions.LastOrDefault() ??
+                                     pending.SafeSession;
+                RepositoryCompanionProfileService.ApplyApprovedGrowth(
+                    saveData,
+                    profileSession,
+                    saveData.WorkSessionSummaries.Where(session => repositorySessionIds.Contains(session.SessionId)).ToList(),
+                    saveData.GrowthHistory.Where(growth => repositorySessionIds.Contains(growth.SessionId)).ToList());
+            }
+            else
+            {
+                var companion = CompanionProgressionRules.Normalize(saveData.CompanionState);
+                var xpDelta = pendingGrowthResults.Sum(growth => Math.Max(0, growth?.ExpGained ?? 0));
+                companion.CurrentXp += xpDelta;
+                companion.TotalLifetimeXp += xpDelta;
+                companion.TotalXp = companion.TotalLifetimeXp;
+                companion.Stats = companion.Stats ?? CompanionStatProfile.Empty();
+                companion.Stats.CodeStat += Math.Max(0, pending.StatDeltas?.Logic ?? 0) + Math.Max(0, pending.StatDeltas?.Architecture ?? 0) + Math.Max(0, pending.StatDeltas?.Velocity ?? 0);
+                companion.Stats.FocusStat += Math.Max(0, pending.StatDeltas?.Efficiency ?? 0) + Math.Max(0, pending.StatDeltas?.Stability ?? 0);
+                companion.Stats.DebugStat += Math.Max(0, pending.StatDeltas?.Debug ?? 0);
+                companion.Stats.DesignStat += Math.Max(0, pending.StatDeltas?.Design ?? 0) + Math.Max(0, pending.StatDeltas?.Creativity ?? 0);
+                saveData.CompanionState = CompanionProgressionRules.Normalize(companion);
+            }
             saveData.DailyProgress = saveData.DailyProgress ?? new DailyProgress();
             saveData.DailyProgress.ExpGainedToday += pendingGrowthResults.Sum(growth => Math.Max(0, growth?.ExpGained ?? 0));
             saveData.DailyProgress.SessionsConfirmedToday += Math.Max(1, pendingSessions.Count);
@@ -1283,6 +1402,17 @@ namespace TokenForge.Client.UI
             {
                 saveData.AppliedNativeReviewIds.Add(reviewId);
             }
+            UpsertActivityReview(saveData, pending, "saved", DateTimeOffset.UtcNow);
+            saveData.RecentNativeAnalysisRuns = saveData.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>();
+            saveData.RecentNativeAnalysisRuns.Insert(0, new NativeAnalysisRunRecord
+            {
+                RunId = Guid.NewGuid().ToString("N"),
+                SourceKind = "reviewSaved",
+                Status = "saved",
+                ErrorCode = string.Empty,
+                SafeSummary = "Growth saved · +" + pendingGrowthResults.Sum(growth => Math.Max(0, growth?.ExpGained ?? 0)) + " XP",
+                CreatedAtUtc = DateTimeOffset.UtcNow
+            });
             saveData.PendingNativeActivityReview = null;
 
             var validation = privacySanitizer.ValidateSafeSaveData(saveData);
@@ -1301,6 +1431,75 @@ namespace TokenForge.Client.UI
             AgentFlow.DiscardPendingReview();
             await RefreshRecentSessionsAsync(cancellationToken);
             await RefreshSafeSyncLocalStateAsync(cancellationToken);
+            return Result<SaveData>.Success(saveData);
+        }
+
+        public async Task<Result<SaveData>> LevelUpSelectedCompanionAsync(CancellationToken cancellationToken = default)
+        {
+            var saveData = await repository.LoadAsync(cancellationToken);
+            RepositoryCompanionProfileService.Normalize(saveData);
+            var profile = RepositoryCompanionProfileService.GetSelectedProfile(saveData);
+            var companion = profile == null || profile.ArchivedAtUtc != null || string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash)
+                ? CompanionProgressionRules.Normalize(saveData.CompanionState)
+                : CompanionProgressionRules.Normalize(profile.CompanionState);
+            if (companion == null)
+            {
+                return Result<SaveData>.Failure("no_companion_progress", "Earn XP before leveling up.");
+            }
+
+            var previousLevel = companion.Level;
+            if (!CompanionProgressionRules.TryLevelUpOnce(companion))
+            {
+                return Result<SaveData>.Failure("level_up_not_ready", "Earn enough XP before leveling up.");
+            }
+
+            if (profile != null && profile.ArchivedAtUtc == null && !string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash))
+            {
+                profile.CompanionState = CompanionProgressionRules.Normalize(companion);
+                profile.UpdatedAtUtc = DateTimeOffset.UtcNow;
+            }
+
+            saveData.CompanionState = CompanionProgressionRules.Normalize(companion);
+            saveData.CharacterProfile = saveData.CharacterProfile ?? new CharacterProfile();
+            saveData.CharacterProfile.Level = Math.Max(saveData.CharacterProfile.Level, saveData.CompanionState.Level);
+            var targetName = profile == null ? "Agent-only" : profile.SafeRepositoryAlias;
+            saveData.RecentNativeAnalysisRuns = saveData.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>();
+            saveData.RecentNativeAnalysisRuns.Insert(0, new NativeAnalysisRunRecord
+            {
+                RunId = Guid.NewGuid().ToString("N"),
+                SourceKind = "levelUp",
+                Status = "saved",
+                ErrorCode = string.Empty,
+                SafeSummary = "Level Up · Lv " + previousLevel + " -> Lv " + saveData.CompanionState.Level + " · " + targetName,
+                CreatedAtUtc = DateTimeOffset.UtcNow
+            });
+            saveData.ActivityReviews = saveData.ActivityReviews ?? new List<ActivityReview>();
+            saveData.ActivityReviews.Insert(0, new ActivityReview
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                RepositoryId = profile == null ? "agent-only" : profile.RepositoryHash,
+                SourceType = "levelUp",
+                Status = "saved",
+                XpDelta = 0,
+                CategoryBreakdown = CharacterStats.Zero(),
+                EvidenceSummary = "Level Up · Lv " + previousLevel + " -> Lv " + saveData.CompanionState.Level,
+                CreatedAt = DateTimeOffset.UtcNow,
+                SavedAt = DateTimeOffset.UtcNow
+            });
+
+            var validation = privacySanitizer.ValidateSafeSaveData(saveData);
+            if (!validation.IsSuccess)
+            {
+                return Result<SaveData>.Failure(validation.ErrorCode, validation.ErrorMessage);
+            }
+
+            var saveResult = await repository.SaveAsync(saveData, cancellationToken);
+            if (!saveResult.IsSuccess)
+            {
+                return Result<SaveData>.Failure(saveResult.ErrorCode, saveResult.ErrorMessage);
+            }
+
+            RefreshCharacterDashboard(saveData, RecentSessions);
             return Result<SaveData>.Success(saveData);
         }
 
@@ -1412,6 +1611,14 @@ namespace TokenForge.Client.UI
 
         public async Task<Result> DiscardPendingNativeReviewAsync(CancellationToken cancellationToken = default)
         {
+            var saveData = await repository.LoadAsync(cancellationToken);
+            if (saveData.PendingNativeActivityReview != null)
+            {
+                UpsertActivityReview(saveData, saveData.PendingNativeActivityReview, "discarded", null);
+                saveData.PendingNativeActivityReview = null;
+                await repository.SaveAsync(saveData, cancellationToken);
+            }
+
             GitFlow.DiscardPendingReview();
             AgentFlow.DiscardPendingReview();
             return await ClearPersistedPendingNativeReviewAsync(cancellationToken);
@@ -1437,7 +1644,10 @@ namespace TokenForge.Client.UI
             var repositoryHash = RepositoryCompanionProfileService.SafeRepositoryHashForSession(session);
             if (string.IsNullOrWhiteSpace(repositoryHash))
             {
-                repositoryHash = saveData.SelectedRepositoryHash;
+                var selectedProfile = RepositoryCompanionProfileService.GetSelectedProfile(saveData);
+                repositoryHash = string.Equals(sourceKind, "aiAgent", StringComparison.OrdinalIgnoreCase)
+                    ? selectedProfile?.RepositoryHash ?? string.Empty
+                    : saveData.SelectedRepositoryHash;
             }
 
             if (!string.IsNullOrWhiteSpace(repositoryHash))
@@ -1478,6 +1688,7 @@ namespace TokenForge.Client.UI
                 GrowthResults = new List<CharacterGrowthResult> { growth },
                 CreatedAtUtc = DateTimeOffset.UtcNow
             };
+            UpsertActivityReview(saveData, saveData.PendingNativeActivityReview, "pending", null);
 
             var validation = privacySanitizer.ValidateSafeSaveData(saveData);
             if (!validation.IsSuccess)
@@ -1492,6 +1703,70 @@ namespace TokenForge.Client.UI
             }
 
             return saveResult;
+        }
+
+        private static void UpsertActivityReview(SaveData saveData, PendingNativeActivityReview pending, string status, DateTimeOffset? savedAt)
+        {
+            if (saveData == null || pending == null)
+            {
+                return;
+            }
+
+            saveData.ActivityReviews = saveData.ActivityReviews ?? new List<ActivityReview>();
+            var id = string.IsNullOrWhiteSpace(pending.ReviewId) ? pending.SafeSession?.SessionId ?? Guid.NewGuid().ToString("N") : pending.ReviewId;
+            var review = saveData.ActivityReviews.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.Ordinal));
+            if (review == null)
+            {
+                review = new ActivityReview { Id = id, CreatedAt = pending.CreatedAtUtc };
+                saveData.ActivityReviews.Insert(0, review);
+            }
+
+            review.RepositoryId = pending.RepositoryHash ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(review.RepositoryId) &&
+                string.Equals(NormalizeActivitySourceType(pending.SourceKind), "aiAgent", StringComparison.Ordinal))
+            {
+                review.RepositoryId = "agent-only";
+            }
+            review.SourceType = NormalizeActivitySourceType(pending.SourceKind);
+            review.ProviderId = PendingProviderId(pending);
+            review.Status = string.IsNullOrWhiteSpace(status) ? "pending" : status;
+            review.XpDelta = Math.Max(0, pending.EstimatedXpDelta);
+            review.CategoryBreakdown = pending.StatDeltas ?? CharacterStats.Zero();
+            review.EvidenceSummary = SafeLocalAlias(pending.SafeSummary, "Aggregate activity ready for review.");
+            review.Warnings = (pending.WarningIds ?? new List<string>()).Where(item => !string.IsNullOrWhiteSpace(item)).Take(8).ToList();
+            review.SavedAt = savedAt;
+            saveData.ActivityReviews = saveData.ActivityReviews.Take(100).ToList();
+        }
+
+        private static string NormalizeActivitySourceType(string value)
+        {
+            value = (value ?? string.Empty).Trim();
+            if (value.IndexOf("repository", StringComparison.OrdinalIgnoreCase) >= 0) return "repository";
+            if (value.IndexOf("combined", StringComparison.OrdinalIgnoreCase) >= 0) return "mixed";
+            if (value.Length > 0) return "aiAgent";
+            return "repository";
+        }
+
+        private static string PendingProviderId(PendingNativeActivityReview pending)
+        {
+            var session = pending?.SafeSessions?.FirstOrDefault(item => item?.AgentActivitySummary != null) ??
+                          (pending?.SafeSession?.AgentActivitySummary != null ? pending.SafeSession : null);
+            var provider = session?.AgentActivitySummary?.ProviderType ?? AgentProviderType.Unknown;
+            if (provider == AgentProviderType.Unknown)
+            {
+                return string.Empty;
+            }
+
+            switch (MacAgentSourceDetector.NormalizeProvider(provider))
+            {
+                case AgentProviderType.Codex: return "codex";
+                case AgentProviderType.ClaudeCode: return "claude";
+                case AgentProviderType.Cursor: return "cursor";
+                case AgentProviderType.GitHubCopilot: return "copilot";
+                case AgentProviderType.GeminiCli: return "gemini";
+                case AgentProviderType.Manual: return "manual";
+                default: return provider.ToString().ToLowerInvariant();
+            }
         }
 
         private async Task<Result> ClearPersistedPendingNativeReviewAsync(CancellationToken cancellationToken)
@@ -1618,6 +1893,7 @@ namespace TokenForge.Client.UI
 
             if (!AgentFlow.HasSelectedAgentLogLocationForLocalOnlyApproval)
             {
+                var restoredProvider = false;
                 foreach (var setting in saveData.ProviderSettings ?? new List<ProviderSettings>())
                 {
                     if (!setting.Enabled || !setting.Selected)
@@ -1655,7 +1931,19 @@ namespace TokenForge.Client.UI
                             source.Confidence = ConfidenceLevel.Medium;
                         }
 
+                        restoredProvider = true;
                         break;
+                    }
+                }
+
+                if (!restoredProvider)
+                {
+                    foreach (var source in Onboarding.AgentSources.Where(item => item.Selected && IsSourceReadyState(item.State)))
+                    {
+                        source.Selected = false;
+                        source.State = AgentSourceSetupState.PermissionRequired;
+                        source.StatusLabel = "No approved source is readable. Choose a folder before analysis.";
+                        source.WarningCount = Math.Max(1, source.WarningCount);
                     }
                 }
             }
@@ -1675,7 +1963,16 @@ namespace TokenForge.Client.UI
 
                 source.Selected = setting.Selected && setting.Enabled;
                 source.SafeLocationHash = setting.SafeLocationHash ?? string.Empty;
-                source.State = ParseSourceState(setting.ConnectionState, source.Selected);
+                source.State = setting.Detected && !source.Selected
+                    ? AgentSourceSetupState.LocalSourceDetected
+                    : ParseSourceState(setting.ConnectionState, source.Selected);
+                source.SafeLabel = source.Selected
+                    ? (string.IsNullOrWhiteSpace(setting.ApprovedSource) ? source.SafeLabel : setting.ApprovedSource)
+                    : ((setting.DetectedSources ?? new List<string>()).FirstOrDefault() ?? string.Empty);
+                source.Confidence = Enum.TryParse(setting.Confidence, true, out ConfidenceLevel confidence)
+                    ? confidence
+                    : ConfidenceLevel.Unknown;
+                source.WarningCount = setting.Warnings?.Count ?? 0;
                 if (IsSourceReadyState(source.State) && string.IsNullOrWhiteSpace(source.SafeLocationHash))
                 {
                     source.Selected = false;
@@ -1685,9 +1982,11 @@ namespace TokenForge.Client.UI
                     source.WarningCount = 0;
                 }
 
-                source.StatusLabel = source.Selected
-                    ? StatusLabelForRestoredState(source.State)
-                    : "Not selected";
+                source.StatusLabel = source.State == AgentSourceSetupState.LocalSourceDetected && !source.Selected
+                    ? "Detected source found. Connect to approve."
+                    : source.Selected
+                        ? StatusLabelForRestoredState(source.State)
+                        : "Not selected";
             }
         }
 
@@ -2553,10 +2852,10 @@ namespace TokenForge.Client.UI
             var desktopSettings = RepositoryCompanionProfileService.GetSelectedDesktopCompanionSettings(saveData);
             var stats = profile.Stats ?? CharacterStats.Zero();
             var companionStats = companion.Stats ?? CompanionStatProfile.Empty();
-            var totalExp = Math.Max(0, profile.TotalExp);
-            const int expPerLevel = 1000;
+            var totalExp = Math.Max(0, companion.TotalLifetimeXp);
             var selectedSessionIds = (saveData.WorkSessionSummaries ?? new List<AgentWorkSession>())
-                .Where(session => string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), saveData.SelectedRepositoryHash, StringComparison.Ordinal))
+                .Where(session => !string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash) &&
+                                  string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), saveData.SelectedRepositoryHash, StringComparison.Ordinal))
                 .Select(session => session.SessionId)
                 .ToList();
             var latestGrowth = (saveData.GrowthHistory ?? new List<CharacterGrowthResult>())
@@ -2572,6 +2871,7 @@ namespace TokenForge.Client.UI
                 ? "No growth recorded yet."
                 : "+" + latestGrowth.ExpGained + " XP | Level " + latestGrowth.LevelBefore + " -> " + latestGrowth.LevelAfter;
             RepositoryCompanions = ToRepositoryCompanionDisplayItems(saveData);
+            var motionState = BuildMotionStateForRepository(saveData, saveData.SelectedRepositoryHash, companion);
             AgentFlow.SetSelectedRepositoryHash(saveData.SelectedRepositoryHash);
             PendingNativeActivityReview = saveData.PendingNativeActivityReview;
             RecentNativeAnalysisRuns = (saveData.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>())
@@ -2582,13 +2882,13 @@ namespace TokenForge.Client.UI
             CharacterDashboard = new CharacterDashboardSummary
             {
                 CharacterName = string.IsNullOrWhiteSpace(profile.DisplayName) ? "Token" : profile.DisplayName,
-                Level = Math.Max(1, profile.Level),
+                Level = Math.Max(1, companion.Level),
                 TotalExp = totalExp,
-                CurrentLevelExp = totalExp % expPerLevel,
-                ExpForNextLevel = expPerLevel,
-                RankTitle = RankFor(Math.Max(1, profile.Level), profile.CurrentEvolutionType),
+                CurrentLevelExp = Math.Max(0, companion.CurrentXp),
+                ExpForNextLevel = Math.Max(1, companion.XpRequiredForNextLevel),
+                RankTitle = RankFor(Math.Max(1, companion.Level), profile.CurrentEvolutionType),
                 CurrentRepositoryHash = saveData.SelectedRepositoryHash,
-                CurrentRepositoryAlias = selectedRepositoryProfile?.SafeRepositoryAlias ?? "Local Repository",
+                CurrentRepositoryAlias = selectedRepositoryProfile?.SafeRepositoryAlias ?? string.Empty,
                 Code = Math.Max(0, companionStats.CodeStat > 0 ? companionStats.CodeStat : stats.Logic + stats.Architecture + stats.Velocity),
                 Focus = Math.Max(0, companionStats.FocusStat > 0 ? companionStats.FocusStat : stats.Efficiency + stats.Stability),
                 Debug = Math.Max(0, companionStats.DebugStat > 0 ? companionStats.DebugStat : stats.Debug),
@@ -2598,6 +2898,7 @@ namespace TokenForge.Client.UI
                 CompanionState = companion,
                 DesktopCompanionSettings = desktopSettings,
                 DesktopOverlayState = desktopSettings.IsDesktopCompanionEnabled ? CompanionDesktopOverlayState.Fallback : CompanionDesktopOverlayState.Disabled,
+                MotionState = motionState,
                 LatestSafeSessionSummary = latestSession,
                 RecentGrowthSummary = growthSummary,
                 QuestSummary = BuildQuestSummary(hasSavedRun),
@@ -2617,6 +2918,7 @@ namespace TokenForge.Client.UI
                 .Select(profile =>
                 {
                     var companion = CompanionProgressionRules.Normalize(profile.CompanionState);
+                    var motionState = BuildMotionStateForRepository(saveData, profile.RepositoryHash, companion);
                     return new RepositoryCompanionDisplayItem
                     {
                         RepositoryHash = profile.RepositoryHash,
@@ -2625,13 +2927,97 @@ namespace TokenForge.Client.UI
                         Archetype = companion.Archetype,
                         Level = companion.Level,
                         TotalXp = companion.TotalXp,
+                        CurrentXp = companion.CurrentXp,
+                        XpRequiredForNextLevel = companion.XpRequiredForNextLevel,
+                        CanLevelUp = companion.CanLevelUp,
+                        RecentGrowthSource = RecentGrowthSourceForRepository(saveData, profile.RepositoryHash),
+                        Skin = CompanionSkinCatalog.Normalize(profile.DesktopCompanionSettings?.VisualThemeId),
+                        MotionState = motionState,
+                        ApprovedByUser = string.Equals(profile.ConnectionSource, "userSelected", StringComparison.OrdinalIgnoreCase) && profile.ApprovedAtUtc != null,
+                        ApprovedAtUtc = profile.ApprovedAtUtc,
                         LastApprovedActivityBucket = profile.LastApprovedActivityBucket,
                         Selected = string.Equals(profile.RepositoryHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal),
                         Archived = profile.ArchivedAtUtc != null
                     };
                 })
                 .Where(item => !string.IsNullOrWhiteSpace(item.RepositoryHash))
+                .Where(item => !string.Equals(item.SafeRepositoryAlias, "Local Repository", StringComparison.OrdinalIgnoreCase))
                 .ToList();
+        }
+
+        private static CompanionMotionState BuildMotionStateForRepository(SaveData saveData, string repositoryHash, CompanionState companion)
+        {
+            saveData = saveData ?? SaveData.CreateDefault();
+            companion = CompanionProgressionRules.Normalize(companion);
+            repositoryHash = repositoryHash ?? string.Empty;
+            var sessions = (saveData.WorkSessionSummaries ?? new List<AgentWorkSession>())
+                .Where(session => session != null &&
+                                  (string.IsNullOrWhiteSpace(repositoryHash) ||
+                                   string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), repositoryHash, StringComparison.Ordinal)))
+                .OrderByDescending(session => session.EndedAt)
+                .Take(8)
+                .ToList();
+            var sessionIds = sessions.Select(session => session.SessionId).Where(id => !string.IsNullOrWhiteSpace(id)).ToList();
+            var growth = (saveData.GrowthHistory ?? new List<CharacterGrowthResult>())
+                .Where(item => item != null && sessionIds.Contains(item.SessionId))
+                .ToList();
+            var git = sessions.FirstOrDefault(session => session.GitChangeSummary != null)?.GitChangeSummary;
+            var agent = sessions.FirstOrDefault(session => session.AgentActivitySummary != null)?.AgentActivitySummary;
+            var pending = saveData.PendingNativeActivityReview != null &&
+                          (string.IsNullOrWhiteSpace(saveData.PendingNativeActivityReview.RepositoryHash) ||
+                           string.IsNullOrWhiteSpace(repositoryHash) ||
+                           string.Equals(saveData.PendingNativeActivityReview.RepositoryHash, repositoryHash, StringComparison.Ordinal));
+            var latestRun = (saveData.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>()).FirstOrDefault();
+            var forced = CompanionMotionReaction.None;
+            if (latestRun != null && latestRun.CreatedAtUtc > DateTimeOffset.UtcNow.AddMinutes(-10))
+            {
+                if (string.Equals(latestRun.SourceKind, "reviewSaved", StringComparison.OrdinalIgnoreCase))
+                {
+                    forced = CompanionMotionReaction.GrowthSaved;
+                }
+                else if (string.Equals(latestRun.SourceKind, "levelUp", StringComparison.OrdinalIgnoreCase))
+                {
+                    forced = CompanionMotionReaction.LevelUp;
+                }
+            }
+
+            return CompanionMotionStateResolver.Resolve(new CompanionMotionSignal
+            {
+                RepositoryId = repositoryHash,
+                RecentGitChangedFiles = git?.ChangedFileCountBucket ?? CountBucket.Unknown,
+                CommitCount = git?.CommitCountBucket ?? CountBucket.Unknown,
+                AddedLines = git?.AddedLineBucket ?? LineChangeBucket.Unknown,
+                DeletedLines = git?.DeletedLineBucket ?? LineChangeBucket.Unknown,
+                RecentRepositoryXp = growth.Where(item => sessions.Any(session => string.Equals(session.SessionId, item.SessionId, StringComparison.Ordinal) &&
+                                                                                  string.Equals(session.SourceProvider, "GIT", StringComparison.OrdinalIgnoreCase)))
+                    .Sum(item => Math.Max(0, item.ExpGained)),
+                AiAgentSessionCount = agent?.SessionCountBucket ?? CountBucket.Unknown,
+                AiAgentInteractionCount = agent?.InteractionCountBucket ?? CountBucket.Unknown,
+                EstimatedTokenActivity = sessions.Select(session => session.TokenUsageBucket).OrderByDescending(bucket => (int)bucket).FirstOrDefault(),
+                AiAgentXp = growth.Where(item => sessions.Any(session => string.Equals(session.SessionId, item.SessionId, StringComparison.Ordinal) &&
+                                                                          !string.Equals(session.SourceProvider, "GIT", StringComparison.OrdinalIgnoreCase)))
+                    .Sum(item => Math.Max(0, item.ExpGained)),
+                HasPendingReview = pending,
+                CanLevelUp = companion.CanLevelUp,
+                HasWarnings = (saveData.PendingNativeActivityReview?.WarningIds?.Count ?? 0) > 0,
+                ForcedReaction = forced
+            });
+        }
+
+        private static string RecentGrowthSourceForRepository(SaveData saveData, string repositoryHash)
+        {
+            var sessions = (saveData?.WorkSessionSummaries ?? new List<AgentWorkSession>())
+                .Where(session => session != null &&
+                                  string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), repositoryHash ?? string.Empty, StringComparison.Ordinal))
+                .OrderByDescending(session => session.EndedAt)
+                .Take(6)
+                .ToList();
+            var hasGit = sessions.Any(session => string.Equals(session.SourceProvider, "GIT", StringComparison.OrdinalIgnoreCase) || session.GitChangeSummary != null);
+            var hasAgent = sessions.Any(session => session.AgentActivitySummary != null || (!string.IsNullOrWhiteSpace(session.SourceProvider) && !string.Equals(session.SourceProvider, "GIT", StringComparison.OrdinalIgnoreCase)));
+            if (hasGit && hasAgent) return "Mixed";
+            if (hasAgent) return "AI Agent";
+            if (hasGit) return "Git";
+            return "None";
         }
 
         private static string TopStatCategory(CharacterStats stats)

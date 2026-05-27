@@ -21,6 +21,14 @@ namespace TokenForge.Client.Domain
     [Serializable]
     public sealed class ConnectedProject
     {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+        public string DisplayName { get; set; } = string.Empty;
+        public DateTimeOffset? ApprovedAt { get; set; }
+        public string ConnectionSource { get; set; } = "userSelected";
+        public string PathHash { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+        public bool IsArchived { get; set; }
+        public string CompanionId { get; set; } = string.Empty;
         public string LocalOnlyProjectId { get; set; } = Guid.NewGuid().ToString("N");
 
         // Local-only by default. Sync only when the user explicitly opts in because aliases may reveal project identity.
@@ -41,10 +49,42 @@ namespace TokenForge.Client.Domain
         public bool Detected { get; set; }
         public bool ManualFolderApproved { get; set; }
         public string ConnectionState { get; set; } = string.Empty;
+        public string Status { get; set; } = "notConfigured";
+        public List<string> DetectedSources { get; set; } = new List<string>();
+        public string ApprovedSource { get; set; } = string.Empty;
+        public DateTimeOffset? LastAnalyzedAt { get; set; }
+        public List<string> Warnings { get; set; } = new List<string>();
+        public string Confidence { get; set; } = string.Empty;
         public string SafeLocationHash { get; set; } = string.Empty;
         public DateTimeOffset? LastScanAt { get; set; }
         public string ParserVersion { get; set; } = string.Empty;
         public int PollingIntervalSeconds { get; set; } = 300;
+    }
+
+    [Serializable]
+    public sealed class ActivityReview
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+        public string RepositoryId { get; set; } = string.Empty;
+        public string SourceType { get; set; } = "repository";
+        public string ProviderId { get; set; } = string.Empty;
+        public string Status { get; set; } = "pending";
+        public int XpDelta { get; set; }
+        public CharacterStats CategoryBreakdown { get; set; } = CharacterStats.Zero();
+        public string EvidenceSummary { get; set; } = string.Empty;
+        public List<string> Warnings { get; set; } = new List<string>();
+        public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+        public DateTimeOffset? SavedAt { get; set; }
+    }
+
+    [Serializable]
+    public sealed class CompanionProgress
+    {
+        public int Level { get; set; } = 1;
+        public int CurrentXP { get; set; }
+        public int XPRequiredForNextLevel { get; set; } = 250;
+        public int TotalLifetimeXP { get; set; }
+        public bool CanLevelUp { get; set; }
     }
 
     [Serializable]
@@ -144,6 +184,7 @@ namespace TokenForge.Client.Domain
         public List<CharacterGrowthResult> GrowthHistory { get; set; } = new List<CharacterGrowthResult>();
         public List<string> AppliedNativeReviewIds { get; set; } = new List<string>();
         public PendingNativeActivityReview PendingNativeActivityReview { get; set; }
+        public List<ActivityReview> ActivityReviews { get; set; } = new List<ActivityReview>();
         public List<NativeAnalysisRunRecord> RecentNativeAnalysisRuns { get; set; } = new List<NativeAnalysisRunRecord>();
         public List<ConnectedProject> ConnectedProjects { get; set; } = new List<ConnectedProject>();
         public List<ProviderSettings> ProviderSettings { get; set; } = new List<ProviderSettings>();

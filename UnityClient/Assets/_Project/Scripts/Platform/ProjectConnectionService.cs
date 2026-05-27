@@ -9,9 +9,16 @@ namespace TokenForge.Client.Platform
         {
             return new ConnectedProject
             {
+                Id = System.Guid.NewGuid().ToString("N"),
+                DisplayName = localAlias ?? string.Empty,
+                ApprovedAt = System.DateTimeOffset.UtcNow,
+                ConnectionSource = "userSelected",
                 ProjectAlias = localAlias ?? string.Empty,
                 ProjectPathHash = SafeHashUtility.ComputeProjectPathHash(projectPath),
+                PathHash = SafeHashUtility.ComputeProjectPathHash(projectPath),
                 IsGitRepository = isGitRepository,
+                IsActive = true,
+                IsArchived = false,
                 AnalysisEnabled = true
             };
         }

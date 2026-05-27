@@ -13,6 +13,7 @@ namespace TokenForge.Client.UI
         private CompanionDesktopMovementController movementController;
         private CompanionState companionState = CompanionState.CreateDefault();
         private DesktopCompanionSettings settings = DesktopCompanionSettings.CreateDefault();
+        private CompanionMotionState motionState = CompanionMotionState.Idle(string.Empty);
         private string lastFailureReason = string.Empty;
         private CompanionVisualProfile visualProfile = CompanionVisualProfileResolver.Resolve(CompanionState.CreateDefault());
         private float reactionCooldownRemaining;
@@ -61,11 +62,13 @@ namespace TokenForge.Client.UI
             ApplySettings(settings, companionState);
         }
 
-        public void ApplySettings(DesktopCompanionSettings desktopSettings, CompanionState state)
+        public void ApplySettings(DesktopCompanionSettings desktopSettings, CompanionState state, CompanionMotionState motion = null)
         {
             settings = desktopSettings ?? DesktopCompanionSettings.CreateDefault();
             companionState = CompanionProgressionRules.Normalize(state);
+            motionState = motion ?? CompanionMotionStateResolver.Resolve(new CompanionMotionSignal { CanLevelUp = companionState.CanLevelUp });
             visualProfile = CompanionVisualProfileResolver.Resolve(companionState, settings.MotionMode);
+            ApplyMotionIntensity(visualProfile, motionState);
             if (overlayService == null)
             {
                 Initialize();
@@ -113,7 +116,7 @@ namespace TokenForge.Client.UI
                 lastFailureReason = string.Empty;
             }
 
-            overlayService.SetClickEnabled(true);
+            overlayService.SetClickEnabled(!settings.IsClickThroughEnabled);
             overlayService.SetClickThrough(settings.IsClickThroughEnabled);
             overlayService.SetSize(SizeFor(companionState.Stage));
             overlayService.SetVisualTheme(settings.VisualThemeId);
@@ -145,6 +148,11 @@ namespace TokenForge.Client.UI
         {
             movementController?.ResetPosition();
             overlayService?.ResetPosition();
+        }
+
+        public void TriggerReaction(CompanionReaction reaction, string speechText)
+        {
+            overlayService?.TriggerReaction(reaction, string.IsNullOrWhiteSpace(speechText) ? "Ready to grow!" : speechText);
         }
 
         public void OnDesktopCompanionClicked()
@@ -195,7 +203,7 @@ namespace TokenForge.Client.UI
                 reactionCooldownRemaining -= Time.deltaTime;
             }
 
-            movementController?.Tick(Time.deltaTime, companionState, settings);
+            movementController?.Tick(Time.deltaTime, companionState, settings, motionState);
         }
 
         private void OnDestroy()
@@ -219,6 +227,36 @@ namespace TokenForge.Client.UI
                 case CompanionStage.Junior: return new Vector2(110f, 110f);
                 case CompanionStage.Adult: return new Vector2(128f, 128f);
                 default: return new Vector2(84f, 84f);
+            }
+        }
+
+        private static void ApplyMotionIntensity(CompanionVisualProfile profile, CompanionMotionState motion)
+        {
+            if (profile?.MotionProfile == null || motion == null)
+            {
+                return;
+            }
+
+            profile.MotionProfile.WanderSpeed *= Mathf.Clamp(motion.MovementSpeed, 0f, 1.6f);
+            profile.MotionProfile.IdleRadius += Mathf.Clamp(motion.BounceAmplitude, 0f, 12f) * 0.25f;
+            profile.MotionProfile.DecisionIntervalSeconds = Mathf.Max(0.8f, profile.MotionProfile.DecisionIntervalSeconds / Mathf.Max(0.65f, motion.IdleFrequency));
+            if (motion.Reaction == CompanionMotionReaction.EvolvePulse)
+            {
+                profile.IdleAnimation = CompanionAnimationState.GrowthPulse;
+                profile.ReactionProfile.PrimaryClickReaction = CompanionReaction.LevelUp;
+                profile.ReactionProfile.DefaultSpeech = "Ready to evolve.";
+            }
+            else if (motion.Reaction == CompanionMotionReaction.ReadyToReview)
+            {
+                profile.IdleAnimation = CompanionAnimationState.Hop;
+                profile.ReactionProfile.PrimaryClickReaction = CompanionReaction.Attention;
+                profile.ReactionProfile.DefaultSpeech = "Review is ready.";
+            }
+            else if (motion.Reaction == CompanionMotionReaction.GrowthSaved)
+            {
+                profile.IdleAnimation = CompanionAnimationState.GrowthPulse;
+                profile.ReactionProfile.PrimaryClickReaction = CompanionReaction.GrowthSaved;
+                profile.ReactionProfile.DefaultSpeech = "Growth saved.";
             }
         }
 

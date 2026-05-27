@@ -163,6 +163,29 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void AutoDetectFindsCandidateButDoesNotConnectUntilApproved()
+        {
+            var saveRepository = new SaveDataRepository(Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName()));
+            var approvedRepository = new ApprovedLocationSettingsRepository(Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName()));
+            var candidatePath = CreateCodexLogDirectory();
+            var fixture = CreateViewModelFixture(new SafeGitRunner(), string.Empty, saveRepository, approvedRepository, providerType => new CandidateAgentSourceDetector(providerType, candidatePath));
+
+            var detect = RunAsync(() => fixture.ViewModel.DetectAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex));
+            var source = fixture.ViewModel.Onboarding.AgentSources.First(item => item.SourceType == ConnectedAgentSourceType.Codex);
+            var afterDetect = RunAsync(() => fixture.SaveRepository.LoadAsync());
+
+            Assert.IsTrue(detect.IsSuccess, detect.ErrorMessage);
+            Assert.AreEqual(AgentSourceSetupState.LocalSourceDetected, source.State);
+            Assert.IsFalse(source.Selected);
+            Assert.IsFalse(afterDetect.ProviderSettings.First(item => item.ProviderId == "Codex").Selected);
+
+            var approve = RunAsync(() => fixture.ViewModel.ApproveDetectedAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex));
+            Assert.IsTrue(approve.IsSuccess, approve.ErrorMessage);
+            Assert.IsTrue(source.Selected);
+            Assert.AreEqual(AgentSourceSetupState.ReadyToAnalyze, source.State);
+        }
+
+        [Test]
         public void RestoredProviderWithoutSourceHashIsNotConnectedOrReady()
         {
             var saveRepository = new SaveDataRepository(Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName()));
@@ -216,6 +239,7 @@ namespace TokenForge.Client.Tests
                 "chooseAgentFolder:codex",
                 "runAgentAnalysis",
                 "saveGrowth",
+                "levelUp",
                 "discardReview",
                 "safeSync"
             };
@@ -313,6 +337,16 @@ namespace TokenForge.Client.Tests
             SaveDataRepository saveRepository,
             ApprovedLocationSettingsRepository approvedLocationRepository)
         {
+            return CreateViewModelFixture(gitRunner, agentLogPath, saveRepository, approvedLocationRepository, providerType => new EmptyAgentSourceDetector(providerType));
+        }
+
+        private static ViewModelFixture CreateViewModelFixture(
+            IGitCommandRunner gitRunner,
+            string agentLogPath,
+            SaveDataRepository saveRepository,
+            ApprovedLocationSettingsRepository approvedLocationRepository,
+            Func<AgentProviderType, IAgentSourceDetector> detectorFactory)
+        {
             var sanitizer = new PrivacySanitizer();
             var git = CreateGitFixture(gitRunner, saveRepository);
             var agentFlow = new AgentAnalysisFlowController(
@@ -329,7 +363,7 @@ namespace TokenForge.Client.Tests
                 approvedLocationRepository,
                 null,
                 null,
-                providerType => new EmptyAgentSourceDetector(providerType));
+                detectorFactory);
             return new ViewModelFixture(viewModel, saveRepository, approvedLocationRepository, git.RepositoryPath, agentLogPath);
         }
 
@@ -533,6 +567,39 @@ namespace TokenForge.Client.Tests
                     ProviderType = ProviderType,
                     AccessState = AgentSourceAccessState.NotDetected,
                     WarningIds = new List<string> { "agent_source_not_detected" }
+                });
+            }
+        }
+
+        private sealed class CandidateAgentSourceDetector : IAgentSourceDetector
+        {
+            private readonly string path;
+
+            public CandidateAgentSourceDetector(AgentProviderType providerType, string path)
+            {
+                ProviderType = providerType;
+                this.path = path;
+            }
+
+            public AgentProviderType ProviderType { get; }
+
+            public Task<AgentSourceDetectionResult> DetectAsync(CancellationToken cancellationToken)
+            {
+                return Task.FromResult(new AgentSourceDetectionResult
+                {
+                    ProviderType = ProviderType,
+                    AccessState = AgentSourceAccessState.Detected,
+                    Candidates = new List<AgentSourceCandidate>
+                    {
+                        new AgentSourceCandidate
+                        {
+                            LocalPath = path,
+                            SafeAlias = "Codex local activity",
+                            SourceKind = AgentSourceKind.DetectedLocal,
+                            AccessState = AgentSourceAccessState.Detected,
+                            Confidence = ConfidenceLevel.High
+                        }
+                    }
                 });
             }
         }

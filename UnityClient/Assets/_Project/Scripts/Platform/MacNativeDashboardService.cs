@@ -326,6 +326,13 @@ namespace TokenForge.Client.Platform
                 case "review_activity":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ReviewActivity, rawAction, value);
                     return true;
+                case "levelUp":
+                case "level_up":
+                case "evolveToken":
+                case "evolve_token":
+                case "companion.levelUp":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.LevelUpCompanion, rawAction, value);
+                    return true;
                 case "approveReview":
                 case "approve_review":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ApproveReview, rawAction, value);

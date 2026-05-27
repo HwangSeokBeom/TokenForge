@@ -12,6 +12,8 @@ namespace TokenForge.Client.Domain
         public const int JuniorXp = 1200;
         public const int AdultXp = 2600;
         private const int XpPerCompanionLevel = 500;
+        private const int BaseLevelXp = 250;
+        private const int LevelXpStep = 169;
 
         public static CompanionState CreateDefaultState()
         {
@@ -28,6 +30,20 @@ namespace TokenForge.Client.Domain
             state.SchemaVersion = SchemaVersion;
             state.Level = Math.Max(1, state.Level);
             state.TotalXp = Math.Max(0, state.TotalXp);
+            if (state.TotalLifetimeXp <= 0 && state.TotalXp > 0)
+            {
+                state.TotalLifetimeXp = state.TotalXp;
+            }
+
+            state.TotalLifetimeXp = Math.Max(0, state.TotalLifetimeXp);
+            if (state.CurrentXp <= 0 && state.TotalXp > 0)
+            {
+                state.CurrentXp = state.TotalXp;
+            }
+
+            state.CurrentXp = Math.Max(0, state.CurrentXp);
+            state.XpRequiredForNextLevel = XpRequiredForLevel(state.Level);
+            state.CanLevelUp = state.CurrentXp >= state.XpRequiredForNextLevel;
             state.Stats = state.Stats ?? CompanionStatProfile.Empty();
             state.GrowthProfile = state.GrowthProfile ?? new CompanionGrowthProfile();
             state.GrowthProfile.SchemaVersion = SchemaVersion;
@@ -38,9 +54,10 @@ namespace TokenForge.Client.Domain
                 state.LastGrowthReasonIds.Add(state.TotalXp <= 0 ? CompanionGrowthReasonIds.NoApprovedGrowthYet : CompanionGrowthReasonIds.ApprovedAggregateGrowth);
             }
 
-            state.Stage = StageForXp(state.TotalXp);
-            state.XpToNextStage = XpToNextStage(state.TotalXp);
-            if (state.TotalXp <= 0)
+            state.Stage = StageForXp(state.TotalLifetimeXp);
+            state.XpToNextStage = XpToNextStage(state.TotalLifetimeXp);
+            state.TotalXp = state.TotalLifetimeXp;
+            if (state.TotalLifetimeXp <= 0)
             {
                 state.Archetype = CompanionArchetype.Unknown;
             }
@@ -69,11 +86,41 @@ namespace TokenForge.Client.Domain
                 Archetype = archetype,
                 Level = Math.Max(1, totalXp / XpPerCompanionLevel + 1),
                 TotalXp = totalXp,
+                CurrentXp = totalXp,
+                TotalLifetimeXp = totalXp,
+                XpRequiredForNextLevel = XpRequiredForLevel(Math.Max(1, totalXp / XpPerCompanionLevel + 1)),
                 XpToNextStage = XpToNextStage(totalXp),
                 Stats = stats,
                 GrowthProfile = profile,
                 LastGrowthReasonIds = BuildReasonIds(profile, archetype, totalXp)
             });
+        }
+
+        public static int XpRequiredForLevel(int level)
+        {
+            return BaseLevelXp + Math.Max(0, level - 1) * LevelXpStep;
+        }
+
+        public static bool CanLevelUp(CompanionState state)
+        {
+            state = Normalize(state);
+            return state.CanLevelUp;
+        }
+
+        public static bool TryLevelUpOnce(CompanionState state)
+        {
+            state = Normalize(state);
+            if (!state.CanLevelUp)
+            {
+                return false;
+            }
+
+            state.CurrentXp -= state.XpRequiredForNextLevel;
+            state.Level += 1;
+            state.XpRequiredForNextLevel = XpRequiredForLevel(state.Level);
+            state.CanLevelUp = state.CurrentXp >= state.XpRequiredForNextLevel;
+            Normalize(state);
+            return true;
         }
 
         public static CompanionStage StageForXp(int totalXp)

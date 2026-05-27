@@ -46,7 +46,7 @@ namespace TokenForge.Client.UI
             overlayService.SetPosition(position);
         }
 
-        public void Tick(float deltaSeconds, CompanionState companionState, DesktopCompanionSettings settings)
+        public void Tick(float deltaSeconds, CompanionState companionState, DesktopCompanionSettings settings, CompanionMotionState motionState = null)
         {
             if (deltaSeconds <= 0f || settings == null || !settings.IsDesktopCompanionEnabled ||
                 (overlayService.State != CompanionDesktopOverlayState.Active && overlayService.State != CompanionDesktopOverlayState.Fallback))
@@ -55,6 +55,7 @@ namespace TokenForge.Client.UI
             }
 
             companionState = CompanionProgressionRules.Normalize(companionState);
+            motionState = motionState ?? CompanionMotionStateResolver.Resolve(new CompanionMotionSignal { CanLevelUp = companionState.CanLevelUp });
             if (!tickStartedLogged)
             {
                 tickStartedLogged = true;
@@ -64,10 +65,23 @@ namespace TokenForge.Client.UI
             if (overlayService.IsNativeOverlay)
             {
                 var profile = CompanionVisualProfileResolver.Resolve(companionState, settings.MotionMode);
+                ApplyMotionIntensity(profile, motionState);
+                overlayService.SetClickEnabled(!settings.IsClickThroughEnabled);
                 overlayService.SetClickThrough(settings.IsClickThroughEnabled);
                 overlayService.SetVisualTheme(settings.VisualThemeId);
                 overlayService.SetMotionProfile(profile);
                 overlayService.SetVisualState(companionState.Stage, companionState.Archetype, profile.IdleAnimation, false);
+                return;
+            }
+
+            if (settings.MotionMode == CompanionDesktopMotionMode.Calm)
+            {
+                velocity = Vector2.zero;
+                overlayService.SetPosition(position);
+                overlayService.SetClickEnabled(!settings.IsClickThroughEnabled);
+                overlayService.SetClickThrough(settings.IsClickThroughEnabled);
+                overlayService.SetVisualTheme(settings.VisualThemeId);
+                overlayService.SetVisualState(companionState.Stage, companionState.Archetype, CompanionAnimationState.Idle, facingLeft);
                 return;
             }
 
@@ -89,7 +103,7 @@ namespace TokenForge.Client.UI
                 Debug.Log("INFO [CompanionMotion] idleResumed anchor=(" + position.x.ToString("0.##") + "," + position.y.ToString("0.##") + ")");
             }
 
-            var motionScale = MotionScale(settings.MotionMode);
+            var motionScale = MotionScale(settings.MotionMode) * Mathf.Clamp(motionState.MovementSpeed, 0f, 1.6f);
             decisionTimer -= deltaSeconds;
             frameTimer -= deltaSeconds;
             if (decisionTimer <= 0f)
@@ -114,6 +128,7 @@ namespace TokenForge.Client.UI
 
             overlayService.SetSize(size);
             overlayService.SetPosition(visualPosition);
+            overlayService.SetClickEnabled(!settings.IsClickThroughEnabled);
             overlayService.SetClickThrough(settings.IsClickThroughEnabled);
             overlayService.SetVisualTheme(settings.VisualThemeId);
             overlayService.SetVisualState(
@@ -126,6 +141,30 @@ namespace TokenForge.Client.UI
             {
                 positionLogTimer = 2.0f;
                 Debug.Log("INFO [DesktopCompanion] idle/wander position updated " + visualPosition.x.ToString("0.##") + "," + visualPosition.y.ToString("0.##"));
+            }
+        }
+
+        private static void ApplyMotionIntensity(CompanionVisualProfile profile, CompanionMotionState motion)
+        {
+            if (profile?.MotionProfile == null || motion == null)
+            {
+                return;
+            }
+
+            profile.MotionProfile.WanderSpeed *= Mathf.Clamp(motion.MovementSpeed, 0f, 1.6f);
+            profile.MotionProfile.IdleRadius += Mathf.Clamp(motion.BounceAmplitude, 0f, 12f) * 0.25f;
+            profile.MotionProfile.DecisionIntervalSeconds = Mathf.Max(0.8f, profile.MotionProfile.DecisionIntervalSeconds / Mathf.Max(0.65f, motion.IdleFrequency));
+            if (motion.Reaction == CompanionMotionReaction.EvolvePulse)
+            {
+                profile.IdleAnimation = CompanionAnimationState.GrowthPulse;
+            }
+            else if (motion.Reaction == CompanionMotionReaction.ReadyToReview)
+            {
+                profile.IdleAnimation = CompanionAnimationState.Hop;
+            }
+            else if (motion.Reaction == CompanionMotionReaction.GrowthSaved)
+            {
+                profile.IdleAnimation = CompanionAnimationState.GrowthPulse;
             }
         }
 

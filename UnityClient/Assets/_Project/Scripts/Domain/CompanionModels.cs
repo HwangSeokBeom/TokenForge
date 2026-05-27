@@ -64,7 +64,35 @@ namespace TokenForge.Client.Domain
         Wake,
         LevelUp,
         HungryNoActivity,
-        AnalysisComplete
+        AnalysisComplete,
+        Attention,
+        GrowthSaved,
+        AiAssisted,
+        Warning
+    }
+
+    public enum CompanionActivityLevel
+    {
+        Idle,
+        Low,
+        Medium,
+        High,
+        ReadyToEvolve,
+        Warning
+    }
+
+    public enum CompanionMotionReaction
+    {
+        None,
+        CalmWander,
+        FocusedWander,
+        AiPulse,
+        TokenPulse,
+        ReadyToReview,
+        EvolvePulse,
+        GrowthSaved,
+        LevelUp,
+        WarningShake
     }
 
     public enum CompanionDesktopOverlayState
@@ -141,6 +169,188 @@ namespace TokenForge.Client.Domain
     }
 
     [Serializable]
+    public sealed class CompanionMotionState
+    {
+        public string RepositoryId { get; set; } = string.Empty;
+        public CompanionActivityLevel ActivityLevel { get; set; } = CompanionActivityLevel.Idle;
+        public float MovementSpeed { get; set; } = 0.35f;
+        public float BounceAmplitude { get; set; } = 2.0f;
+        public float IdleFrequency { get; set; } = 0.6f;
+        public float PulseFrequency { get; set; } = 0.2f;
+        public CompanionMotionReaction Reaction { get; set; } = CompanionMotionReaction.None;
+        public string Mood { get; set; } = "idle";
+        public string ReasonSummary { get; set; } = "No recent aggregate activity.";
+        public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+        public static CompanionMotionState Idle(string repositoryId)
+        {
+            return new CompanionMotionState { RepositoryId = repositoryId ?? string.Empty };
+        }
+    }
+
+    [Serializable]
+    public sealed class CompanionMotionSignal
+    {
+        public string RepositoryId { get; set; } = string.Empty;
+        public CountBucket RecentGitChangedFiles { get; set; } = CountBucket.Unknown;
+        public CountBucket CommitCount { get; set; } = CountBucket.Unknown;
+        public LineChangeBucket AddedLines { get; set; } = LineChangeBucket.Unknown;
+        public LineChangeBucket DeletedLines { get; set; } = LineChangeBucket.Unknown;
+        public int RecentRepositoryXp { get; set; }
+        public CountBucket AiAgentSessionCount { get; set; } = CountBucket.Unknown;
+        public CountBucket AiAgentInteractionCount { get; set; } = CountBucket.Unknown;
+        public TokenUsageBucket EstimatedTokenActivity { get; set; } = TokenUsageBucket.Unknown;
+        public int AiAgentXp { get; set; }
+        public bool HasPendingReview { get; set; }
+        public bool CanLevelUp { get; set; }
+        public bool HasWarnings { get; set; }
+        public CompanionMotionReaction ForcedReaction { get; set; } = CompanionMotionReaction.None;
+    }
+
+    public static class CompanionMotionStateResolver
+    {
+        public static CompanionMotionState Resolve(CompanionMotionSignal signal)
+        {
+            signal = signal ?? new CompanionMotionSignal();
+            var gitScore = CountBucketScore(signal.RecentGitChangedFiles) +
+                           CountBucketScore(signal.CommitCount) +
+                           LineBucketScore(signal.AddedLines) +
+                           LineBucketScore(signal.DeletedLines) +
+                           Math.Min(4, Math.Max(0, signal.RecentRepositoryXp) / 100);
+            var aiScore = CountBucketScore(signal.AiAgentSessionCount) +
+                          CountBucketScore(signal.AiAgentInteractionCount) +
+                          TokenBucketScore(signal.EstimatedTokenActivity) +
+                          Math.Min(4, Math.Max(0, signal.AiAgentXp) / 100);
+            var total = gitScore + aiScore;
+            var state = CompanionMotionState.Idle(signal.RepositoryId);
+
+            if (signal.HasWarnings)
+            {
+                state.ActivityLevel = CompanionActivityLevel.Warning;
+                state.Reaction = CompanionMotionReaction.WarningShake;
+                state.Mood = "cautious";
+                state.MovementSpeed = 0.55f;
+                state.BounceAmplitude = 4.0f;
+                state.PulseFrequency = 0.8f;
+                state.ReasonSummary = "Warnings need attention.";
+            }
+            else if (signal.CanLevelUp)
+            {
+                state.ActivityLevel = CompanionActivityLevel.ReadyToEvolve;
+                state.Reaction = CompanionMotionReaction.EvolvePulse;
+                state.Mood = "readyToEvolve";
+                state.MovementSpeed = 0.85f;
+                state.BounceAmplitude = 8.0f;
+                state.IdleFrequency = 1.1f;
+                state.PulseFrequency = 1.4f;
+                state.ReasonSummary = "Enough XP is stored for evolution.";
+            }
+            else if (signal.HasPendingReview)
+            {
+                state.ActivityLevel = CompanionActivityLevel.Medium;
+                state.Reaction = CompanionMotionReaction.ReadyToReview;
+                state.Mood = "attention";
+                state.MovementSpeed = 0.75f;
+                state.BounceAmplitude = 6.0f;
+                state.PulseFrequency = 1.0f;
+                state.ReasonSummary = "A pending review is ready.";
+            }
+            else if (total >= 10)
+            {
+                state.ActivityLevel = CompanionActivityLevel.High;
+                state.Reaction = aiScore > gitScore ? CompanionMotionReaction.TokenPulse : CompanionMotionReaction.FocusedWander;
+                state.Mood = aiScore > gitScore ? "thinking" : "focused";
+                state.MovementSpeed = 1.2f;
+                state.BounceAmplitude = 7.0f;
+                state.IdleFrequency = 1.25f;
+                state.PulseFrequency = aiScore > 0 ? 1.1f : 0.6f;
+                state.ReasonSummary = aiScore > gitScore ? "High AI/token aggregate activity." : "High Git aggregate activity.";
+            }
+            else if (total >= 5)
+            {
+                state.ActivityLevel = CompanionActivityLevel.Medium;
+                state.Reaction = aiScore > 0 ? CompanionMotionReaction.AiPulse : CompanionMotionReaction.FocusedWander;
+                state.Mood = aiScore > 0 ? "aiAssisted" : "focused";
+                state.MovementSpeed = 0.85f;
+                state.BounceAmplitude = 5.0f;
+                state.IdleFrequency = 0.95f;
+                state.PulseFrequency = aiScore > 0 ? 0.9f : 0.4f;
+                state.ReasonSummary = aiScore > 0 ? "AI agent aggregate activity detected." : "Moderate Git aggregate activity.";
+            }
+            else if (total > 0)
+            {
+                state.ActivityLevel = CompanionActivityLevel.Low;
+                state.Reaction = CompanionMotionReaction.CalmWander;
+                state.Mood = "calm";
+                state.MovementSpeed = 0.55f;
+                state.BounceAmplitude = 3.0f;
+                state.IdleFrequency = 0.75f;
+                state.PulseFrequency = 0.25f;
+                state.ReasonSummary = "Light aggregate activity detected.";
+            }
+
+            if (signal.ForcedReaction != CompanionMotionReaction.None)
+            {
+                state.Reaction = signal.ForcedReaction;
+                if (signal.ForcedReaction == CompanionMotionReaction.GrowthSaved)
+                {
+                    state.Mood = "growthSaved";
+                    state.PulseFrequency = Math.Max(state.PulseFrequency, 1.0f);
+                    state.BounceAmplitude = Math.Max(state.BounceAmplitude, 6.0f);
+                    state.ReasonSummary = "Growth was saved.";
+                }
+                else if (signal.ForcedReaction == CompanionMotionReaction.LevelUp)
+                {
+                    state.Mood = "levelUp";
+                    state.PulseFrequency = Math.Max(state.PulseFrequency, 1.4f);
+                    state.BounceAmplitude = Math.Max(state.BounceAmplitude, 9.0f);
+                    state.ReasonSummary = "Evolution was saved.";
+                }
+            }
+
+            state.UpdatedAt = DateTimeOffset.UtcNow;
+            return state;
+        }
+
+        private static int CountBucketScore(CountBucket bucket)
+        {
+            switch (bucket)
+            {
+                case CountBucket.One: return 1;
+                case CountBucket.Small: return 2;
+                case CountBucket.Medium: return 4;
+                case CountBucket.Large: return 6;
+                case CountBucket.Huge: return 8;
+                default: return 0;
+            }
+        }
+
+        private static int LineBucketScore(LineChangeBucket bucket)
+        {
+            switch (bucket)
+            {
+                case LineChangeBucket.Small: return 1;
+                case LineChangeBucket.Medium: return 2;
+                case LineChangeBucket.Large: return 4;
+                case LineChangeBucket.Huge: return 6;
+                default: return 0;
+            }
+        }
+
+        private static int TokenBucketScore(TokenUsageBucket bucket)
+        {
+            switch (bucket)
+            {
+                case TokenUsageBucket.Small: return 1;
+                case TokenUsageBucket.Medium: return 3;
+                case TokenUsageBucket.Large: return 5;
+                case TokenUsageBucket.Huge: return 7;
+                default: return 0;
+            }
+        }
+    }
+
+    [Serializable]
     public sealed class CompanionReactionProfile
     {
         public CompanionReaction PrimaryClickReaction { get; set; } = CompanionReaction.Tap;
@@ -197,6 +407,19 @@ namespace TokenForge.Client.Domain
 
         private static CompanionMotionProfile MotionProfileFor(CompanionStage stage, CompanionDesktopMotionMode mode)
         {
+            if (mode == CompanionDesktopMotionMode.Calm)
+            {
+                return new CompanionMotionProfile
+                {
+                    DefaultMode = CompanionMotionMode.Idle,
+                    IdleRadius = 0f,
+                    WanderRadius = 0f,
+                    WanderSpeed = 0f,
+                    DecisionIntervalSeconds = 10f,
+                    AllowsWandering = false
+                };
+            }
+
             var scale = mode == CompanionDesktopMotionMode.Calm ? 0.65f : mode == CompanionDesktopMotionMode.Playful ? 1.25f : 1f;
             switch (stage)
             {
@@ -304,6 +527,10 @@ namespace TokenForge.Client.Domain
         public CompanionArchetype Archetype { get; set; } = CompanionArchetype.Unknown;
         public int Level { get; set; } = 1;
         public int TotalXp { get; set; }
+        public int CurrentXp { get; set; }
+        public int TotalLifetimeXp { get; set; }
+        public int XpRequiredForNextLevel { get; set; } = 250;
+        public bool CanLevelUp { get; set; }
         public int XpToNextStage { get; set; } = 250;
         public CompanionStatProfile Stats { get; set; } = CompanionStatProfile.Empty();
         public CompanionGrowthProfile GrowthProfile { get; set; } = new CompanionGrowthProfile();
@@ -327,7 +554,10 @@ namespace TokenForge.Client.Domain
     {
         public int SchemaVersion { get; set; } = 1;
         public string RepositoryHash { get; set; } = string.Empty;
-        public string SafeRepositoryAlias { get; set; } = "Local Repository";
+        public string SafeRepositoryAlias { get; set; } = "Repository";
+        public DateTimeOffset? ApprovedAtUtc { get; set; }
+        public string ConnectionSource { get; set; } = "userSelected";
+        public string CompanionId { get; set; } = Guid.NewGuid().ToString("N");
         public CompanionState CompanionState { get; set; } = CompanionState.CreateDefault();
         public DesktopCompanionSettings DesktopCompanionSettings { get; set; } = DesktopCompanionSettings.CreateDefault();
         public List<SourceProviderMixEntry> SourceProviderMix { get; set; } = new List<SourceProviderMixEntry>();

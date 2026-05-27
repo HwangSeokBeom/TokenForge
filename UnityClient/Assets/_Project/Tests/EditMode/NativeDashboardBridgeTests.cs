@@ -158,7 +158,10 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("agentProviders", json);
             StringAssert.Contains("repositories", json);
             StringAssert.Contains("review", json);
-            StringAssert.Contains("No Agents", json);
+            StringAssert.Contains("evolveActionVisible", json);
+            StringAssert.Contains("xpProgressRatio", json);
+            StringAssert.Contains("motion", json);
+            StringAssert.Contains("AI Agents: 0 connected", json);
             Assert.IsFalse(json.Contains("Cdx 0%"));
         }
 
@@ -476,9 +479,18 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("activityScreenWithActivity", source);
             StringAssert.Contains("TokenForge Settings", source);
             StringAssert.Contains("TokenForgeSettingsSwitchRow", source);
+            StringAssert.Contains("TokenForgeDashboardCompanionPreviewView", source);
+            StringAssert.Contains("startDashboardPreviewAnimation", source);
+            StringAssert.Contains("xpProgressRatio", source);
+            StringAssert.Contains("Evolve Token", source);
+            StringAssert.Contains("View Growth", source);
+            StringAssert.Contains("TokenForgeMenuCanLevelUp", source);
             StringAssert.Contains("NSSwitch", source);
             StringAssert.Contains("Click anywhere in this row", source);
             StringAssert.Contains("Available in a signed release build.", source);
+            StringAssert.Contains("NSPointInRect(togglePoint, self.toggleControl.bounds)", source);
+            StringAssert.Contains("Connect a repository to customize its companion.", source);
+            Assert.IsFalse(source.Contains("%ld/%ld XP, overflow carries forward"));
             StringAssert.Contains("skinTileWithId", source);
             StringAssert.Contains("SetCompanionOverlayVisualTheme", source);
             StringAssert.Contains("repository.add", source);
@@ -486,7 +498,7 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("review.saveGrowth", source);
             StringAssert.Contains("review.viewDetails", source);
             StringAssert.Contains("agent.autoDetect", source);
-            StringAssert.Contains("No Agents", source);
+            StringAssert.Contains("AI Agents: 0 connected", source);
             Assert.IsFalse(source.Contains("Native shell preferences"));
         }
 

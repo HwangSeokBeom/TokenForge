@@ -48,6 +48,48 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void WanderMovementOffStopsMotionProfileImmediately()
+        {
+            var service = new FakeOverlayService();
+            var movement = new CompanionDesktopMovementController(service);
+            var settings = DesktopCompanionSettings.CreateDefault();
+            settings.IsDesktopCompanionEnabled = true;
+            settings.MotionMode = CompanionDesktopMotionMode.Calm;
+            service.Create();
+            service.Show();
+
+            movement.Tick(0.5f, new CompanionState { Stage = CompanionStage.Junior, TotalXp = 1200 }, settings);
+
+            Assert.IsNotNull(service.LastMotionProfile);
+            Assert.IsFalse(service.LastMotionProfile.MotionProfile.AllowsWandering);
+            Assert.AreEqual(0f, service.LastMotionProfile.MotionProfile.WanderSpeed);
+        }
+
+        [Test]
+        public void MotionIntensityScalesNativeOverlayProfile()
+        {
+            var service = new FakeOverlayService();
+            var movement = new CompanionDesktopMovementController(service);
+            var settings = DesktopCompanionSettings.CreateDefault();
+            settings.IsDesktopCompanionEnabled = true;
+            settings.MotionMode = CompanionDesktopMotionMode.Normal;
+            service.Create();
+            service.Show();
+
+            movement.Tick(0.5f, new CompanionState { Stage = CompanionStage.Junior, TotalLifetimeXp = 1200, CurrentXp = 120 }, settings, new CompanionMotionState
+            {
+                MovementSpeed = 1.4f,
+                BounceAmplitude = 8f,
+                IdleFrequency = 1.2f,
+                Reaction = CompanionMotionReaction.ReadyToReview
+            });
+
+            Assert.IsNotNull(service.LastMotionProfile);
+            Assert.Greater(service.LastMotionProfile.MotionProfile.WanderSpeed, 23f);
+            Assert.AreEqual(CompanionAnimationState.Hop, service.LastMotionProfile.IdleAnimation);
+        }
+
+        [Test]
         public void MacLifecycleBridgeNoOpsOutsideMacPlayerBuild()
         {
             var service = new MacApplicationLifecycleService();
@@ -134,6 +176,23 @@ namespace TokenForge.Client.Tests
 
             Assert.AreEqual(0, lifecycle.ShowCount);
             Assert.AreEqual(0, overlay.ReactionCount);
+            UnityEngine.Object.DestroyImmediate(controllerObject);
+        }
+
+        [Test]
+        public void ClickReactionOffDisablesNativeClickCallback()
+        {
+            var overlay = new FakeOverlayService();
+            var lifecycle = new FakeLifecycleService();
+            var controllerObject = new GameObject("Desktop Companion Controller");
+            var controller = controllerObject.AddComponent<DesktopCompanionOverlayController>();
+            var settings = DesktopCompanionSettings.CreateDefault();
+            settings.IsDesktopCompanionEnabled = true;
+            settings.IsClickThroughEnabled = true;
+            controller.Initialize(overlay, lifecycle);
+            controller.ApplySettings(settings, CompanionState.CreateDefault());
+
+            Assert.IsFalse(overlay.LastClickEnabled);
             UnityEngine.Object.DestroyImmediate(controllerObject);
         }
 
@@ -264,7 +323,7 @@ namespace TokenForge.Client.Tests
         {
             var lifecycle = new FakeLifecycleService();
 
-            lifecycle.UpdateStatusItem("Token", CompanionStage.Egg, CompanionArchetype.Unknown, 1, "Local Repository 1", "Codex selected", "Local only", true, false, true, false);
+            lifecycle.UpdateStatusItem("Token", CompanionStage.Egg, CompanionArchetype.Unknown, 1, "Repository 1", "Codex selected", "Local only", true, false, true, false);
             lifecycle.ShowMainWindow();
             lifecycle.HideMainWindow();
             lifecycle.Quit();
@@ -342,6 +401,7 @@ namespace TokenForge.Client.Tests
             public int ReactionCount { get; private set; }
             public int ResetPositionCount { get; private set; }
             public int MotionProfileSetCount { get; private set; }
+            public CompanionVisualProfile LastMotionProfile { get; private set; }
             public CompanionStage LastStage { get; private set; }
             public CompanionArchetype LastArchetype { get; private set; }
             public string LastVisualThemeId { get; private set; }
@@ -399,6 +459,7 @@ namespace TokenForge.Client.Tests
             public void SetMotionProfile(CompanionVisualProfile profile)
             {
                 MotionProfileSetCount++;
+                LastMotionProfile = profile;
             }
 
             public void TriggerReaction(CompanionReaction reaction, string speechText)

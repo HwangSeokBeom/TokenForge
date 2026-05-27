@@ -28,6 +28,7 @@ namespace TokenForge.Client.Platform
         ConnectAgent,
         SelectCodexLogFolder,
         ManageAgents,
+        LevelUpCompanion,
         SelectRepository,
         AnalyzeRepository,
         DisconnectRepository,
@@ -132,7 +133,8 @@ namespace TokenForge.Client.Platform
         public NativeProviderUsagePercentage[] providerUsagePercentages = new NativeProviderUsagePercentage[0];
         public NativeActivityState activity = NativeActivityState.CreateDefault();
         public NativeReviewState review = NativeReviewState.CreateDefault();
-        public string statusText = "No Agents";
+        public string statusText = "Repo: None · AI Agents: 0 connected";
+        public int stateRevision;
 
         public static NativeDashboardState CreateDefault()
         {
@@ -154,8 +156,19 @@ namespace TokenForge.Client.Platform
         public int level = 1;
         public int xp;
         public int xpToNextLevel = 250;
+        public int totalLifetimeXP;
+        public bool canLevelUp;
+        public string levelUpStatusText = "Earn more XP to level up.";
+        public string levelUpDisabledReason = "Earn enough XP before leveling up.";
         public string mood = "active";
         public string skin = "orange_cat";
+        public bool evolveActionVisible;
+        public string evolveActionHiddenReason = "currentXP below requirement";
+        public string xpStatusText = "0 XP · 250 XP required";
+        public string carryForwardText = string.Empty;
+        public float xpProgressRatio;
+        public string dashboardAnimationState = "idle";
+        public NativeCompanionMotionState motion = NativeCompanionMotionState.CreateDefault();
 
         public static NativeCompanionState CreateDefault()
         {
@@ -216,7 +229,7 @@ namespace TokenForge.Client.Platform
     public sealed class NativeRepositoryListItem
     {
         public string id = string.Empty;
-        public string name = "Local Repository";
+        public string name = "Repository";
         public string safePath = "Approved local folder";
         public string companion = "Egg · Lv 1";
         public string lastAnalyzed = "Not analyzed";
@@ -229,6 +242,40 @@ namespace TokenForge.Client.Platform
         public bool canRestore;
         public bool canDelete;
         public bool archived;
+        public string avatarSkin = "orange_cat";
+        public string stage = "Egg";
+        public int stageIndex;
+        public int level = 1;
+        public int currentXP;
+        public int requiredXP = 250;
+        public bool canLevelUp;
+        public string xpStatusText = "0 XP · 250 XP required";
+        public string recentGrowthSource = "None";
+        public string motionMood = "idle";
+        public string motionReason = "No recent aggregate activity.";
+        public bool canViewGrowth = true;
+        public bool canEvolve;
+        public string sourceBadge = "Connected";
+    }
+
+    [Serializable]
+    public sealed class NativeCompanionMotionState
+    {
+        public string repositoryId = string.Empty;
+        public string activityLevel = "idle";
+        public float movementSpeed = 0.35f;
+        public float bounceAmplitude = 2.0f;
+        public float idleFrequency = 0.6f;
+        public float pulseFrequency = 0.2f;
+        public string reaction = "none";
+        public string mood = "idle";
+        public string reasonSummary = "No recent aggregate activity.";
+        public string updatedAt = string.Empty;
+
+        public static NativeCompanionMotionState CreateDefault()
+        {
+            return new NativeCompanionMotionState();
+        }
     }
 
     [Serializable]
@@ -319,6 +366,8 @@ namespace TokenForge.Client.Platform
         public string generatedAt = string.Empty;
         public string status = "none";
         public string privacyNote = "Raw prompt, code, file content, and command logs are not stored.";
+        public string evidenceSummary = string.Empty;
+        public string categoryBreakdown = string.Empty;
 
         public static NativeReviewState CreateDefault()
         {
@@ -339,5 +388,11 @@ namespace TokenForge.Client.Platform
         public string currentStep = string.Empty;
         public string actionKey = string.Empty;
         public string disabledReason = string.Empty;
+        public int xpDelta;
+        public string categoryBreakdown = string.Empty;
+        public string confidence = string.Empty;
+        public string warnings = string.Empty;
+        public string target = string.Empty;
+        public string period = string.Empty;
     }
 }

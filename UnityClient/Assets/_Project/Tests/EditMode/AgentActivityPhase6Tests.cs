@@ -242,6 +242,44 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void AnalyzeAgentSourceForOnboardingCreatesPendingNativeReview()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName());
+            var repository = new SaveDataRepository(directory);
+            var sanitizer = new PrivacySanitizer();
+            var agentFlow = new AgentAnalysisFlowController(
+                new AgentLogActivityProvider(new AgentActivityAnalyzer(new FakeReader(CodexSampleEntries()))),
+                repository,
+                null,
+                sanitizer);
+            var viewModel = new ApprovedActivityAnalysisViewModel(
+                new GitAnalysisFlowController(new CancelledRepositoryPicker(), new GitAggregateAnalyzer(null, sanitizer), repository, null, sanitizer),
+                agentFlow,
+                new CancelledAgentLogLocationPicker(),
+                repository,
+                sanitizer,
+                new ApprovedLocationSettingsRepository(Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName())));
+            viewModel.SelectedAgentProviderType = AgentProviderType.Codex;
+            var source = viewModel.Onboarding.AgentSources.First(item => item.SourceType == ConnectedAgentSourceType.Codex);
+            source.Selected = true;
+            source.State = AgentSourceSetupState.ReadyToAnalyze;
+            source.SafeLabel = "Codex local activity";
+            source.SafeLocationHash = "codex-safe-location";
+            agentFlow.SelectApprovedLogLocation(Input(AgentProviderType.Codex));
+
+            var result = RunAsync(() => viewModel.AnalyzeAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex));
+            var loaded = repository.LoadAsync().GetAwaiter().GetResult();
+
+            Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
+            Assert.IsNotNull(loaded.PendingNativeActivityReview);
+            Assert.AreEqual("aiAgent", loaded.PendingNativeActivityReview.SourceKind);
+            Assert.Greater(loaded.PendingNativeActivityReview.EstimatedXpDelta, 0);
+            Assert.AreEqual("aiAgent", loaded.ActivityReviews[0].SourceType);
+            Assert.AreEqual("codex", loaded.ActivityReviews[0].ProviderId);
+            Assert.AreEqual("pending", loaded.ActivityReviews[0].Status);
+        }
+
+        [Test]
         public void AgentFlow_SavedJsonContainsNoRawPathPromptResponseCodeCommandOrSecrets()
         {
             var directory = Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName());
@@ -300,6 +338,16 @@ namespace TokenForge.Client.Tests
                 Entry("{\"provider\":\"claude\",\"timestamp\":\"2026-05-14T01:03:00Z\",\"tool_name\":\"Edit\",\"file_path\":\"" + RawPath + "\",\"response\":\"" + RawResponseText + "\",\"sourceText\":\"" + Escape(RawSourceSnippet) + "\"}"),
                 Entry("{\"provider\":\"claude\",\"timestamp\":\"2026-05-14T01:04:00Z\",\"tool_name\":\"Bash\",\"command\":\"" + RawCommand + "\",\"authorization\":\"" + RawToken + "\",\"username\":\"alice\"}"),
                 Entry("{\"provider\":\"claude\",\"timestamp\":\"2026-05-14T01:05:00Z\",\"tool_name\":\"Grep\",\"pattern\":\"" + RawSecret + "\"}")
+            };
+        }
+
+        private static List<AgentLogEntry> CodexSampleEntries()
+        {
+            return new List<AgentLogEntry>
+            {
+                Entry("{\"provider\":\"codex\",\"timestamp\":\"2026-05-14T03:00:00Z\",\"session_id\":\"codex-session-1\",\"type\":\"message\",\"role\":\"user\",\"prompt\":\"" + RawPromptText + "\"}"),
+                Entry("{\"provider\":\"codex\",\"timestamp\":\"2026-05-14T03:01:00Z\",\"tool\":\"exec_command\",\"command\":\"" + RawCommand + "\"}"),
+                Entry("{\"provider\":\"codex\",\"timestamp\":\"2026-05-14T03:02:00Z\",\"tool\":\"apply_patch\",\"file_path\":\"" + RawPath + "\",\"output\":\"" + RawResponseText + "\"}")
             };
         }
 
@@ -452,6 +500,22 @@ namespace TokenForge.Client.Tests
             public Task<AgentLogReadResult> ReadAsync(AgentAnalysisInput input, CancellationToken cancellationToken)
             {
                 return Task.FromResult(AgentLogReadResult.Success(entries, new List<string>()));
+            }
+        }
+
+        private sealed class CancelledRepositoryPicker : TokenForge.Client.Platform.IRepositoryPicker
+        {
+            public Task<TokenForge.Client.Platform.RepositoryPickerResult> PickRepositoryAsync(CancellationToken cancellationToken = default)
+            {
+                return Task.FromResult(TokenForge.Client.Platform.RepositoryPickerResult.Cancelled());
+            }
+        }
+
+        private sealed class CancelledAgentLogLocationPicker : TokenForge.Client.Platform.IAgentLogLocationPicker
+        {
+            public Task<TokenForge.Client.Platform.AgentLogLocationPickerResult> PickAgentLogLocationAsync(CancellationToken cancellationToken = default)
+            {
+                return Task.FromResult(TokenForge.Client.Platform.AgentLogLocationPickerResult.Cancelled());
             }
         }
 

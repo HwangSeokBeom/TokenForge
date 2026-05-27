@@ -54,21 +54,41 @@ namespace TokenForge.Client.Domain
                 .Select(group => group.OrderByDescending(profile => profile.UpdatedAtUtc).First())
                 .ToList();
 
-            if (saveData.RepositoryCompanionProfiles.Count == 0)
+            foreach (var profile in saveData.RepositoryCompanionProfiles)
             {
-                saveData.RepositoryCompanionProfiles.Add(CreateDefaultProfileFromLegacyCompanion(saveData.CompanionState));
+                if (IsStaleFallbackProfile(profile) && profile.ArchivedAtUtc == null)
+                {
+                    profile.ConnectionSource = string.IsNullOrWhiteSpace(profile.ConnectionSource) ? "debugFallback" : profile.ConnectionSource;
+                    profile.ArchivedAtUtc = DateTimeOffset.UtcNow;
+                    profile.UpdatedAtUtc = DateTimeOffset.UtcNow;
+                }
+            }
+
+            saveData.ConnectedProjects = saveData.ConnectedProjects ?? new List<ConnectedProject>();
+            foreach (var project in saveData.ConnectedProjects)
+            {
+                if (project == null)
+                {
+                    continue;
+                }
+
+                if (IsStaleFallbackProject(project))
+                {
+                    project.IsActive = false;
+                    project.IsArchived = true;
+                    project.ConnectionSource = string.IsNullOrWhiteSpace(project.ConnectionSource) ? "debugFallback" : project.ConnectionSource;
+                }
             }
 
             if (string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash) ||
                 saveData.RepositoryCompanionProfiles.All(profile => profile.ArchivedAtUtc != null || !string.Equals(profile.RepositoryHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal)))
             {
-                saveData.SelectedRepositoryHash = (saveData.RepositoryCompanionProfiles.FirstOrDefault(profile => profile.ArchivedAtUtc == null) ??
-                                                   saveData.RepositoryCompanionProfiles[0]).RepositoryHash;
+                var nextActive = saveData.RepositoryCompanionProfiles.FirstOrDefault(profile => profile.ArchivedAtUtc == null);
+                saveData.SelectedRepositoryHash = nextActive?.RepositoryHash ?? string.Empty;
             }
 
             var selected = saveData.RepositoryCompanionProfiles.FirstOrDefault(profile => profile.ArchivedAtUtc == null && string.Equals(profile.RepositoryHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal)) ??
-                           saveData.RepositoryCompanionProfiles.FirstOrDefault(profile => profile.ArchivedAtUtc == null) ??
-                           saveData.RepositoryCompanionProfiles.FirstOrDefault();
+                           saveData.RepositoryCompanionProfiles.FirstOrDefault(profile => profile.ArchivedAtUtc == null);
             if (selected != null)
             {
                 if (ShouldMigrateLegacyDesktopSettings(selected.DesktopCompanionSettings, saveData.DesktopCompanionSettings))
@@ -78,6 +98,11 @@ namespace TokenForge.Client.Domain
 
                 saveData.CompanionState = CompanionProgressionRules.Normalize(selected.CompanionState);
                 saveData.DesktopCompanionSettings = CloneDesktopCompanionSettings(selected.DesktopCompanionSettings);
+            }
+            else
+            {
+                saveData.CompanionState = CompanionState.CreateDefault();
+                saveData.DesktopCompanionSettings = CloneDesktopCompanionSettings(saveData.DesktopCompanionSettings);
             }
 
             return saveData;
@@ -120,23 +145,14 @@ namespace TokenForge.Client.Domain
             var profile = saveData.RepositoryCompanionProfiles.FirstOrDefault(item => string.Equals(item.RepositoryHash, hash, StringComparison.Ordinal));
             if (profile == null)
             {
-                var defaultProfile = saveData.RepositoryCompanionProfiles.FirstOrDefault(item =>
-                    string.Equals(item.RepositoryHash, DefaultLocalRepositoryHash, StringComparison.Ordinal) &&
-                    (item.CompanionState?.TotalXp ?? 0) <= 0);
-                if (defaultProfile != null)
-                {
-                    profile = defaultProfile;
-                    profile.RepositoryHash = hash;
-                    profile.SafeRepositoryAlias = SafeRepositoryAlias(repositoryRootPath, "Local Repository");
-                }
-                else
-                {
-                    profile = CreateProfile(hash, SafeRepositoryAlias(repositoryRootPath, NextRepositoryAlias(saveData)));
-                    saveData.RepositoryCompanionProfiles.Add(profile);
-                }
+                profile = CreateProfile(hash, SafeRepositoryAlias(repositoryRootPath));
+                saveData.RepositoryCompanionProfiles.Add(profile);
             }
 
             profile.ArchivedAtUtc = null;
+            profile.ApprovedAtUtc = profile.ApprovedAtUtc ?? DateTimeOffset.UtcNow;
+            profile.ConnectionSource = "userSelected";
+            profile.SafeRepositoryAlias = SafeRepositoryAlias(repositoryRootPath);
             profile.UpdatedAtUtc = DateTimeOffset.UtcNow;
             saveData.SelectedRepositoryHash = profile.RepositoryHash;
             saveData.CompanionState = CompanionProgressionRules.Normalize(profile.CompanionState);
@@ -153,8 +169,7 @@ namespace TokenForge.Client.Domain
             }
 
             return saveData.RepositoryCompanionProfiles.FirstOrDefault(profile => profile.ArchivedAtUtc == null && string.Equals(profile.RepositoryHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal)) ??
-                   saveData.RepositoryCompanionProfiles.FirstOrDefault(profile => profile.ArchivedAtUtc == null) ??
-                   saveData.RepositoryCompanionProfiles.FirstOrDefault();
+                   saveData.RepositoryCompanionProfiles.FirstOrDefault(profile => profile.ArchivedAtUtc == null);
         }
 
         public static RepositoryCompanionProfile ApplyApprovedGrowth(
@@ -165,11 +180,16 @@ namespace TokenForge.Client.Domain
         {
             saveData = Normalize(saveData);
             var profile = GetSelectedProfile(saveData);
-            if (profile == null)
+            if (profile == null && !string.IsNullOrWhiteSpace(SafeRepositoryHashForSession(session)))
             {
-                profile = CreateDefaultProfileFromLegacyCompanion(saveData.CompanionState);
+                profile = CreateProfile(SafeRepositoryHashForSession(session), NextRepositoryAlias(saveData), saveData.CompanionState);
                 saveData.RepositoryCompanionProfiles.Add(profile);
                 saveData.SelectedRepositoryHash = profile.RepositoryHash;
+            }
+
+            if (profile == null)
+            {
+                return null;
             }
 
             var sessionHash = SafeRepositoryHashForSession(session);
@@ -179,7 +199,17 @@ namespace TokenForge.Client.Domain
                 saveData.SelectedRepositoryHash = sessionHash;
             }
 
-            profile.CompanionState = CompanionProgressionRules.CalculateState(repositorySessions, repositoryGrowthHistory);
+            var previous = CompanionProgressionRules.Normalize(profile.CompanionState);
+            var calculated = CompanionProgressionRules.CalculateState(repositorySessions, repositoryGrowthHistory);
+            var repositoryLifetimeXp = Math.Max(0, calculated.TotalLifetimeXp);
+            var xpDelta = Math.Max(0, repositoryLifetimeXp - Math.Max(0, previous.TotalLifetimeXp));
+            calculated.Level = previous.Level;
+            calculated.CurrentXp = Math.Max(0, previous.CurrentXp) + xpDelta;
+            calculated.TotalLifetimeXp = repositoryLifetimeXp;
+            calculated.TotalXp = repositoryLifetimeXp;
+            calculated.XpRequiredForNextLevel = CompanionProgressionRules.XpRequiredForLevel(calculated.Level);
+            calculated.CanLevelUp = calculated.CurrentXp >= calculated.XpRequiredForNextLevel;
+            profile.CompanionState = CompanionProgressionRules.Normalize(calculated);
             profile.LastApprovedActivityBucket = LastActivityBucket(session);
             profile.UpdatedAtUtc = DateTimeOffset.UtcNow;
             IncrementProviderMix(profile, SafeProvider(session));
@@ -207,8 +237,10 @@ namespace TokenForge.Client.Domain
             var nextActive = saveData.RepositoryCompanionProfiles.FirstOrDefault(item => item.ArchivedAtUtc == null);
             if (nextActive == null)
             {
-                nextActive = CreateProfile(DefaultLocalRepositoryHash, "Local Repository");
-                saveData.RepositoryCompanionProfiles.Add(nextActive);
+                saveData.SelectedRepositoryHash = string.Empty;
+                saveData.CompanionState = CompanionState.CreateDefault();
+                saveData.DesktopCompanionSettings = CloneDesktopCompanionSettings(saveData.DesktopCompanionSettings);
+                return Result.Success();
             }
 
             saveData.SelectedRepositoryHash = nextActive.RepositoryHash;
@@ -224,7 +256,7 @@ namespace TokenForge.Client.Domain
 
         private static RepositoryCompanionProfile CreateDefaultProfileFromLegacyCompanion(CompanionState legacyCompanion)
         {
-            return CreateProfile(DefaultLocalRepositoryHash, "Local Repository", legacyCompanion);
+            return CreateProfile(DefaultLocalRepositoryHash, "Repository", legacyCompanion);
         }
 
         private static RepositoryCompanionProfile CreateProfile(string repositoryHash, string alias, CompanionState companionState = null)
@@ -234,7 +266,10 @@ namespace TokenForge.Client.Domain
             {
                 SchemaVersion = 1,
                 RepositoryHash = repositoryHash ?? string.Empty,
-                SafeRepositoryAlias = string.IsNullOrWhiteSpace(alias) ? "Local Repository" : alias.Trim(),
+                SafeRepositoryAlias = string.IsNullOrWhiteSpace(alias) ? "Repository" : alias.Trim(),
+                ApprovedAtUtc = DateTimeOffset.UtcNow,
+                ConnectionSource = string.Equals(repositoryHash, DefaultLocalRepositoryHash, StringComparison.Ordinal) ? "debugFallback" : "userSelected",
+                CompanionId = Guid.NewGuid().ToString("N"),
                 CompanionState = CompanionProgressionRules.Normalize(companionState),
                 DesktopCompanionSettings = CloneDesktopCompanionSettings(null),
                 SourceProviderMix = new List<SourceProviderMixEntry>(),
@@ -253,13 +288,58 @@ namespace TokenForge.Client.Domain
             profile.SchemaVersion = 1;
             profile.RepositoryHash = profile.RepositoryHash ?? string.Empty;
             profile.SafeRepositoryAlias = string.IsNullOrWhiteSpace(profile.SafeRepositoryAlias)
-                ? "Local Repository"
+                ? "Repository"
                 : profile.SafeRepositoryAlias.Trim();
+            profile.ConnectionSource = string.IsNullOrWhiteSpace(profile.ConnectionSource) ? "userSelected" : profile.ConnectionSource.Trim();
+            profile.CompanionId = string.IsNullOrWhiteSpace(profile.CompanionId) ? Guid.NewGuid().ToString("N") : profile.CompanionId;
             profile.CompanionState = CompanionProgressionRules.Normalize(profile.CompanionState);
             profile.DesktopCompanionSettings = CloneDesktopCompanionSettings(profile.DesktopCompanionSettings);
             profile.SourceProviderMix = profile.SourceProviderMix ?? new List<SourceProviderMixEntry>();
             profile.CreatedAtUtc = profile.CreatedAtUtc == default(DateTimeOffset) ? DateTimeOffset.UtcNow : profile.CreatedAtUtc;
             profile.UpdatedAtUtc = profile.UpdatedAtUtc == default(DateTimeOffset) ? profile.CreatedAtUtc : profile.UpdatedAtUtc;
+        }
+
+        private static bool IsStaleFallbackProfile(RepositoryCompanionProfile profile)
+        {
+            if (profile == null)
+            {
+                return false;
+            }
+
+            return string.Equals(profile.RepositoryHash, DefaultLocalRepositoryHash, StringComparison.Ordinal) ||
+                   string.Equals(profile.SafeRepositoryAlias, "Local Repository", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(profile.ConnectionSource, "auto", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(profile.ConnectionSource, "default", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(profile.ConnectionSource, "unknown", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(profile.ConnectionSource, "dev", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(profile.ConnectionSource, "debugFallback", StringComparison.OrdinalIgnoreCase) ||
+                   (string.Equals(profile.ConnectionSource, "userSelected", StringComparison.OrdinalIgnoreCase) &&
+                    profile.ApprovedAtUtc == null);
+        }
+
+        public static bool IsStaleFallbackProject(ConnectedProject project)
+        {
+            if (project == null)
+            {
+                return false;
+            }
+
+            var displayName = project.DisplayName ?? string.Empty;
+            var alias = project.ProjectAlias ?? string.Empty;
+            var source = project.ConnectionSource ?? string.Empty;
+            var hasApprovalEvidence = project.ApprovedAt != null &&
+                                      (!string.IsNullOrWhiteSpace(project.PathHash) ||
+                                       !string.IsNullOrWhiteSpace(project.ProjectPathHash));
+            return string.Equals(displayName, "Local Repository", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(alias, "Local Repository", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(source, "auto", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(source, "default", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(source, "unknown", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(source, "dev", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(source, "debugFallback", StringComparison.OrdinalIgnoreCase) ||
+                   (string.Equals(source, "userSelected", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(displayName, "Local Repository", StringComparison.OrdinalIgnoreCase) &&
+                    !hasApprovalEvidence);
         }
 
         public static DesktopCompanionSettings CloneDesktopCompanionSettings(DesktopCompanionSettings settings)
@@ -301,23 +381,23 @@ namespace TokenForge.Client.Domain
             return "Repository " + count;
         }
 
-        private static string SafeRepositoryAlias(string repositoryRootPath, string fallback)
+        public static string SafeRepositoryAlias(string repositoryRootPath)
         {
             var alias = string.Empty;
             try
             {
-                alias = Path.GetFileName((repositoryRootPath ?? string.Empty).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                var trimmed = (repositoryRootPath ?? string.Empty).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                alias = Path.GetFileName(trimmed);
             }
             catch (ArgumentException)
             {
                 alias = string.Empty;
             }
 
-            alias = string.IsNullOrWhiteSpace(alias) ? fallback : alias.Trim();
             alias = new string(alias.Where(character => char.IsLetterOrDigit(character) || character == '-' || character == '_' || character == ' ').Take(48).ToArray()).Trim();
-            if (string.IsNullOrWhiteSpace(alias) || new ForbiddenFieldDetector().ContainsSensitiveString(alias))
+            if (string.IsNullOrWhiteSpace(alias) || string.Equals(alias, "Local Repository", StringComparison.OrdinalIgnoreCase) || new ForbiddenFieldDetector().ContainsSensitiveString(alias))
             {
-                alias = string.IsNullOrWhiteSpace(fallback) ? "Local Repository" : fallback;
+                alias = "Repository";
             }
 
             return alias;

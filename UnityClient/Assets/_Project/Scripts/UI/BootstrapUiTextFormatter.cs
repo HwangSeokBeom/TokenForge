@@ -214,8 +214,8 @@ namespace TokenForge.Client.UI
             {
                 case AgentSourceSetupState.Selected: return "selected";
                 case AgentSourceSetupState.DetectingLocalSource: return "detecting local source";
-                case AgentSourceSetupState.LocalSourceDetected:
-                case AgentSourceSetupState.ReadyToAnalyze: return "detected";
+                case AgentSourceSetupState.LocalSourceDetected: return "detected";
+                case AgentSourceSetupState.ReadyToAnalyze: return "connected";
                 case AgentSourceSetupState.PermissionRequired: return "permission required";
                 case AgentSourceSetupState.ManualImportRequired: return "manual import required";
                 case AgentSourceSetupState.AnalysisComplete: return "analysis complete";
@@ -236,7 +236,7 @@ namespace TokenForge.Client.UI
                 return viewModel.Onboarding.GitSafeAlias;
             }
 
-            return viewModel.GitFlow.State == GitAnalysisFlowState.Selected ? "Local Repository 1" : "No source selected";
+            return viewModel.GitFlow.State == GitAnalysisFlowState.Selected ? "Repository 1" : "No source selected";
         }
 
         public static string FriendlyError(string errorCode, string fallbackMessage)

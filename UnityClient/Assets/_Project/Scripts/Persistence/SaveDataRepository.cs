@@ -189,6 +189,11 @@ namespace TokenForge.Client.Persistence
             }
             saveData.GrowthHistory = saveData.GrowthHistory ?? new System.Collections.Generic.List<CharacterGrowthResult>();
             saveData.AppliedNativeReviewIds = saveData.AppliedNativeReviewIds ?? new System.Collections.Generic.List<string>();
+            saveData.ActivityReviews = (saveData.ActivityReviews ?? new System.Collections.Generic.List<ActivityReview>())
+                .Where(review => review != null && !string.IsNullOrWhiteSpace(review.Id))
+                .OrderByDescending(review => review.CreatedAt)
+                .Take(100)
+                .ToList();
             if (saveData.PendingNativeActivityReview != null)
             {
                 saveData.PendingNativeActivityReview.StatDeltas = saveData.PendingNativeActivityReview.StatDeltas ?? CharacterStats.Zero();
@@ -202,7 +207,44 @@ namespace TokenForge.Client.Persistence
                 .Take(20)
                 .ToList();
             saveData.ConnectedProjects = saveData.ConnectedProjects ?? new System.Collections.Generic.List<ConnectedProject>();
+            foreach (var project in saveData.ConnectedProjects)
+            {
+                if (project == null)
+                {
+                    continue;
+                }
+
+                project.Id = string.IsNullOrWhiteSpace(project.Id) ? project.LocalOnlyProjectId : project.Id;
+                project.DisplayName = string.IsNullOrWhiteSpace(project.DisplayName) ? project.ProjectAlias : project.DisplayName;
+                project.PathHash = string.IsNullOrWhiteSpace(project.PathHash) ? project.ProjectPathHash : project.PathHash;
+                project.ConnectionSource = string.IsNullOrWhiteSpace(project.ConnectionSource) ? "migrated" : project.ConnectionSource;
+                project.CompanionId = project.CompanionId ?? string.Empty;
+                if (RepositoryCompanionProfileService.IsStaleFallbackProject(project) ||
+                    string.Equals(project.ConnectionSource, "auto", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(project.ConnectionSource, "default", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(project.ConnectionSource, "unknown", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(project.ConnectionSource, "dev", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(project.ConnectionSource, "debugFallback", StringComparison.OrdinalIgnoreCase))
+                {
+                    project.IsActive = false;
+                    project.IsArchived = true;
+                }
+            }
             saveData.ProviderSettings = saveData.ProviderSettings ?? new System.Collections.Generic.List<ProviderSettings>();
+            foreach (var provider in saveData.ProviderSettings)
+            {
+                if (provider == null)
+                {
+                    continue;
+                }
+
+                provider.DetectedSources = provider.DetectedSources ?? new System.Collections.Generic.List<string>();
+                provider.Warnings = provider.Warnings ?? new System.Collections.Generic.List<string>();
+                provider.Status = string.IsNullOrWhiteSpace(provider.Status)
+                    ? ProviderStatusFromLegacy(provider)
+                    : provider.Status;
+                provider.ApprovedSource = provider.ManualFolderApproved || provider.Selected ? provider.ApprovedSource : string.Empty;
+            }
             saveData.SyncState = saveData.SyncState ?? new SyncState();
             saveData.PrivacyPreferences = saveData.PrivacyPreferences ?? new PrivacyPreferences();
             saveData.UserSettings = saveData.UserSettings ?? new UserSettings();
@@ -211,6 +253,26 @@ namespace TokenForge.Client.Persistence
             saveData.MiniGameHistory = saveData.MiniGameHistory ?? new System.Collections.Generic.List<MiniGameSession>();
             saveData.Achievements = saveData.Achievements ?? new System.Collections.Generic.List<AchievementProgress>();
             return saveData;
+        }
+
+        private static string ProviderStatusFromLegacy(ProviderSettings provider)
+        {
+            if (provider == null || !provider.Enabled)
+            {
+                return "notConfigured";
+            }
+
+            if (provider.Selected && !string.IsNullOrWhiteSpace(provider.SafeLocationHash))
+            {
+                return "connected";
+            }
+
+            if (provider.Detected)
+            {
+                return "detected";
+            }
+
+            return "notConfigured";
         }
 
         private static DesktopCompanionSettings NormalizeDesktopCompanionSettings(DesktopCompanionSettings settings)

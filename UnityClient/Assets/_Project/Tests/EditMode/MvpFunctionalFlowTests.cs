@@ -54,9 +54,8 @@ namespace TokenForge.Client.Tests
             var selected = RunAsync(() => fixture.ViewModel.SelectLocalGitRepositoryForOnboardingAsync());
             Assert.IsTrue(selected.IsSuccess, selected.ErrorMessage);
             Assert.IsTrue(fixture.ViewModel.Onboarding.GitConnected);
-            Assert.AreEqual("Local Repository", fixture.ViewModel.Onboarding.GitSafeAlias);
+            Assert.IsFalse(string.IsNullOrWhiteSpace(fixture.ViewModel.Onboarding.GitSafeAlias));
             Assert.IsFalse(ObjectContainsString(fixture.ViewModel.Onboarding, fixture.RawRepositoryPath));
-            Assert.IsFalse(ObjectContainsString(fixture.ViewModel.Onboarding, RawRepoName));
 
             fixture.ViewModel.ClearGitForOnboarding();
             Assert.IsFalse(fixture.ViewModel.Onboarding.GitConnected);

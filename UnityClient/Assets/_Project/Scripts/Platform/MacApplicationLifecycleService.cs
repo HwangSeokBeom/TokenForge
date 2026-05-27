@@ -108,7 +108,7 @@ namespace TokenForge.Client.Platform
                     (int)stage,
                     (int)archetype,
                     Math.Max(1, level),
-                    SafeMenuText(repositoryAlias, "Local Repository"),
+                    SafeMenuText(repositoryAlias, "Not selected"),
                     SafeMenuText(agentStatus, "No agent connected"),
                     SafeMenuText(syncStatus, "Local only"),
                     companionEnabled,

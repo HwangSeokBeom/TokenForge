@@ -256,6 +256,13 @@ namespace TokenForge.Client.Persistence
             entry.LocalId = string.IsNullOrWhiteSpace(entry.LocalId) ? Guid.NewGuid().ToString("N") : SafeIdentifier(entry.LocalId);
             entry.DisplayAlias = SafeAlias(entry.DisplayAlias);
             entry.LocalPath = entry.LocalPath ?? string.Empty;
+            if (entry.SourceType == ApprovedLocationSourceType.Git &&
+                string.Equals(entry.DisplayAlias, "Local Repository", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(entry.LocalPath))
+            {
+                entry.DisplayAlias = SafeAlias(Path.GetFileName(entry.LocalPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)));
+            }
+
             if (entry.CreatedAt == default)
             {
                 entry.CreatedAt = DateTimeOffset.UtcNow;
