@@ -89,7 +89,7 @@ if ! TOKENFORGE_VERIFY_RUNTIME=1 open "${VERIFY_APP_PATH}" --args -TokenForgeVer
   echo "Runtime PASS is NOT claimed."
   exit 10
 fi
-sleep 20
+sleep "${VERIFY_RUNTIME_WAIT_SECONDS:-30}"
 log show --style compact --predicate 'process CONTAINS "TokenForge"' --last 2m --debug > "${LOG_SHOW_FILE}" 2>&1 || true
 cleanup
 trap - EXIT

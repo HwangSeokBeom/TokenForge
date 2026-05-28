@@ -11,7 +11,8 @@ namespace TokenForge.Client.Platform
         event Action<Vector2> DragEnded;
         bool IsAvailable { get; }
         bool IsNativeOverlay { get; }
-        bool IsDragging { get; }
+        bool IsAnyOverlayDragging();
+        bool IsOverlayDragging(string repositoryId);
         CompanionDesktopOverlayState State { get; }
         string StatusMessage { get; }
         bool Create();
@@ -26,6 +27,10 @@ namespace TokenForge.Client.Platform
         void ResetPosition();
         void SetClickEnabled(bool enabled);
         void SetClickThrough(bool clickThrough);
+        void SetCompanionFarmSnapshots(DesktopCompanionFarmState farmState);
+        void ShowAllRepositoryCompanions(string source = "csharp.showAll");
+        void HideAllRepositoryCompanions(string source = "csharp.hideAll");
+        void SetOverlayFrame(string repositoryId, Rect frame, string source = "csharp.setFrame");
         void Destroy();
     }
 }

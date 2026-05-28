@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using TokenForge.Client.Domain;
 using UnityEngine;
@@ -10,12 +11,15 @@ namespace TokenForge.Client.Platform
         private const string LogPrefix = "[DesktopCompanion]";
         private delegate void OverlayClickedCallback();
         private delegate void OverlayDragEndedCallback(float x, float y);
+        private delegate void OverlayRepositoryDragEndedCallback(string repositoryId, float x, float y);
         private static readonly OverlayClickedCallback ClickedCallback = OnNativeOverlayClicked;
         private static readonly OverlayClickedCallback DoubleClickedCallback = OnNativeOverlayDoubleClicked;
         private static readonly OverlayDragEndedCallback DragEndedCallback = OnNativeOverlayDragEnded;
+        private static readonly OverlayRepositoryDragEndedCallback RepositoryDragEndedCallback = OnNativeOverlayRepositoryDragEnded;
         private static event Action GlobalClicked;
         private static event Action GlobalDoubleClicked;
         private static event Action<Vector2> GlobalDragEnded;
+        private static event Action<string, Vector2> GlobalRepositoryDragEnded;
         private bool createAttempted;
         private bool clickCallbackRegistered;
         private bool? lastClickThrough;
@@ -25,12 +29,14 @@ namespace TokenForge.Client.Platform
         public event Action Clicked;
         public event Action DoubleClicked;
         public event Action<Vector2> DragEnded;
+        public event Action<string, Vector2> RepositoryDragEnded;
 
         public MacDesktopCompanionOverlayService()
         {
             GlobalClicked += RaiseClicked;
             GlobalDoubleClicked += RaiseDoubleClicked;
             GlobalDragEnded += RaiseDragEnded;
+            GlobalRepositoryDragEnded += RaiseRepositoryDragEnded;
         }
 
         ~MacDesktopCompanionOverlayService()
@@ -38,6 +44,7 @@ namespace TokenForge.Client.Platform
             GlobalClicked -= RaiseClicked;
             GlobalDoubleClicked -= RaiseDoubleClicked;
             GlobalDragEnded -= RaiseDragEnded;
+            GlobalRepositoryDragEnded -= RaiseRepositoryDragEnded;
         }
 
         public bool IsAvailable
@@ -54,7 +61,16 @@ namespace TokenForge.Client.Platform
 
         public CompanionDesktopOverlayState State { get; private set; } = CompanionDesktopOverlayState.Unavailable;
         public bool IsNativeOverlay => IsAvailable && State != CompanionDesktopOverlayState.Unavailable;
-        public bool IsDragging => false;
+        public bool IsAnyOverlayDragging()
+        {
+            if (!IsAvailable)
+            {
+                return false;
+            }
+
+            try { return NativeIsOverlayDragging(); }
+            catch { return false; }
+        }
         public string StatusMessage { get; private set; } = "Native overlay has not been initialized.";
 
         public bool Create()
@@ -92,6 +108,7 @@ namespace TokenForge.Client.Platform
                 RegisterClickCallbackIfPossible();
                 RegisterDoubleClickCallbackIfPossible();
                 RegisterDragEndedCallbackIfPossible();
+                RegisterRepositoryDragEndedCallbackIfPossible();
                 SetClickEnabled(true);
                 SetClickThrough(false);
                 LogOnce("native overlay created");
@@ -127,9 +144,11 @@ namespace TokenForge.Client.Platform
                     return;
                 }
 
-                NativeShow();
-                State = CompanionDesktopOverlayState.Active;
-                StatusMessage = "Native desktop companion active.";
+                NativeSetCompanionVisibleWithSource(true, "csharp.overlayService.show");
+                var nativeVisible = NativeIsCompanionVisible();
+                State = nativeVisible ? CompanionDesktopOverlayState.Active : CompanionDesktopOverlayState.Disabled;
+                StatusMessage = nativeVisible ? "Native desktop companion active." : "Native desktop companion show requested but not visible.";
+                Debug.Log("INFO [OverlayState][NATIVE_ACTUAL] desiredVisible=true actualVisible=" + nativeVisible + " source=csharp.overlayService.show");
             }
             catch (Exception exception)
             {
@@ -149,9 +168,10 @@ namespace TokenForge.Client.Platform
 
             try
             {
-                NativeHide();
+                NativeSetCompanionVisibleWithSource(false, "csharp.overlayService.hide");
                 State = CompanionDesktopOverlayState.Disabled;
                 StatusMessage = "Native desktop companion hidden.";
+                Debug.Log("INFO [OverlayState][NATIVE_ACTUAL] desiredVisible=false actualVisible=false source=csharp.overlayService.hide");
             }
             catch (Exception exception)
             {
@@ -190,6 +210,116 @@ namespace TokenForge.Client.Platform
             {
                 try { NativeSetVisualState((int)stage, (int)archetype, (int)animationState, facingLeft); } catch (Exception exception) { State = CompanionDesktopOverlayState.Unavailable; StatusMessage = "Native overlay visual update failed: " + exception.GetType().Name; }
             }
+        }
+
+        public void SetRenderSnapshot(string repositoryId, CompanionState state, int xp, string visualThemeId)
+        {
+            if (!IsAvailable)
+            {
+                return;
+            }
+
+            try
+            {
+                state = CompanionProgressionRules.Normalize(state);
+                NativeSetRenderSnapshot(
+                    string.IsNullOrWhiteSpace(repositoryId) ? "unknown" : repositoryId.Trim(),
+                    (int)state.Stage,
+                    Math.Max(1, state.Level),
+                    Math.Max(0, xp),
+                    (int)state.Archetype,
+                    CompanionSkinCatalog.Normalize(visualThemeId),
+                    true);
+            }
+            catch (Exception exception)
+            {
+                StatusMessage = "Native overlay render snapshot failed: " + exception.GetType().Name;
+            }
+        }
+
+        public void SetCompanionFarmSnapshots(DesktopCompanionFarmState farmState)
+        {
+            if (!IsAvailable)
+            {
+                return;
+            }
+
+            try
+            {
+                var envelope = new NativeCompanionFarmSnapshotEnvelope();
+                var overlays = farmState?.overlays ?? new RepositoryCompanionOverlayState[0];
+                foreach (var overlay in overlays)
+                {
+                    if (overlay?.hydratedSnapshot == null || string.IsNullOrWhiteSpace(overlay.repositoryId))
+                    {
+                        continue;
+                    }
+
+                    var snapshot = overlay.hydratedSnapshot;
+                    snapshot.repositoryId = overlay.repositoryId;
+                    snapshot.repositoryName = string.IsNullOrWhiteSpace(overlay.repositoryName) ? "Repository" : overlay.repositoryName;
+                    snapshot.desiredVisible = farmState.enabled && overlay.desiredVisible;
+                    snapshot.hasSavedPosition = overlay.hasSavedPosition;
+                    snapshot.desiredInitialX = overlay.desiredPositionX;
+                    snapshot.desiredInitialY = overlay.desiredPositionY;
+                    envelope.overlays.Add(snapshot);
+                    Debug.Log("INFO [FarmProjection][ITEM] repo=" + snapshot.repositoryId + " stage=" + ((CompanionStage)snapshot.stage) + " level=" + Math.Max(1, snapshot.level));
+                }
+
+                NativeSetFarmSnapshots(JsonUtility.ToJson(envelope));
+                State = envelope.overlays.Count > 0 && farmState != null && farmState.enabled
+                    ? CompanionDesktopOverlayState.Active
+                    : CompanionDesktopOverlayState.Disabled;
+                StatusMessage = State == CompanionDesktopOverlayState.Active
+                    ? "Native repository companion farm active."
+                    : "Native repository companion farm hidden.";
+                Debug.Log("INFO [FarmProjection][BUILD] count=" + envelope.overlays.Count);
+                Debug.Log("INFO [OverlayFarm][SNAPSHOT_APPLY] count=" + envelope.overlays.Count + " source=csharp");
+            }
+            catch (Exception exception)
+            {
+                StatusMessage = "Native overlay farm snapshot failed: " + exception.GetType().Name;
+            }
+        }
+
+        public bool IsOverlayDragging(string repositoryId)
+        {
+            if (!IsAvailable)
+            {
+                return false;
+            }
+
+            try { return NativeIsOverlayDraggingForRepository(SafeRepositoryId(repositoryId)); }
+            catch { return false; }
+        }
+
+        public void ShowAllRepositoryCompanions(string source = "csharp.showAll")
+        {
+            if (IsAvailable)
+            {
+                try { NativeShowAllRepositoryCompanions(source); } catch { }
+            }
+        }
+
+        public void HideAllRepositoryCompanions(string source = "csharp.hideAll")
+        {
+            if (IsAvailable)
+            {
+                try { NativeHideAllRepositoryCompanions(source); } catch { }
+            }
+        }
+
+        public void SetOverlayFrame(string repositoryId, Rect frame, string source = "csharp.setFrame")
+        {
+            if (IsAvailable)
+            {
+                try { NativeSetOverlayFrame(SafeRepositoryId(repositoryId), frame.x, frame.y, Mathf.Max(24f, frame.width), Mathf.Max(24f, frame.height), source); } catch { }
+            }
+        }
+
+        private static string SafeRepositoryId(string repositoryId)
+        {
+            return string.IsNullOrWhiteSpace(repositoryId) ? "legacy" : repositoryId.Trim();
         }
 
         public void SetMotionProfile(CompanionVisualProfile profile)
@@ -325,6 +455,11 @@ namespace TokenForge.Client.Platform
             DragEnded?.Invoke(position);
         }
 
+        private void RaiseRepositoryDragEnded(string repositoryId, Vector2 position)
+        {
+            RepositoryDragEnded?.Invoke(repositoryId, position);
+        }
+
         private static void OnNativeOverlayClicked()
         {
             Debug.Log("INFO " + LogPrefix + " single click reaction triggered");
@@ -341,6 +476,13 @@ namespace TokenForge.Client.Platform
         {
             Debug.Log("INFO " + LogPrefix + " drag ended with x/y " + x.ToString("0.##") + "," + y.ToString("0.##"));
             GlobalDragEnded?.Invoke(new Vector2(x, y));
+        }
+
+        private static void OnNativeOverlayRepositoryDragEnded(string repositoryId, float x, float y)
+        {
+            var safeRepo = SafeRepositoryId(repositoryId);
+            Debug.Log("INFO " + LogPrefix + " drag ended repo=" + safeRepo + " x/y " + x.ToString("0.##") + "," + y.ToString("0.##"));
+            GlobalRepositoryDragEnded?.Invoke(safeRepo, new Vector2(x, y));
         }
 
         private void RegisterClickCallbackIfPossible()
@@ -382,6 +524,18 @@ namespace TokenForge.Client.Platform
             catch (Exception exception)
             {
                 Debug.LogWarning("WARN " + LogPrefix + " drag callback unavailable: " + exception.GetType().Name);
+            }
+        }
+
+        private void RegisterRepositoryDragEndedCallbackIfPossible()
+        {
+            try
+            {
+                NativeRegisterRepositoryDragEndedCallback(RepositoryDragEndedCallback);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("WARN " + LogPrefix + " repository drag callback unavailable: " + exception.GetType().Name);
             }
         }
 
@@ -427,6 +581,17 @@ namespace TokenForge.Client.Platform
         [DllImport("DesktopCompanionOverlay", EntryPoint = "HideDesktopCompanionOverlay")]
         private static extern void NativeHide();
 
+        [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_SetCompanionVisibleWithSource")]
+        private static extern void NativeSetCompanionVisibleWithSource([MarshalAs(UnmanagedType.I1)] bool visible, string source);
+
+        [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_IsCompanionVisible")]
+        [return: MarshalAs(UnmanagedType.I1)]
+        private static extern bool NativeIsCompanionVisible();
+
+        [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_IsOverlayDragging")]
+        [return: MarshalAs(UnmanagedType.I1)]
+        private static extern bool NativeIsOverlayDragging();
+
         [DllImport("DesktopCompanionOverlay", EntryPoint = "SetCompanionOverlayPosition")]
         private static extern void NativeSetPosition(float x, float y);
 
@@ -435,6 +600,25 @@ namespace TokenForge.Client.Platform
 
         [DllImport("DesktopCompanionOverlay", EntryPoint = "SetCompanionOverlayVisualState")]
         private static extern void NativeSetVisualState(int stage, int archetype, int animationState, bool facingLeft);
+
+        [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_SetCompanionRenderSnapshot")]
+        private static extern void NativeSetRenderSnapshot(string repositoryId, int stage, int level, int xp, int archetype, string visualThemeId, [MarshalAs(UnmanagedType.I1)] bool hydrated);
+
+        [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_SetCompanionFarmSnapshots")]
+        private static extern void NativeSetFarmSnapshots(string json);
+
+        [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_IsOverlayDraggingForRepository")]
+        [return: MarshalAs(UnmanagedType.I1)]
+        private static extern bool NativeIsOverlayDraggingForRepository(string repositoryId);
+
+        [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_ShowAllRepositoryCompanions")]
+        private static extern void NativeShowAllRepositoryCompanions(string source);
+
+        [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_HideAllRepositoryCompanions")]
+        private static extern void NativeHideAllRepositoryCompanions(string source);
+
+        [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_SetOverlayFrame")]
+        private static extern void NativeSetOverlayFrame(string repositoryId, float x, float y, float width, float height, string source);
 
         [DllImport("DesktopCompanionOverlay", EntryPoint = "SetCompanionOverlayVisualTheme")]
         private static extern void NativeSetVisualTheme(string visualThemeId);
@@ -463,6 +647,9 @@ namespace TokenForge.Client.Platform
         [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_RegisterOverlayDragEndedCallback")]
         private static extern void NativeRegisterDragEndedCallback(OverlayDragEndedCallback callback);
 
+        [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_RegisterOverlayDragEndedForRepositoryCallback")]
+        private static extern void NativeRegisterRepositoryDragEndedCallback(OverlayRepositoryDragEndedCallback callback);
+
         [DllImport("DesktopCompanionOverlay", EntryPoint = "DestroyDesktopCompanionOverlay")]
         private static extern void NativeDestroy();
 
@@ -472,9 +659,18 @@ namespace TokenForge.Client.Platform
         private static bool NativeCreate() { return false; }
         private static void NativeShow() { }
         private static void NativeHide() { }
+        private static void NativeSetCompanionVisibleWithSource(bool visible, string source) { }
+        private static bool NativeIsCompanionVisible() { return false; }
+        private static bool NativeIsOverlayDragging() { return false; }
         private static void NativeSetPosition(float x, float y) { }
         private static void NativeSetSize(float width, float height) { }
         private static void NativeSetVisualState(int stage, int archetype, int animationState, bool facingLeft) { }
+        private static void NativeSetRenderSnapshot(string repositoryId, int stage, int level, int xp, int archetype, string visualThemeId, bool hydrated) { }
+        private static void NativeSetFarmSnapshots(string json) { }
+        private static bool NativeIsOverlayDraggingForRepository(string repositoryId) { return false; }
+        private static void NativeShowAllRepositoryCompanions(string source) { }
+        private static void NativeHideAllRepositoryCompanions(string source) { }
+        private static void NativeSetOverlayFrame(string repositoryId, float x, float y, float width, float height, string source) { }
         private static void NativeSetVisualTheme(string visualThemeId) { }
         private static void NativeSetMotionProfile(int motionMode, float idleRadius, float wanderRadius, float wanderSpeed, float decisionIntervalSeconds, bool allowsWandering, float reactionCooldownSeconds) { }
         private static void NativeTriggerReaction(int reaction, string speechText) { }
@@ -484,6 +680,7 @@ namespace TokenForge.Client.Platform
         private static void NativeRegisterClickedCallback(OverlayClickedCallback callback) { }
         private static void NativeRegisterDoubleClickedCallback(OverlayClickedCallback callback) { }
         private static void NativeRegisterDragEndedCallback(OverlayDragEndedCallback callback) { }
+        private static void NativeRegisterRepositoryDragEndedCallback(OverlayRepositoryDragEndedCallback callback) { }
         private static void NativeDestroy() { }
         private static IntPtr NativeGetLibraryPath() { return IntPtr.Zero; }
 #endif

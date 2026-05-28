@@ -1,6 +1,8 @@
 using TokenForge.Client.Domain;
 using TokenForge.Client.Platform;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace TokenForge.Client.UI
@@ -26,13 +28,28 @@ namespace TokenForge.Client.UI
             ? (overlayService?.StatusMessage ?? "Desktop companion service unavailable.")
             : lastFailureReason;
         public bool IsNativeOverlayActive => overlayService != null && overlayService.IsNativeOverlay && overlayService.State == CompanionDesktopOverlayState.Active;
+        public bool IsDragging => IsAnyOverlayDragging();
         public event Action<Vector2> PositionChanged;
         public event Action DashboardRestoreRequested;
+
+        public bool IsAnyOverlayDragging()
+        {
+            return overlayService?.IsAnyOverlayDragging() ?? false;
+        }
+
+        public bool IsOverlayDragging(string repositoryId)
+        {
+            return overlayService?.IsOverlayDragging(repositoryId) ?? false;
+        }
 
         public void Initialize(IDesktopCompanionOverlayService service = null, IApplicationLifecycleService lifecycle = null)
         {
             if (overlayService != null)
             {
+                if (overlayService is MacDesktopCompanionOverlayService oldMacService)
+                {
+                    oldMacService.RepositoryDragEnded -= OnRepositoryCompanionDragEnded;
+                }
                 overlayService.Clicked -= OnDesktopCompanionClicked;
                 overlayService.DoubleClicked -= OnDesktopCompanionDoubleClicked;
                 overlayService.DragEnded -= OnDesktopCompanionDragEnded;
@@ -44,11 +61,19 @@ namespace TokenForge.Client.UI
             overlayService.Clicked += OnDesktopCompanionClicked;
             overlayService.DoubleClicked += OnDesktopCompanionDoubleClicked;
             overlayService.DragEnded += OnDesktopCompanionDragEnded;
+            if (overlayService is MacDesktopCompanionOverlayService macService)
+            {
+                macService.RepositoryDragEnded += OnRepositoryCompanionDragEnded;
+            }
             movementController = new CompanionDesktopMovementController(overlayService);
             if (!overlayService.Create() && service == null && overlayService.State != CompanionDesktopOverlayState.Fallback)
             {
                 lastFailureReason = overlayService.StatusMessage;
                 Debug.Log("INFO " + LogPrefix + " fallback companion active");
+                if (overlayService is MacDesktopCompanionOverlayService failedMacService)
+                {
+                    failedMacService.RepositoryDragEnded -= OnRepositoryCompanionDragEnded;
+                }
                 overlayService.Clicked -= OnDesktopCompanionClicked;
                 overlayService.DoubleClicked -= OnDesktopCompanionDoubleClicked;
                 overlayService.DragEnded -= OnDesktopCompanionDragEnded;
@@ -62,7 +87,82 @@ namespace TokenForge.Client.UI
             ApplySettings(settings, companionState);
         }
 
-        public void ApplySettings(DesktopCompanionSettings desktopSettings, CompanionState state, CompanionMotionState motion = null)
+        public void ApplyFarmSettings(
+            IEnumerable<RepositoryCompanionDisplayItem> repositories,
+            DesktopCompanionSettings globalSettings,
+            bool desiredVisible,
+            int renderVersion)
+        {
+            if (overlayService == null || !overlayService.IsAvailable)
+            {
+                return;
+            }
+
+            var settings = globalSettings ?? DesktopCompanionSettings.CreateDefault();
+            overlayService.SetClickEnabled(!settings.IsClickThroughEnabled);
+            overlayService.SetClickThrough(settings.IsClickThroughEnabled);
+            var overlays = (repositories ?? Enumerable.Empty<RepositoryCompanionDisplayItem>())
+                .Where(item => item != null &&
+                               !item.Archived &&
+                               item.ApprovedByUser &&
+                               !string.IsNullOrWhiteSpace(item.RepositoryHash) &&
+                               !string.Equals(item.RepositoryHash, RepositoryCompanionProfileService.DefaultLocalRepositoryHash, StringComparison.Ordinal))
+                .Select(item =>
+                {
+                    var isDragging = overlayService.IsOverlayDragging(item.RepositoryHash);
+                    if (isDragging)
+                    {
+                        Debug.Log("INFO [CSharpProjection][SKIP_TO_NATIVE] repo=" + item.RepositoryHash + " reason=overlayDragInProgress");
+                    }
+
+                    return new RepositoryCompanionOverlayState
+                    {
+                        repositoryId = item.RepositoryHash,
+                        repositoryName = string.IsNullOrWhiteSpace(item.SafeRepositoryAlias) ? "Repository" : item.SafeRepositoryAlias,
+                        companionId = item.CompanionId,
+                        desiredVisible = desiredVisible && item.DesktopCompanionEnabled,
+                        actualVisible = !isDragging && overlayService.State == CompanionDesktopOverlayState.Active,
+                        desiredPositionX = item.OverlayPositionX,
+                        desiredPositionY = item.OverlayPositionY,
+                        actualPositionX = item.OverlayPositionX,
+                        actualPositionY = item.OverlayPositionY,
+                        hasSavedPosition = item.HasSavedOverlayPosition,
+                        dragEnabled = !settings.IsClickThroughEnabled,
+                        isDragging = isDragging,
+                        hydratedSnapshot = new NativeCompanionFarmSnapshot
+                        {
+                            repositoryId = item.RepositoryHash,
+                            repositoryName = string.IsNullOrWhiteSpace(item.SafeRepositoryAlias) ? "Repository" : item.SafeRepositoryAlias,
+                            companionId = item.CompanionId,
+                            stage = (int)item.Stage,
+                            level = Math.Max(1, item.Level),
+                            xp = Math.Max(0, item.CurrentXp),
+                            archetype = (int)item.Archetype,
+                            visualThemeId = CompanionSkinCatalog.Normalize(item.Skin),
+                            hydrated = true,
+                            renderVersion = renderVersion,
+                            desiredVisible = desiredVisible && item.DesktopCompanionEnabled,
+                            hasSavedPosition = item.HasSavedOverlayPosition,
+                            desiredInitialX = item.OverlayPositionX,
+                            desiredInitialY = item.OverlayPositionY
+                        }
+                    };
+                })
+                .ToArray();
+
+            var farm = new DesktopCompanionFarmState
+            {
+                enabled = desiredVisible && settings.IsDesktopCompanionEnabled,
+                overlays = overlays,
+                visibleCount = overlays.Count(item => item.desiredVisible),
+                draggingRepositoryId = overlays.FirstOrDefault(item => item.isDragging)?.repositoryId ?? string.Empty,
+                globalMotionEnabled = settings.MotionMode != CompanionDesktopMotionMode.Calm,
+                globalClickThroughEnabled = settings.IsClickThroughEnabled
+            };
+            overlayService.SetCompanionFarmSnapshots(farm);
+        }
+
+        public void ApplySettings(DesktopCompanionSettings desktopSettings, CompanionState state, CompanionMotionState motion = null, string repositoryId = "", int currentXp = 0)
         {
             settings = desktopSettings ?? DesktopCompanionSettings.CreateDefault();
             companionState = CompanionProgressionRules.Normalize(state);
@@ -99,6 +199,10 @@ namespace TokenForge.Client.UI
                 overlayService.Clicked -= OnDesktopCompanionClicked;
                 overlayService.DoubleClicked -= OnDesktopCompanionDoubleClicked;
                 overlayService.DragEnded -= OnDesktopCompanionDragEnded;
+                if (overlayService is MacDesktopCompanionOverlayService unavailableMacService)
+                {
+                    unavailableMacService.RepositoryDragEnded -= OnRepositoryCompanionDragEnded;
+                }
                 Debug.Log("INFO " + LogPrefix + " fallback companion active");
                 overlayService = new InAppCompanionOverlayFallbackService();
                 overlayService.Create();
@@ -118,6 +222,10 @@ namespace TokenForge.Client.UI
             overlayService.SetClickEnabled(!settings.IsClickThroughEnabled);
             overlayService.SetClickThrough(settings.IsClickThroughEnabled);
             overlayService.SetSize(SizeFor(companionState.Stage));
+            if (overlayService is MacDesktopCompanionOverlayService macOverlay)
+            {
+                macOverlay.SetRenderSnapshot(repositoryId, companionState, currentXp, settings.VisualThemeId);
+            }
             overlayService.SetVisualTheme(settings.VisualThemeId);
             overlayService.SetVisualState(companionState.Stage, companionState.Archetype, visualProfile.IdleAnimation, false);
             overlayService.SetMotionProfile(visualProfile);
@@ -126,7 +234,7 @@ namespace TokenForge.Client.UI
                 var savedPosition = hasPendingDragPosition
                     ? pendingDragPosition
                     : new Vector2(settings.LastOverlayPositionX, settings.LastOverlayPositionY);
-                if (!overlayService.IsDragging)
+                if (!overlayService.IsAnyOverlayDragging())
                 {
                     movementController?.SetPosition(savedPosition);
                     overlayService.SetPosition(savedPosition);
@@ -191,8 +299,18 @@ namespace TokenForge.Client.UI
             pendingDragPosition = position;
             movementController?.SetPosition(position);
             Debug.Log("INFO [CompanionDrag] mouseUp final=(" + position.x.ToString("0.##") + "," + position.y.ToString("0.##") + ") saved=pending");
+            Debug.Log("INFO [OverlayPositionSync][COMMIT] source=dragEnd position=(" + position.x.ToString("0.##") + "," + position.y.ToString("0.##") + ")");
             PositionChanged?.Invoke(position);
         }
+
+        private void OnRepositoryCompanionDragEnded(string repositoryId, Vector2 position)
+        {
+            Debug.Log("INFO [OverlayPositionSync][COMMIT] repo=" + repositoryId + " source=dragEnd position=(" + position.x.ToString("0.##") + "," + position.y.ToString("0.##") + ")");
+            PositionChanged?.Invoke(position);
+            RepositoryPositionChanged?.Invoke(repositoryId, position);
+        }
+
+        public event Action<string, Vector2> RepositoryPositionChanged;
 
         private void Update()
         {
@@ -208,6 +326,10 @@ namespace TokenForge.Client.UI
         {
             if (overlayService != null)
             {
+                if (overlayService is MacDesktopCompanionOverlayService macService)
+                {
+                    macService.RepositoryDragEnded -= OnRepositoryCompanionDragEnded;
+                }
                 overlayService.Clicked -= OnDesktopCompanionClicked;
                 overlayService.DoubleClicked -= OnDesktopCompanionDoubleClicked;
                 overlayService.DragEnded -= OnDesktopCompanionDragEnded;

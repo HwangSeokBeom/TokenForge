@@ -52,7 +52,7 @@ namespace TokenForge.Client.Platform
             }
         }
 
-        public void ShowDashboardWindow(string source = "csharp.showDashboard")
+        public void ShowDashboardWindow(string source = "csharp.dashboard")
         {
             if (!EnsureInstalled())
             {
@@ -61,7 +61,7 @@ namespace TokenForge.Client.Platform
 
             try
             {
-                NativeShowDashboardWindowWithSource(SafeNativeSource(source, "csharp.showDashboard"));
+                NativeShowDashboardWindowWithSource(SafeNativeSource(source, "csharp.dashboard"));
             }
             catch (Exception exception)
             {
@@ -118,7 +118,7 @@ namespace TokenForge.Client.Platform
             }
         }
 
-        public void SetCompanionVisible(bool visible)
+        public void SetCompanionVisible(bool visible, string source = "csharp")
         {
             if (!EnsureInstalled())
             {
@@ -127,8 +127,10 @@ namespace TokenForge.Client.Platform
 
             try
             {
-                Debug.Log("INFO [OverlayTrace:csharp] DllImport TokenForge_SetCompanionVisible(" + visible + ")");
-                NativeSetCompanionVisible(visible);
+                var safeSource = SafeNativeSource(source, "csharp");
+                Debug.Log("INFO [OverlayNative][CALL] TokenForge_SetCompanionVisible visible=" + visible + " source=" + safeSource);
+                Debug.Log("INFO [OverlayTrace:csharp] DllImport TokenForge_SetCompanionVisible(" + visible + ") source=" + safeSource);
+                NativeSetCompanionVisibleWithSource(visible, safeSource);
             }
             catch (Exception exception)
             {
@@ -409,10 +411,12 @@ namespace TokenForge.Client.Platform
                 case "disable_desktop_companion":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ToggleCompanionVisible, rawAction, value);
                     return true;
+                case "showOnDesktop":
                 case "show_companion":
                 case "desktop.show":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ShowCompanion, rawAction, "true", OverlayTraceId(value));
                     return true;
+                case "hideFromDesktop":
                 case "hide_companion":
                 case "desktop.hide":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.HideCompanion, rawAction, "false", OverlayTraceId(value));
@@ -514,7 +518,10 @@ namespace TokenForge.Client.Platform
         private static extern void NativeSetMenuBarStatus(string json);
 
         [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_SetCompanionVisible")]
-        private static extern void NativeSetCompanionVisible(bool visible);
+        private static extern void NativeSetCompanionVisible([MarshalAs(UnmanagedType.I1)] bool visible);
+
+        [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_SetCompanionVisibleWithSource")]
+        private static extern void NativeSetCompanionVisibleWithSource([MarshalAs(UnmanagedType.I1)] bool visible, string source);
 
         [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_GetOverlayLibraryPath")]
         private static extern IntPtr NativeGetLibraryPath();
@@ -531,6 +538,7 @@ namespace TokenForge.Client.Platform
         private static void NativeUpdateDashboardState(string json) { }
         private static void NativeSetMenuBarStatus(string json) { }
         private static void NativeSetCompanionVisible(bool visible) { }
+        private static void NativeSetCompanionVisibleWithSource(bool visible, string source) { }
         private static IntPtr NativeGetLibraryPath() { return IntPtr.Zero; }
         private static void RegisterDashboardActionCallback(NativeDashboardActionCallback callback) { }
 #endif

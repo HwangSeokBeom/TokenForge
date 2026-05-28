@@ -85,12 +85,13 @@ namespace TokenForge.Client.UI
                 return;
             }
 
-            if (overlayService.IsDragging || dragCooldownRemaining > 0f)
+            var isAnyOverlayDragging = overlayService.IsAnyOverlayDragging();
+            if (isAnyOverlayDragging || dragCooldownRemaining > 0f)
             {
                 if (!pauseLogged)
                 {
                     pauseLogged = true;
-                    Debug.Log("INFO [CompanionMotion] idlePaused reason=" + (overlayService.IsDragging ? "drag" : "dragCooldown"));
+                    Debug.Log("INFO [CompanionMotion] idlePaused reason=" + (isAnyOverlayDragging ? "drag" : "dragCooldown"));
                 }
 
                 dragCooldownRemaining = Mathf.Max(0f, dragCooldownRemaining - deltaSeconds);

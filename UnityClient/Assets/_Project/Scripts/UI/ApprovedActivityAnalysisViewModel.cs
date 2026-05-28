@@ -78,6 +78,11 @@ namespace TokenForge.Client.UI
         public int RecentAiXp { get; set; }
         public TokenUsageBucket EstimatedTokenActivity { get; set; } = TokenUsageBucket.Unknown;
         public string Skin { get; set; } = CompanionSkinCatalog.DefaultSkinId;
+        public string CompanionId { get; set; } = string.Empty;
+        public bool DesktopCompanionEnabled { get; set; } = true;
+        public bool HasSavedOverlayPosition { get; set; }
+        public float OverlayPositionX { get; set; } = -1f;
+        public float OverlayPositionY { get; set; } = -1f;
         public CompanionMotionState MotionState { get; set; } = CompanionMotionState.Idle(string.Empty);
         public bool ApprovedByUser { get; set; }
         public DateTimeOffset? ApprovedAtUtc { get; set; }
@@ -1258,6 +1263,46 @@ namespace TokenForge.Client.UI
             }, cancellationToken);
             Debug.Log("INFO [CompanionDrag] SaveDataRepository position=(" + Math.Max(0f, x).ToString("0.##") + "," + Math.Max(0f, y).ToString("0.##") + ") saved=" + (result.IsSuccess ? "true" : "false"));
             return result;
+        }
+
+        public async Task<Result<DesktopCompanionSettings>> SaveDesktopCompanionPositionForRepositoryAsync(string repositoryId, float x, float y, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(repositoryId))
+            {
+                return await SaveDesktopCompanionPositionAsync(x, y, cancellationToken);
+            }
+
+            var saveData = await repository.LoadAsync(cancellationToken);
+            saveData = RepositoryCompanionProfileService.Normalize(saveData);
+            var profile = (saveData.RepositoryCompanionProfiles ?? new List<RepositoryCompanionProfile>())
+                .FirstOrDefault(item => string.Equals(item.RepositoryHash, repositoryId, StringComparison.Ordinal));
+            if (profile == null)
+            {
+                return Result<DesktopCompanionSettings>.Failure("repository_profile_not_found", "Repository profile was not found.");
+            }
+
+            var settings = RepositoryCompanionProfileService.CloneDesktopCompanionSettings(profile.DesktopCompanionSettings);
+            settings.LastOverlayPositionX = Math.Max(0f, x);
+            settings.LastOverlayPositionY = Math.Max(0f, y);
+            settings.HasSavedOverlayPosition = true;
+            settings.LastOverlayPositionXBucket = BucketForCoordinate(x);
+            settings.LastOverlayPositionYBucket = BucketForCoordinate(y);
+            profile.DesktopCompanionSettings = settings;
+            profile.UpdatedAtUtc = DateTimeOffset.UtcNow;
+            if (string.Equals(saveData.SelectedRepositoryHash, repositoryId, StringComparison.Ordinal))
+            {
+                saveData.DesktopCompanionSettings = RepositoryCompanionProfileService.CloneDesktopCompanionSettings(settings);
+            }
+
+            var saveResult = await repository.SaveAsync(saveData, cancellationToken);
+            Debug.Log("INFO [OverlayPositionSync][SAVE] repo=" + repositoryId + " position=(" + Math.Max(0f, x).ToString("0.##") + "," + Math.Max(0f, y).ToString("0.##") + ")");
+            if (!saveResult.IsSuccess)
+            {
+                return Result<DesktopCompanionSettings>.Failure(saveResult.ErrorCode, saveResult.ErrorMessage);
+            }
+
+            await RefreshRecentSessionsAsync(cancellationToken);
+            return Result<DesktopCompanionSettings>.Success(settings);
         }
 
         public Result DiscardGitReview()
@@ -2937,6 +2982,11 @@ namespace TokenForge.Client.UI
                         RecentAiXp = RecentXpForRepository(saveData, profile.RepositoryHash, gitOnly: false),
                         EstimatedTokenActivity = EstimatedTokenActivityForRepository(saveData, profile.RepositoryHash),
                         Skin = CompanionSkinCatalog.Normalize(profile.DesktopCompanionSettings?.VisualThemeId),
+                        CompanionId = profile.CompanionId,
+                        DesktopCompanionEnabled = profile.DesktopCompanionSettings?.IsDesktopCompanionEnabled ?? true,
+                        HasSavedOverlayPosition = profile.DesktopCompanionSettings?.HasSavedOverlayPosition ?? false,
+                        OverlayPositionX = profile.DesktopCompanionSettings?.LastOverlayPositionX ?? -1f,
+                        OverlayPositionY = profile.DesktopCompanionSettings?.LastOverlayPositionY ?? -1f,
                         MotionState = motionState,
                         ApprovedByUser = string.Equals(profile.ConnectionSource, "userSelected", StringComparison.OrdinalIgnoreCase) && profile.ApprovedAtUtc != null,
                         ApprovedAtUtc = profile.ApprovedAtUtc,

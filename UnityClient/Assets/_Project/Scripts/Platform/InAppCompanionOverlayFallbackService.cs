@@ -15,7 +15,15 @@ namespace TokenForge.Client.Platform
         public event Action<Vector2> DragEnded;
         public bool IsAvailable => false;
         public bool IsNativeOverlay => false;
-        public bool IsDragging => view != null && view.IsDragging;
+        public bool IsAnyOverlayDragging()
+        {
+            return view != null && view.IsDragging;
+        }
+
+        public bool IsOverlayDragging(string repositoryId)
+        {
+            return IsAnyOverlayDragging();
+        }
         public CompanionDesktopOverlayState State { get; private set; } = CompanionDesktopOverlayState.Fallback;
         public string StatusMessage { get; private set; } = "Editor preview mode. Native desktop overlay is available only in macOS player builds.";
         private FallbackCompanionView view;
@@ -125,6 +133,26 @@ namespace TokenForge.Client.Platform
             }
 
             Debug.Log("INFO " + LogPrefix + " " + (clickThrough ? "click-through enabled" : "click-through disabled"));
+        }
+
+        public void SetCompanionFarmSnapshots(DesktopCompanionFarmState farmState)
+        {
+        }
+
+        public void ShowAllRepositoryCompanions(string source = "csharp.showAll")
+        {
+            Show();
+        }
+
+        public void HideAllRepositoryCompanions(string source = "csharp.hideAll")
+        {
+            Hide();
+        }
+
+        public void SetOverlayFrame(string repositoryId, Rect frame, string source = "csharp.setFrame")
+        {
+            SetPosition(new Vector2(frame.x, frame.y));
+            SetSize(new Vector2(frame.width, frame.height));
         }
 
         public void Destroy()

@@ -118,9 +118,19 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(NativeDashboardAction.ShowCompanion, show.Action);
             Assert.IsTrue(show.BoolValue(false));
 
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("showOnDesktop:trace-1", out var explicitShow));
+            Assert.AreEqual(NativeDashboardAction.ShowCompanion, explicitShow.Action);
+            Assert.AreEqual("trace-1", explicitShow.TraceId);
+            Assert.IsTrue(explicitShow.BoolValue(false));
+
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("hide_companion", out var hide));
             Assert.AreEqual(NativeDashboardAction.HideCompanion, hide.Action);
             Assert.IsFalse(hide.BoolValue(true));
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("hideFromDesktop:trace-2", out var explicitHide));
+            Assert.AreEqual(NativeDashboardAction.HideCompanion, explicitHide.Action);
+            Assert.AreEqual("trace-2", explicitHide.TraceId);
+            Assert.IsFalse(explicitHide.BoolValue(true));
 
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("enable_wander", out var enableWander));
             Assert.AreEqual(NativeDashboardAction.EnableWander, enableWander.Action);
@@ -689,15 +699,18 @@ namespace TokenForge.Client.Tests
         {
             var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
 
-            StringAssert.Contains("TokenForgeCompanionViewRoleDesktopOverlayPanelContent", source);
-            StringAssert.Contains("TokenForgeCompanionViewRoleDashboardHeroPreview", source);
-            StringAssert.Contains("TokenForgeCompanionViewRoleDashboardSidebarPreview", source);
+            StringAssert.Contains("TokenForgeCompanionRenderRoleDesktopOverlay", source);
+            StringAssert.Contains("TokenForgeCompanionRenderRoleDashboardPreview", source);
+            StringAssert.Contains("TokenForgeDesktopOverlayCompanionView", source);
             StringAssert.Contains("TokenForgeIsDesktopOverlayPanelContentView", source);
             StringAssert.Contains("TokenForge.DesktopCompanion", source);
-            StringAssert.Contains("[OverlayDrag][BEGIN] role=", source);
-            StringAssert.Contains("[OverlayDrag][IGNORE] role=", source);
-            StringAssert.Contains("[OverlayDrag][UPDATE] role=", source);
-            StringAssert.Contains("[OverlayDrag][END] role=", source);
+            StringAssert.Contains("[OverlayDrag][BEGIN] generation=", source);
+            StringAssert.Contains("[DashboardAvatarView][NO_DRAG] reason=previewRole", source);
+            StringAssert.Contains("[OverlayDrag][MOVE] generation=", source);
+            StringAssert.Contains("[OverlayDrag][END] generation=", source);
+            StringAssert.Contains("[OverlayDrag][COORDS]", source);
+            StringAssert.Contains("[OverlayDrag][POSITION_ERROR]", source);
+            StringAssert.Contains("[OverlayDrag][SUPPRESS_PROJECTION] reason=dragInProgress", source);
             StringAssert.Contains("[OverlayMovement][PAUSE] reason=drag", source);
             StringAssert.Contains("[OverlayMovement][RESUME] reason=dragEnded", source);
             StringAssert.Contains("[OverlayProjection][SUPPRESSED_POSITION_APPLY] reason=dragging", source);
@@ -740,13 +753,23 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("[DashboardLifecycle][OPEN] source=", source);
             StringAssert.Contains("[DashboardLifecycle][FOCUS_EXISTING] source=", source);
             StringAssert.Contains("[DashboardLifecycle][CLOSE] source=", source);
+            StringAssert.Contains("[DashboardLifecycle][OPEN_REQUEST] source=", source);
+            StringAssert.Contains("[DashboardLifecycle][REUSE_EXISTING] window=", source);
+            StringAssert.Contains("[DashboardLifecycle][FOCUS] source=", source);
             StringAssert.Contains("[DashboardLifecycle][SUPPRESS_REOPEN] reason=recentExplicitClose", source);
+            StringAssert.Contains("[DashboardLifecycle][SUPPRESS_DUPLICATE] reason=", source);
             StringAssert.Contains("[DashboardLifecycle][WARN_DUPLICATE] count=", source);
             StringAssert.Contains("TokenForgeCleanupDuplicateDashboardWindows", source);
             StringAssert.Contains("TokenForgeCleanupStaleUnityDashboardWindows", source);
-            StringAssert.Contains("TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(@\"dockReopen\", NO)", source);
-            StringAssert.Contains("TokenForgeOpenNativeDashboardOnMainWithSource(@\"menuBar.openDashboard\")", source);
-            StringAssert.Contains("TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(@\"csharp.showDashboard\", YES)", source);
+            StringAssert.Contains("TokenForgeOpenOrFocusDashboard(@\"dock.reopen\")", source);
+            StringAssert.Contains("TokenForgeOpenOrFocusDashboard(@\"menubar.dashboard\")", source);
+            StringAssert.Contains("TokenForgeOpenOrFocusDashboard(@\"csharp.dashboard\")", source);
+            StringAssert.Contains("[DockReopen][ENTER] hasVisibleWindows=", source);
+            StringAssert.Contains("[DockReopen][CLASSIFY] dashboardVisible=", source);
+            StringAssert.Contains("[DockReopen][ACTION] openOrFocusDashboard source=dock.reopen", source);
+            StringAssert.Contains("[WindowsDump][AFTER_DOCK_REOPEN]", source);
+            StringAssert.Contains("[WindowsDump][AFTER_MENUBAR_OPEN]", source);
+            StringAssert.Contains("[WindowsDump][AFTER_DASHBOARD_CLOSE]", source);
             StringAssert.Contains("hideDashboardFromSource:@\"dashboardX\"", source);
             StringAssert.Contains("blank TokenForge window detected; orderOut without dashboard reopen", source);
         }
@@ -789,7 +812,7 @@ namespace TokenForge.Client.Tests
             var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
 
             StringAssert.Contains("Show on Desktop", source);
-            StringAssert.Contains("Hide", source);
+            StringAssert.Contains("Hide Overlay", source);
             StringAssert.Contains("Enable Movement", source);
             StringAssert.Contains("Pause Movement", source);
             StringAssert.Contains("Enable Drag", source);
@@ -800,6 +823,8 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("disableWanderFromDashboard", source);
             StringAssert.Contains("SetCompanionOverlayMotionProfile", source);
             StringAssert.Contains("ShowDesktopCompanionOverlay", source);
+            StringAssert.Contains("showOnDesktop", source);
+            StringAssert.Contains("hideFromDesktop", source);
             StringAssert.Contains("desktop.show", source);
             StringAssert.Contains("desktop.hide", source);
             StringAssert.Contains("desktop.movement.enable", source);
@@ -833,10 +858,28 @@ namespace TokenForge.Client.Tests
         public void NativeCompanionBridgeExportsRuntimeEntryPoints()
         {
             var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+            var service = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/Platform/MacDesktopCompanionOverlayService.cs"));
 
             StringAssert.Contains("extern \"C\" bool CreateDesktopCompanionOverlay", source);
             StringAssert.Contains("extern \"C\" void ShowDesktopCompanionOverlay", source);
             StringAssert.Contains("extern \"C\" void HideDesktopCompanionOverlay", source);
+            StringAssert.Contains("extern \"C\" bool TokenForge_IsOverlayDragging", source);
+            StringAssert.Contains("extern \"C\" bool TokenForge_IsOverlayDraggingForRepository", source);
+            StringAssert.Contains("TokenForgeOverlayPanelsByRepositoryId", source);
+            StringAssert.Contains("TokenForgeOverlayViewsByRepositoryId", source);
+            StringAssert.Contains("TokenForgeOverlaySnapshotsByRepositoryId", source);
+            StringAssert.Contains("TokenForgeOverlayFramesByRepositoryId", source);
+            StringAssert.Contains("TokenForgeOverlayDragStatesByRepositoryId", source);
+            StringAssert.Contains("TokenForgeOverlayGenerationsByRepositoryId", source);
+            StringAssert.Contains("TokenForgeResolveFarmFrameForRepository", source);
+            StringAssert.Contains("[OverlayFarmLayout][COLLISION]", source);
+            StringAssert.Contains("[OverlayFarmLayout][NUDGE]", source);
+            StringAssert.Contains("TokenForgeActiveDragRepositoryId", source);
+            StringAssert.Contains("[OverlayDrag][CAPTURE] repo=", source);
+            StringAssert.Contains("[OverlayDrag][IGNORE] repo=%@ reason=notActiveDrag", source);
+            StringAssert.Contains("[StatusItem][ENSURE] source=%@", source);
+            StringAssert.Contains("TokenForgeEnsureStatusItem(@\"launch.statusItem\")", source);
+            StringAssert.Contains("[DashboardLifecycle][FOCUS] source=%@ visible=%@ key=%@ main=%@ miniaturized=%@", source);
             StringAssert.Contains("extern \"C\" void SetCompanionOverlayMotionProfile", source);
             StringAssert.Contains("extern \"C\" void SetCompanionOverlayClickThrough", source);
             StringAssert.Contains("extern \"C\" void TokenForge_SetOverlayClickEnabled", source);
@@ -844,6 +887,12 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("extern \"C\" void TokenForge_RegisterOverlayClickedCallback", source);
             StringAssert.Contains("extern \"C\" void TokenForge_RegisterOverlayDoubleClickedCallback", source);
             StringAssert.Contains("extern \"C\" void TokenForge_RegisterOverlayDragEndedCallback", source);
+            StringAssert.Contains("public bool IsAnyOverlayDragging()", service);
+            StringAssert.Contains("public bool IsOverlayDragging(string repositoryId)", service);
+            StringAssert.Contains("public void SetCompanionFarmSnapshots(DesktopCompanionFarmState farmState)", service);
+            StringAssert.Contains("EntryPoint = \"TokenForge_IsOverlayDragging\"", service);
+            StringAssert.Contains("EntryPoint = \"TokenForge_IsOverlayDraggingForRepository\"", service);
+            Assert.IsFalse(service.Contains("public bool IsDragging"));
         }
 
         [Test]

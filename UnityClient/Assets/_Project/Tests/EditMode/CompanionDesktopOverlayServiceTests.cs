@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
@@ -380,6 +381,78 @@ namespace TokenForge.Client.Tests
             Assert.That(source, Does.Not.Contain("@\"◉ TF\""));
         }
 
+        [Test]
+        public void FarmSnapshotIdentityUsesEachRepositoryCompanionProfile()
+        {
+            var overlay = new FakeOverlayService();
+            var lifecycle = new FakeLifecycleService();
+            var controllerObject = new GameObject("Desktop Companion Controller");
+            var controller = controllerObject.AddComponent<DesktopCompanionOverlayController>();
+            controller.Initialize(overlay, lifecycle);
+            var settings = DesktopCompanionSettings.CreateDefault();
+            settings.IsDesktopCompanionEnabled = true;
+
+            controller.ApplyFarmSettings(new[]
+            {
+                RepositoryItem("repo-a", "Junior Repo", CompanionStage.Junior, 4, 1200),
+                RepositoryItem("repo-b", "Egg Repo", CompanionStage.Egg, 1, 0)
+            }, settings, true, 7);
+
+            Assert.IsNotNull(overlay.LastFarmState);
+            Assert.AreEqual(2, overlay.LastFarmState.overlays.Length);
+            var repoA = overlay.LastFarmState.overlays.Single(item => item.repositoryId == "repo-a").hydratedSnapshot;
+            var repoB = overlay.LastFarmState.overlays.Single(item => item.repositoryId == "repo-b").hydratedSnapshot;
+            Assert.AreEqual((int)CompanionStage.Junior, repoA.stage);
+            Assert.AreEqual(4, repoA.level);
+            Assert.AreEqual((int)CompanionStage.Egg, repoB.stage);
+            Assert.AreEqual(1, repoB.level);
+            Assert.AreNotEqual(repoA.repositoryId, repoB.repositoryId);
+            UnityEngine.Object.DestroyImmediate(controllerObject);
+        }
+
+        [Test]
+        public void FarmProjectionMarksOnlyMatchingRepositoryAsDragging()
+        {
+            var overlay = new FakeOverlayService { AnyOverlayDragging = true, DraggingRepositoryId = "repo-a" };
+            var lifecycle = new FakeLifecycleService();
+            var controllerObject = new GameObject("Desktop Companion Controller");
+            var controller = controllerObject.AddComponent<DesktopCompanionOverlayController>();
+            controller.Initialize(overlay, lifecycle);
+            var settings = DesktopCompanionSettings.CreateDefault();
+            settings.IsDesktopCompanionEnabled = true;
+
+            controller.ApplyFarmSettings(new[]
+            {
+                RepositoryItem("repo-a", "Junior Repo", CompanionStage.Junior, 4, 1200),
+                RepositoryItem("repo-b", "Egg Repo", CompanionStage.Egg, 1, 0)
+            }, settings, true, 8);
+
+            Assert.IsTrue(controller.IsAnyOverlayDragging());
+            Assert.IsTrue(controller.IsOverlayDragging("repo-a"));
+            Assert.IsFalse(controller.IsOverlayDragging("repo-b"));
+            Assert.IsTrue(overlay.LastFarmState.overlays.Single(item => item.repositoryId == "repo-a").isDragging);
+            Assert.IsFalse(overlay.LastFarmState.overlays.Single(item => item.repositoryId == "repo-b").isDragging);
+            UnityEngine.Object.DestroyImmediate(controllerObject);
+        }
+
+        private static RepositoryCompanionDisplayItem RepositoryItem(string repositoryId, string name, CompanionStage stage, int level, int xp)
+        {
+            return new RepositoryCompanionDisplayItem
+            {
+                RepositoryHash = repositoryId,
+                SafeRepositoryAlias = name,
+                CompanionId = repositoryId + "-companion",
+                ApprovedByUser = true,
+                Archived = false,
+                DesktopCompanionEnabled = true,
+                Stage = stage,
+                Level = level,
+                CurrentXp = xp,
+                Archetype = CompanionArchetype.Builder,
+                Skin = "orange_cat"
+            };
+        }
+
         private sealed class FakeOverlayService : IDesktopCompanionOverlayService
         {
             public event System.Action Clicked;
@@ -387,7 +460,8 @@ namespace TokenForge.Client.Tests
             public event System.Action<Vector2> DragEnded;
             public bool IsAvailable => true;
             public bool IsNativeOverlay => true;
-            public bool IsDragging { get; set; }
+            public bool AnyOverlayDragging { get; set; }
+            public string DraggingRepositoryId { get; set; } = string.Empty;
             public CompanionDesktopOverlayState State { get; private set; } = CompanionDesktopOverlayState.Disabled;
             public string StatusMessage { get; private set; } = "fake";
             public bool CreateShouldSucceed { get; set; } = true;
@@ -406,6 +480,18 @@ namespace TokenForge.Client.Tests
             public CompanionStage LastStage { get; private set; }
             public CompanionArchetype LastArchetype { get; private set; }
             public string LastVisualThemeId { get; private set; }
+            public DesktopCompanionFarmState LastFarmState { get; private set; }
+            public string LastOverlayFrameRepositoryId { get; private set; }
+
+            public bool IsAnyOverlayDragging()
+            {
+                return AnyOverlayDragging;
+            }
+
+            public bool IsOverlayDragging(string repositoryId)
+            {
+                return AnyOverlayDragging && string.Equals(DraggingRepositoryId, repositoryId, System.StringComparison.Ordinal);
+            }
 
             public bool Create()
             {
@@ -481,6 +567,26 @@ namespace TokenForge.Client.Tests
             public void SetClickEnabled(bool enabled)
             {
                 LastClickEnabled = enabled;
+            }
+
+            public void SetCompanionFarmSnapshots(DesktopCompanionFarmState farmState)
+            {
+                LastFarmState = farmState;
+            }
+
+            public void ShowAllRepositoryCompanions(string source = "csharp.showAll")
+            {
+                Show();
+            }
+
+            public void HideAllRepositoryCompanions(string source = "csharp.hideAll")
+            {
+                Hide();
+            }
+
+            public void SetOverlayFrame(string repositoryId, Rect frame, string source = "csharp.setFrame")
+            {
+                LastOverlayFrameRepositoryId = repositoryId;
             }
 
             public void RaiseClick()

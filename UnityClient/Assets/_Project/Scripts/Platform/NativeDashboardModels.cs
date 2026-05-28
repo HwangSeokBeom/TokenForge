@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace TokenForge.Client.Platform
@@ -152,6 +153,7 @@ namespace TokenForge.Client.Platform
         public NativeCodexAgentState codexAgent = NativeCodexAgentState.CreateDefault();
         public NativeAgentSummaryState agents = NativeAgentSummaryState.CreateDefault();
         public NativeRepositoryListItem[] repositories = new NativeRepositoryListItem[0];
+        public DesktopCompanionFarmState companionFarm = DesktopCompanionFarmState.CreateDefault();
         public NativeAgentProviderState[] agentProviders = new NativeAgentProviderState[0];
         public NativeProviderUsagePercentage[] providerUsagePercentages = new NativeProviderUsagePercentage[0];
         public NativeActivityState activity = NativeActivityState.CreateDefault();
@@ -168,6 +170,70 @@ namespace TokenForge.Client.Platform
         {
             return JsonUtility.ToJson(this);
         }
+    }
+
+    [Serializable]
+    public sealed class RepositoryCompanionOverlayState
+    {
+        public string repositoryId = string.Empty;
+        public string repositoryName = "Repository";
+        public string companionId = string.Empty;
+        public bool desiredVisible = true;
+        public bool actualVisible;
+        public float desiredPositionX = -1f;
+        public float desiredPositionY = -1f;
+        public float actualPositionX = -1f;
+        public float actualPositionY = -1f;
+        public bool hasSavedPosition;
+        public bool dragEnabled = true;
+        public bool isDragging;
+        public NativeCompanionFarmSnapshot hydratedSnapshot = NativeCompanionFarmSnapshot.CreateDefault();
+    }
+
+    [Serializable]
+    public sealed class DesktopCompanionFarmState
+    {
+        public bool enabled = true;
+        public RepositoryCompanionOverlayState[] overlays = new RepositoryCompanionOverlayState[0];
+        public int visibleCount;
+        public string draggingRepositoryId = string.Empty;
+        public bool globalMotionEnabled = true;
+        public bool globalClickThroughEnabled;
+
+        public static DesktopCompanionFarmState CreateDefault()
+        {
+            return new DesktopCompanionFarmState();
+        }
+    }
+
+    [Serializable]
+    public sealed class NativeCompanionFarmSnapshot
+    {
+        public string repositoryId = string.Empty;
+        public string repositoryName = "Repository";
+        public string companionId = string.Empty;
+        public int stage;
+        public int level = 1;
+        public int xp;
+        public int archetype;
+        public string visualThemeId = "orange_cat";
+        public bool hydrated;
+        public int renderVersion;
+        public bool desiredVisible = true;
+        public bool hasSavedPosition;
+        public float desiredInitialX = -1f;
+        public float desiredInitialY = -1f;
+
+        public static NativeCompanionFarmSnapshot CreateDefault()
+        {
+            return new NativeCompanionFarmSnapshot();
+        }
+    }
+
+    [Serializable]
+    public sealed class NativeCompanionFarmSnapshotEnvelope
+    {
+        public List<NativeCompanionFarmSnapshot> overlays = new List<NativeCompanionFarmSnapshot>();
     }
 
     [Serializable]

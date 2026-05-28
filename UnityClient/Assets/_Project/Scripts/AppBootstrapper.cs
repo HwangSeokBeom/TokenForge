@@ -438,6 +438,8 @@ namespace TokenForge.Client
                 nativeDesktopCompanionController.Initialize(null, lifecycleService);
                 nativeDesktopCompanionController.PositionChanged -= HandleNativeCompanionPositionChanged;
                 nativeDesktopCompanionController.PositionChanged += HandleNativeCompanionPositionChanged;
+                nativeDesktopCompanionController.RepositoryPositionChanged -= HandleNativeRepositoryCompanionPositionChanged;
+                nativeDesktopCompanionController.RepositoryPositionChanged += HandleNativeRepositoryCompanionPositionChanged;
                 nativeDesktopCompanionController.DashboardRestoreRequested -= HandleNativeCompanionDashboardRestoreRequested;
                 nativeDesktopCompanionController.DashboardRestoreRequested += HandleNativeCompanionDashboardRestoreRequested;
             }
@@ -445,14 +447,34 @@ namespace TokenForge.Client
 
         private void HandleNativeCompanionDashboardRestoreRequested()
         {
-            OpenNativeDashboardCanonical("companionRestore");
+            OpenNativeDashboardCanonical("csharp.dashboard");
         }
 
         private void OpenNativeDashboardCanonical(string reason)
         {
             nativeDashboardShown = true;
-            Debug.Log("INFO [WindowLifecycle] openDashboard route reason=" + SafeNativeText(reason, "unknown"));
-            nativeDashboardService?.ShowDashboardWindow(SafeNativeText(reason, "csharp.showDashboard"));
+            var source = NormalizeDashboardOpenSource(reason);
+            Debug.Log("INFO [WindowLifecycle] openDashboard route reason=" + SafeNativeText(reason, "unknown") + " source=" + source);
+            nativeDashboardService?.ShowDashboardWindow(source);
+        }
+
+        private static string NormalizeDashboardOpenSource(string reason)
+        {
+            var safeReason = SafeNativeText(reason, "csharp.dashboard");
+            if (string.Equals(safeReason, "menubar.dashboard", StringComparison.Ordinal) ||
+                string.Equals(safeReason, "dock.reopen", StringComparison.Ordinal) ||
+                string.Equals(safeReason, "launch.initial", StringComparison.Ordinal) ||
+                string.Equals(safeReason, "csharp.dashboard", StringComparison.Ordinal))
+            {
+                return safeReason;
+            }
+
+            if (string.Equals(safeReason, "startup", StringComparison.Ordinal))
+            {
+                return "launch.initial";
+            }
+
+            return "csharp.dashboard";
         }
 
         private void HandleNativeCompanionPositionChanged(Vector2 position)
@@ -465,10 +487,26 @@ namespace TokenForge.Client
             _ = SaveNativeCompanionPositionAsync(position);
         }
 
+        private void HandleNativeRepositoryCompanionPositionChanged(string repositoryId, Vector2 position)
+        {
+            if (approvedActivityAnalysis == null || string.IsNullOrWhiteSpace(repositoryId))
+            {
+                return;
+            }
+
+            _ = SaveNativeRepositoryCompanionPositionAsync(repositoryId, position);
+        }
+
         private async Task SaveNativeCompanionPositionAsync(Vector2 position)
         {
             await approvedActivityAnalysis.SaveDesktopCompanionPositionAsync(position.x, position.y);
-            ApplyNativeShellState(showDashboardIfNeeded: false);
+            Debug.Log("INFO [OverlayPositionSync][COMMIT] source=dragEnd position=(" + position.x.ToString("0.##") + "," + position.y.ToString("0.##") + ")");
+        }
+
+        private async Task SaveNativeRepositoryCompanionPositionAsync(string repositoryId, Vector2 position)
+        {
+            await approvedActivityAnalysis.SaveDesktopCompanionPositionForRepositoryAsync(repositoryId, position.x, position.y);
+            Debug.Log("INFO [OverlayPositionSync][COMMIT] repo=" + repositoryId + " source=dragEnd position=(" + position.x.ToString("0.##") + "," + position.y.ToString("0.##") + ")");
         }
 
         private void ApplyNativeShellState(bool showDashboardIfNeeded)
@@ -479,7 +517,6 @@ namespace TokenForge.Client
             }
 
             EnsureNativeDashboardShell();
-            var state = BuildNativeDashboardState();
             var companionSettings = RepositoryCompanionProfileService.CloneDesktopCompanionSettings(
                 approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault());
             if (!nativeCompanionDesiredVisibleInitialized)
@@ -499,6 +536,44 @@ namespace TokenForge.Client
             }
 
             companionSettings.IsDesktopCompanionEnabled = nativeCompanionDesiredVisible;
+            var dashboardSnapshot = approvedActivityAnalysis?.CharacterDashboard;
+            var hasRepositoryOverlayFarm = (approvedActivityAnalysis?.RepositoryCompanions ?? new List<RepositoryCompanionDisplayItem>())
+                .Any(item => item != null &&
+                             !item.Archived &&
+                             item.ApprovedByUser &&
+                             !string.IsNullOrWhiteSpace(item.RepositoryHash) &&
+                             !string.Equals(item.RepositoryHash, RepositoryCompanionProfileService.DefaultLocalRepositoryHash, StringComparison.Ordinal));
+            if (nativeDesktopCompanionController != null && nativeDesktopCompanionController.IsAnyOverlayDragging())
+            {
+                Debug.Log("INFO [CSharpProjection][SKIP_TO_NATIVE] repo=unknown reason=overlayDragInProgress");
+                Debug.Log("INFO [DashboardLifecycle][REDRAW_SUPPRESSED] reason=overlayDrag repo=unknown");
+                Debug.Log("INFO [DashboardProjection][SKIP] reason=overlayDrag repo=unknown");
+                Debug.Log("INFO [DashboardState][UNCHANGED_DURING_DRAG] repo=unknown");
+            }
+            else
+            {
+                if (hasRepositoryOverlayFarm)
+                {
+                    Debug.Log("INFO [FarmProjection][LEGACY_ACTIVE_OVERLAY_SKIPPED] reason=repositoryKeyedFarmActive");
+                }
+                else
+                {
+                    nativeDesktopCompanionController?.ApplySettings(
+                        companionSettings,
+                        dashboardSnapshot?.CompanionState ?? CompanionState.CreateDefault(),
+                        dashboardSnapshot?.MotionState,
+                        dashboardSnapshot?.CurrentRepositoryHash ?? string.Empty,
+                        Math.Max(0, dashboardSnapshot?.CurrentLevelExp ?? 0));
+                }
+            }
+
+            nativeDesktopCompanionController?.ApplyFarmSettings(
+                approvedActivityAnalysis?.RepositoryCompanions,
+                companionSettings,
+                nativeCompanionDesiredVisible,
+                nativeProjectionRevision + 1);
+
+            var state = BuildNativeDashboardState();
             state.companionVisible = nativeCompanionDesiredVisible;
             if (nativeCompanionDesiredVisible && string.Equals(state.companion.mood, "hidden", StringComparison.Ordinal))
             {
@@ -510,19 +585,37 @@ namespace TokenForge.Client
                       " motion=" + state.wanderEnabled +
                       " clickThrough=" + state.clickThroughEnabled +
                       " source=" + nativeCompanionLastProjectionSource);
+            Debug.Log("INFO [OverlayState][PROJECTED_TO_NATIVE] desiredVisible=" + state.desiredVisible +
+                      " actualVisible=" + state.actualVisible +
+                      " dragEnabled=" + state.dragEnabled +
+                      " source=" + nativeCompanionLastProjectionSource);
+            Debug.Log("INFO [OverlayState][DASHBOARD_RENDER] desiredVisible=" + state.desiredVisible +
+                      " actualVisible=" + state.actualVisible +
+                      " dragEnabled=" + state.dragEnabled +
+                      " clickThrough=" + state.clickThroughEnabled +
+                      " revision=" + state.stateRevision);
             var stateJson = state.ToJson();
             var changed = !string.Equals(lastNativeDashboardStateJson, stateJson, StringComparison.Ordinal);
             if (changed)
             {
                 Debug.Log("INFO [DashboardState] projected changed=true");
                 lastNativeDashboardStateJson = stateJson;
-                nativeDashboardService.UpdateDashboardState(state);
-                nativeDashboardService.SetMenuBarStatus(state);
-                Debug.Log("INFO [DashboardProjection] selectedTab=" + state.selectedNavItem +
-                          " activeRepositoryId=" + SafeNativeText(state.repository.id, "none") +
-                          " activeCompanionId=" + SafeNativeText(state.companion.motion.repositoryId, "none") +
-                          " overlayVisible=" + state.companionVisible +
-                          " motionEnabled=" + state.wanderEnabled);
+                if (nativeDesktopCompanionController != null && nativeDesktopCompanionController.IsAnyOverlayDragging())
+                {
+                    Debug.Log("INFO [DashboardLifecycle][REDRAW_SUPPRESSED] reason=overlayDrag repo=unknown");
+                    Debug.Log("INFO [DashboardProjection][SKIP] reason=overlayDrag repo=unknown");
+                    Debug.Log("INFO [DashboardState][UNCHANGED_DURING_DRAG] repo=unknown");
+                }
+                else
+                {
+                    nativeDashboardService.UpdateDashboardState(state);
+                    nativeDashboardService.SetMenuBarStatus(state);
+                    Debug.Log("INFO [DashboardProjection] selectedTab=" + state.selectedNavItem +
+                              " activeRepositoryId=" + SafeNativeText(state.repository.id, "none") +
+                              " activeCompanionId=" + SafeNativeText(state.companion.motion.repositoryId, "none") +
+                              " overlayVisible=" + state.companionVisible +
+                              " motionEnabled=" + state.wanderEnabled);
+                }
                 Debug.Log("INFO [MenuBarProjection] providersShown=" + state.statusText + " hiddenReason=" + (state.providerUsagePercentages.Any(item => item.hasSavedApprovedActivity) ? "none" : "noSavedAgentAnalysis"));
             }
             else if (Time.realtimeSinceStartup - lastUnchangedProjectionLogTime > 2f)
@@ -530,11 +623,6 @@ namespace TokenForge.Client
                 lastUnchangedProjectionLogTime = Time.realtimeSinceStartup;
                 Debug.Log("INFO [DashboardState] projected changed=false");
             }
-
-            nativeDesktopCompanionController?.ApplySettings(
-                companionSettings,
-                approvedActivityAnalysis?.CharacterDashboard?.CompanionState ?? CompanionState.CreateDefault(),
-                approvedActivityAnalysis?.CharacterDashboard?.MotionState);
 
             if (showDashboardIfNeeded && !nativeDashboardShown)
             {
@@ -644,6 +732,7 @@ namespace TokenForge.Client
             state.codexAgent.status = AgentCodexStatus();
             state.codexAgent.statusText = AgentCodexStatusText();
             state.repositories = BuildNativeRepositoryItems(dashboard);
+            state.companionFarm = BuildNativeCompanionFarmState(state.repositories, settings);
             state.agentProviders = BuildNativeAgentProviderItems();
             state.agents.connectedCount = state.agentProviders.Count(provider => provider.connected && provider.hasValidSource);
             state.agents.warningCount = state.agentProviders.Sum(provider => Math.Max(0, provider.warningCount));
@@ -753,6 +842,51 @@ namespace TokenForge.Client
                     sourceBadge = item.ApprovedByUser ? "Approved by you" : "Approval missing"
                 })
                 .ToArray();
+        }
+
+        private static DesktopCompanionFarmState BuildNativeCompanionFarmState(NativeRepositoryListItem[] repositories, DesktopCompanionSettings settings)
+        {
+            settings = settings ?? DesktopCompanionSettings.CreateDefault();
+            repositories = repositories ?? new NativeRepositoryListItem[0];
+            var overlays = repositories
+                .Where(item => item != null && !item.archived && !string.IsNullOrWhiteSpace(item.id))
+                .Select(item => new RepositoryCompanionOverlayState
+                {
+                    repositoryId = item.id,
+                    repositoryName = SafeNativeText(item.name, "Repository"),
+                    companionId = item.id,
+                    desiredVisible = settings.IsDesktopCompanionEnabled,
+                    actualVisible = false,
+                    desiredPositionX = -1f,
+                    desiredPositionY = -1f,
+                    actualPositionX = -1f,
+                    actualPositionY = -1f,
+                    hasSavedPosition = false,
+                    dragEnabled = !settings.IsClickThroughEnabled,
+                    isDragging = false,
+                    hydratedSnapshot = new NativeCompanionFarmSnapshot
+                    {
+                        repositoryId = item.id,
+                        repositoryName = SafeNativeText(item.name, "Repository"),
+                        companionId = item.id,
+                        stage = item.stageIndex,
+                        level = Math.Max(1, item.level),
+                        xp = Math.Max(0, item.currentXP),
+                        archetype = 0,
+                        visualThemeId = CompanionSkinCatalog.Normalize(item.avatarSkin),
+                        hydrated = true,
+                        desiredVisible = settings.IsDesktopCompanionEnabled
+                    }
+                })
+                .ToArray();
+            return new DesktopCompanionFarmState
+            {
+                enabled = settings.IsDesktopCompanionEnabled,
+                overlays = overlays,
+                visibleCount = overlays.Length,
+                globalMotionEnabled = settings.MotionMode != CompanionDesktopMotionMode.Calm,
+                globalClickThroughEnabled = settings.IsClickThroughEnabled
+            };
         }
 
         private static string RepositoryAnalyzeDisabledReason(bool hasActiveRepository, bool analysisRunning)
@@ -1291,7 +1425,14 @@ namespace TokenForge.Client
                 : "Repo: None";
             var agents = NativeProviderUsageStatusText(state?.providerUsagePercentages, Math.Max(0, state?.agents?.connectedCount ?? 0));
             var level = state?.companion != null && state.companion.canLevelUp ? "Level Up Ready" : "Lv " + Math.Max(1, state?.companion?.level ?? 1);
-            return repo + " · " + agents + " · " + level;
+            var farm = state?.companionFarm;
+            var farmText = "Desktop: " + ((farm?.enabled ?? false) ? "On" : "Off") +
+                           " · Connected companions: " + Math.Max(0, state?.repository?.connectedCount ?? 0) +
+                           " · Visible overlays: " + Math.Max(0, farm?.visibleCount ?? 0) +
+                           " · Drag: " + ((state?.dragEnabled ?? false) ? "Enabled" : "Disabled") +
+                           " · Motion: " + ((farm?.globalMotionEnabled ?? false) ? "On" : "Off") +
+                           " · Click-through: " + ((farm?.globalClickThroughEnabled ?? false) ? "On" : "Off");
+            return repo + " · " + agents + " · " + level + " · " + farmText;
         }
 
         private static bool IsTrackedAgentProvider(AgentProviderType providerType)
@@ -1836,6 +1977,11 @@ namespace TokenForge.Client
             Debug.Log("INFO [NativeAction] routed action=" + request.RawAction + " handler=" + request.Action);
             Debug.Log("INFO [DashboardAction] action=" + request.RawAction + " target=" + request.Value + " enabled=true result=received");
             Debug.Log("INFO [OverlayTrace:" + request.TraceId + "] C# route resolved target=" + request.Action);
+            if (request.Action == NativeDashboardAction.ShowCompanion || request.Action == NativeDashboardAction.HideCompanion || request.Action == NativeDashboardAction.ToggleCompanionVisible)
+            {
+                var normalizedOverlayAction = request.Action == NativeDashboardAction.HideCompanion ? "hideFromDesktop" : "showOnDesktop";
+                Debug.Log("INFO [OverlayAction][RECEIVED] action=" + normalizedOverlayAction + " source=dashboard explicit=true rawAction=" + request.RawAction);
+            }
             switch (request.Action)
             {
                 case NativeDashboardAction.Dashboard:
@@ -1961,13 +2107,13 @@ namespace TokenForge.Client
                     RunNativeDashboardTask(DiscardNativeReviewAsync, request.RawAction);
                     break;
                 case NativeDashboardAction.ToggleCompanionVisible:
-                    RunNativeDashboardTask(() => SetCompanionVisibleFromNativeAsync(request.BoolValue(!(approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings?.IsDesktopCompanionEnabled ?? true)), request.TraceId), request.RawAction);
+                    RunNativeDashboardTask(() => SetCompanionVisibleFromNativeAsync(request.BoolValue(!(approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings?.IsDesktopCompanionEnabled ?? true)), request.TraceId, "explicitDashboardAction"), request.RawAction);
                     break;
                 case NativeDashboardAction.ShowCompanion:
-                    RunNativeDashboardTask(() => SetCompanionVisibleFromNativeAsync(true, request.TraceId), request.RawAction);
+                    RunNativeDashboardTask(() => SetCompanionVisibleFromNativeAsync(true, request.TraceId, "explicitDashboardAction"), request.RawAction);
                     break;
                 case NativeDashboardAction.HideCompanion:
-                    RunNativeDashboardTask(() => SetCompanionVisibleFromNativeAsync(false, request.TraceId), request.RawAction);
+                    RunNativeDashboardTask(() => SetCompanionVisibleFromNativeAsync(false, request.TraceId, "explicitDashboardAction"), request.RawAction);
                     break;
                 case NativeDashboardAction.SetWanderEnabled:
                     RunNativeDashboardTask(() => SetWanderEnabledFromNativeAsync(request.BoolValue(true), request.TraceId), request.RawAction);
@@ -2854,14 +3000,17 @@ namespace TokenForge.Client
             await RefreshAndPublishNativeDashboardAsync();
         }
 
-        private async Task SetCompanionVisibleFromNativeAsync(bool visible, string traceId = "none")
+        private async Task SetCompanionVisibleFromNativeAsync(bool visible, string traceId = "none", string source = "explicitDashboardAction")
         {
             Debug.Log("INFO [OverlayTrace:" + SafeNativeText(traceId, "none") + "] AppBootstrapper route invoked target=DesktopCompanionOverlayController.SetVisible visible=" + visible);
             var oldDesired = nativeCompanionDesiredVisibleInitialized && nativeCompanionDesiredVisible;
+            var oldActual = nativeDesktopCompanionController != null && nativeDesktopCompanionController.OverlayState == CompanionDesktopOverlayState.Active;
+            Debug.Log("INFO [OverlayState][BEFORE_ACTION] desiredVisible=" + oldDesired + " actualVisible=" + oldActual + " source=" + SafeNativeText(source, "explicitDashboardAction"));
             nativeCompanionDesiredVisible = visible;
             nativeCompanionDesiredVisibleInitialized = true;
-            nativeCompanionLastProjectionSource = visible ? "button_show" : "button_hide";
+            nativeCompanionLastProjectionSource = SafeNativeText(source, visible ? "button_show" : "button_hide");
             Debug.Log("INFO [OverlayTrace:" + SafeNativeText(traceId, "none") + "] desired_visible_changed old=" + oldDesired + " new=" + visible + " source=button");
+            Debug.Log("INFO [OverlayProjection][REQUEST] desiredVisible=" + visible + " source=" + nativeCompanionLastProjectionSource);
             var showWithoutRepoWarning = visible && !ActiveRepositoryReadyForNative();
             if (showWithoutRepoWarning)
             {
@@ -2888,8 +3037,10 @@ namespace TokenForge.Client
                 nativeActionStatusText = visible ? "Desktop companion shown." : "Desktop companion hidden.";
             }
 
-            Debug.Log("INFO [OverlayTrace:" + SafeNativeText(traceId, "none") + "] MacNativeDashboardService SetCompanionVisible visible=" + visible);
-            nativeDashboardService?.SetCompanionVisible(visible);
+            Debug.Log("INFO [OverlayTrace:" + SafeNativeText(traceId, "none") + "] MacNativeDashboardService SetCompanionVisible visible=" + visible + " source=" + nativeCompanionLastProjectionSource);
+            nativeDashboardService?.SetCompanionVisible(visible, nativeCompanionLastProjectionSource);
+            var actualAfterNativeCall = nativeDesktopCompanionController != null && nativeDesktopCompanionController.OverlayState == CompanionDesktopOverlayState.Active;
+            Debug.Log("INFO [OverlayState][AFTER_ACTION] desiredVisible=" + nativeCompanionDesiredVisible + " actualVisible=" + actualAfterNativeCall + " source=" + nativeCompanionLastProjectionSource);
             await RefreshAndPublishNativeDashboardAsync();
         }
 
