@@ -76,6 +76,13 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(NativeDashboardAction.SelectRepository, selectRepository.Action);
             Assert.AreEqual("repo-1", selectRepository.Value);
 
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("open_active_companion_dashboard", out var openActiveCompanion));
+            Assert.AreEqual(NativeDashboardAction.OpenActiveCompanionDashboard, openActiveCompanion.Action);
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("open_repository_companion_dashboard:repo-1", out var openRepositoryCompanion));
+            Assert.AreEqual(NativeDashboardAction.OpenRepositoryCompanionDashboard, openRepositoryCompanion.Action);
+            Assert.AreEqual("repo-1", openRepositoryCompanion.Value);
+
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("autoDetectAgent:ClaudeCode", out var detectAgent));
             Assert.AreEqual(NativeDashboardAction.AutoDetectAgent, detectAgent.Action);
             Assert.AreEqual("ClaudeCode", detectAgent.Value);
@@ -126,6 +133,10 @@ namespace TokenForge.Client.Tests
 
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("disable_click", out var disableClick));
             Assert.AreEqual(NativeDashboardAction.DisableClick, disableClick.Action);
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("set_companion_click_through_enabled:true", out var clickThrough));
+            Assert.AreEqual(NativeDashboardAction.SetClickThroughEnabled, clickThrough.Action);
+            Assert.IsTrue(clickThrough.BoolValue(false));
 
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("reset_companion_position", out var reset));
             Assert.AreEqual(NativeDashboardAction.ResetCompanionPosition, reset.Action);
@@ -767,6 +778,8 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("[SidebarCompanions] item repo=", source);
             StringAssert.Contains("[SidebarCompanions] select repo=", source);
             StringAssert.Contains("repository.setActive:", source);
+            StringAssert.Contains("open_active_companion_dashboard", source);
+            StringAssert.Contains("open_repository_companion_dashboard:", source);
             StringAssert.Contains("Active repository", source);
             StringAssert.Contains("row.toolTip = [NSString stringWithFormat:@\"%@ · %@ · Lv %ld%@\"", source);
             StringAssert.Contains("Evolve", source);

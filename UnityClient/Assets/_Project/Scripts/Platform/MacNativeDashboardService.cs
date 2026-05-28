@@ -42,6 +42,7 @@ namespace TokenForge.Client.Platform
                 installed = true;
                 Debug.Log("INFO " + LogPrefix + " action callback registered");
                 Debug.Log("INFO " + LogPrefix + " AppKit dashboard bridge installed");
+                Debug.Log("INFO [RuntimeIdentity] DllImportName=DesktopCompanionOverlay loadedDylibPath=" + NativeLibraryPath());
                 return true;
             }
             catch (Exception exception)
@@ -114,6 +115,7 @@ namespace TokenForge.Client.Platform
 
             try
             {
+                Debug.Log("INFO [OverlayTrace:csharp] DllImport TokenForge_SetCompanionVisible(" + visible + ")");
                 NativeSetCompanionVisible(visible);
             }
             catch (Exception exception)
@@ -144,6 +146,20 @@ namespace TokenForge.Client.Platform
             }
         }
 
+        private static string NativeLibraryPath()
+        {
+            try
+            {
+                var pointer = NativeGetLibraryPath();
+                var path = Marshal.PtrToStringAnsi(pointer);
+                return string.IsNullOrWhiteSpace(path) ? "DesktopCompanionOverlay via Unity plugin loader" : path;
+            }
+            catch (Exception exception)
+            {
+                return "unavailable:" + exception.GetType().Name;
+            }
+        }
+
         private static void OnNativeDashboardAction(string action)
         {
             Debug.Log("INFO [NativeAction] received action=" + (action ?? "<null>"));
@@ -157,6 +173,7 @@ namespace TokenForge.Client.Platform
                 else
                 {
                     Debug.Log("INFO [NativeAction] routed action=" + parsed.RawAction + " handler=" + parsed.Action);
+                    Debug.Log("INFO [OverlayTrace:" + parsed.TraceId + "] C# MacNativeDashboardService action received action=" + parsed.RawAction);
                     Debug.Log("INFO " + LogPrefix + " action=" + parsed.RawAction + " mapped=" + parsed.Action + (string.IsNullOrEmpty(parsed.Value) ? string.Empty : " value=" + parsed.Value));
                 }
             }
@@ -233,6 +250,17 @@ namespace TokenForge.Client.Platform
                 case "select_repository":
                 case "repository.setActive":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.SelectRepository, rawAction, value);
+                    return true;
+                case "open_active_companion_dashboard":
+                case "select_active_companion_dashboard":
+                case "companion.openActiveDashboard":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.OpenActiveCompanionDashboard, rawAction, value);
+                    return true;
+                case "open_repository_companion_dashboard":
+                case "select_repository_companion":
+                case "select_repository_companion_dashboard":
+                case "companion.openRepositoryDashboard":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.OpenRepositoryCompanionDashboard, rawAction, value);
                     return true;
                 case "analyzeRepository":
                 case "analyze_repository":
@@ -368,10 +396,10 @@ namespace TokenForge.Client.Platform
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ToggleCompanionVisible, rawAction, value);
                     return true;
                 case "show_companion":
-                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.ShowCompanion, rawAction, "true");
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.ShowCompanion, rawAction, "true", OverlayTraceId(value));
                     return true;
                 case "hide_companion":
-                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.HideCompanion, rawAction, "false");
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.HideCompanion, rawAction, "false", OverlayTraceId(value));
                     return true;
                 case "changeCompanionSkin":
                 case "change_companion_skin":
@@ -386,14 +414,19 @@ namespace TokenForge.Client.Platform
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.SetWanderEnabled, rawAction, value);
                     return true;
                 case "enable_wander":
-                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.EnableWander, rawAction, "true");
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.EnableWander, rawAction, "true", OverlayTraceId(value));
                     return true;
                 case "disable_wander":
-                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.DisableWander, rawAction, "false");
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.DisableWander, rawAction, "false", OverlayTraceId(value));
                     return true;
                 case "setClickReactionEnabled":
                 case "set_click_reaction_enabled":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.SetClickReactionEnabled, rawAction, value);
+                    return true;
+                case "set_companion_click_through_enabled":
+                case "setClickThroughEnabled":
+                case "set_click_through_enabled":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.SetClickThroughEnabled, rawAction, value);
                     return true;
                 case "enable_click":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.EnableClick, rawAction, "true");
@@ -412,6 +445,11 @@ namespace TokenForge.Client.Platform
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.Unsupported, rawAction, string.Empty);
                     return true;
             }
+        }
+
+        private static string OverlayTraceId(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? "none" : value.Trim();
         }
 
 #if UNITY_STANDALONE_OSX && !UNITY_EDITOR
@@ -439,6 +477,9 @@ namespace TokenForge.Client.Platform
         [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_SetCompanionVisible")]
         private static extern void NativeSetCompanionVisible(bool visible);
 
+        [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_GetOverlayLibraryPath")]
+        private static extern IntPtr NativeGetLibraryPath();
+
         [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_RegisterDashboardActionCallback")]
         private static extern void RegisterDashboardActionCallback(NativeDashboardActionCallback callback);
 #else
@@ -450,6 +491,7 @@ namespace TokenForge.Client.Platform
         private static void NativeUpdateDashboardState(string json) { }
         private static void NativeSetMenuBarStatus(string json) { }
         private static void NativeSetCompanionVisible(bool visible) { }
+        private static IntPtr NativeGetLibraryPath() { return IntPtr.Zero; }
         private static void RegisterDashboardActionCallback(NativeDashboardActionCallback callback) { }
 #endif
     }

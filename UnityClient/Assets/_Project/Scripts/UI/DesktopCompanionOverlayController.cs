@@ -82,7 +82,6 @@ namespace TokenForge.Client.UI
                 {
                     lastFailureReason = string.Empty;
                     overlayService.Hide();
-                    overlayService.Destroy();
                 }
 
                 return;

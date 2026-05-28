@@ -424,7 +424,7 @@ namespace TokenForge.Client.Domain
             switch (stage)
             {
                 case CompanionStage.Hatching:
-                    return new CompanionMotionProfile { DefaultMode = CompanionMotionMode.Idle, IdleRadius = 7f * scale, WanderRadius = 14f * scale, WanderSpeed = 7f * scale, DecisionIntervalSeconds = 2.4f, AllowsWandering = false };
+                    return new CompanionMotionProfile { DefaultMode = CompanionMotionMode.Wandering, IdleRadius = 7f * scale, WanderRadius = 24f * scale, WanderSpeed = 7f * scale, DecisionIntervalSeconds = 2.4f, AllowsWandering = true };
                 case CompanionStage.Baby:
                     return new CompanionMotionProfile { DefaultMode = CompanionMotionMode.Wandering, IdleRadius = 6f * scale, WanderRadius = 64f * scale, WanderSpeed = 15f * scale, DecisionIntervalSeconds = 3.2f, AllowsWandering = true };
                 case CompanionStage.Junior:
@@ -432,7 +432,7 @@ namespace TokenForge.Client.Domain
                 case CompanionStage.Adult:
                     return new CompanionMotionProfile { DefaultMode = CompanionMotionMode.Wandering, IdleRadius = 5f * scale, WanderRadius = 220f * scale, WanderSpeed = 30f * scale, DecisionIntervalSeconds = 4.4f, AllowsWandering = true };
                 default:
-                    return new CompanionMotionProfile { DefaultMode = CompanionMotionMode.Idle, IdleRadius = 5f * scale, WanderRadius = 18f * scale, WanderSpeed = 5f * scale, DecisionIntervalSeconds = 4.6f, AllowsWandering = false };
+                    return new CompanionMotionProfile { DefaultMode = CompanionMotionMode.Wandering, IdleRadius = 5f * scale, WanderRadius = 28f * scale, WanderSpeed = 5f * scale, DecisionIntervalSeconds = 4.6f, AllowsWandering = true };
             }
         }
 

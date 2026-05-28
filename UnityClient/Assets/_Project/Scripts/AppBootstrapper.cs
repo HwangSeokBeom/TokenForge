@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Reflection;
+using System.Security.Cryptography;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
@@ -28,6 +31,7 @@ namespace TokenForge.Client
     {
         private const string LogPrefix = "[TokenForgeBootstrap]";
         private const string HierarchyLogPrefix = "[TokenForgeHierarchy]";
+        private const string AppBootstrapperVersionMarker = "app-bootstrapper-overlay-projection-v8";
         private const string BootstrapRootPrefabPath = "Assets/_Project/Prefabs/UI/BootstrapRoot.prefab";
         private const string StartupScenePath = "Assets/_Project/Scenes/TokenForgeMain.unity";
         private const string LegacyBootstrapScenePath = "Assets/_Project/Scenes/Bootstrap.unity";
@@ -95,6 +99,9 @@ namespace TokenForge.Client
         private float lastUnchangedProjectionLogTime;
         private int nativeProjectionRevision;
         private int unityMainThreadId;
+        private bool nativeCompanionDesiredVisible;
+        private bool nativeCompanionDesiredVisibleInitialized;
+        private string nativeCompanionLastProjectionSource = "startup";
 
 #if UNITY_EDITOR
         public static bool DisableEditorAssetPrefabLookupForTests { get; set; }
@@ -137,6 +144,7 @@ namespace TokenForge.Client
             unityMainThreadId = Thread.CurrentThread.ManagedThreadId;
             Debug.Log("INFO [Startup] AppBootstrapper begin");
             Debug.Log("INFO " + LogPrefix + " TokenForge bootstrap starting.");
+            LogRuntimeBuildIdentity();
             LogStartupScene();
             LogHierarchyDump("AwakeStart");
             lifecycleService = new MacApplicationLifecycleService();
@@ -428,7 +436,14 @@ namespace TokenForge.Client
 
         private void HandleNativeCompanionDashboardRestoreRequested()
         {
-            nativeDashboardService?.ToggleDashboardWindow();
+            OpenNativeDashboardCanonical("companionRestore");
+        }
+
+        private void OpenNativeDashboardCanonical(string reason)
+        {
+            nativeDashboardShown = true;
+            Debug.Log("INFO [WindowLifecycle] openDashboard route reason=" + SafeNativeText(reason, "unknown"));
+            nativeDashboardService?.ShowDashboardWindow();
         }
 
         private void HandleNativeCompanionPositionChanged(Vector2 position)
@@ -456,6 +471,32 @@ namespace TokenForge.Client
 
             EnsureNativeDashboardShell();
             var state = BuildNativeDashboardState();
+            var companionSettings = RepositoryCompanionProfileService.CloneDesktopCompanionSettings(
+                approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault());
+            if (!nativeCompanionDesiredVisibleInitialized)
+            {
+                nativeCompanionDesiredVisible = companionSettings.IsDesktopCompanionEnabled;
+                nativeCompanionDesiredVisibleInitialized = true;
+                nativeCompanionLastProjectionSource = "initial_profile";
+            }
+
+            if (nativeCompanionDesiredVisible && !companionSettings.IsDesktopCompanionEnabled)
+            {
+                Debug.Log("INFO [OverlayTrace] projection_hide_blocked reason=desired_visible_true");
+            }
+
+            companionSettings.IsDesktopCompanionEnabled = nativeCompanionDesiredVisible;
+            state.companionVisible = nativeCompanionDesiredVisible;
+            if (nativeCompanionDesiredVisible && string.Equals(state.companion.mood, "hidden", StringComparison.Ordinal))
+            {
+                state.companion.mood = string.IsNullOrWhiteSpace(state.companion.motion?.mood) ? "active" : state.companion.motion.mood;
+            }
+
+            Debug.Log("INFO [OverlayTrace] projection_applied traceId=unity desiredVisible=" + nativeCompanionDesiredVisible +
+                      " nativeVisible=" + state.companionVisible +
+                      " motion=" + state.wanderEnabled +
+                      " clickThrough=" + state.clickThroughEnabled +
+                      " source=" + nativeCompanionLastProjectionSource);
             var stateJson = state.ToJson();
             var changed = !string.Equals(lastNativeDashboardStateJson, stateJson, StringComparison.Ordinal);
             if (changed)
@@ -464,6 +505,11 @@ namespace TokenForge.Client
                 lastNativeDashboardStateJson = stateJson;
                 nativeDashboardService.UpdateDashboardState(state);
                 nativeDashboardService.SetMenuBarStatus(state);
+                Debug.Log("INFO [DashboardProjection] selectedTab=" + state.selectedNavItem +
+                          " activeRepositoryId=" + SafeNativeText(state.repository.id, "none") +
+                          " activeCompanionId=" + SafeNativeText(state.companion.motion.repositoryId, "none") +
+                          " overlayVisible=" + state.companionVisible +
+                          " motionEnabled=" + state.wanderEnabled);
                 Debug.Log("INFO [MenuBarProjection] providersShown=" + state.statusText + " hiddenReason=" + (state.providerUsagePercentages.Any(item => item.hasSavedApprovedActivity) ? "none" : "noSavedAgentAnalysis"));
             }
             else if (Time.realtimeSinceStartup - lastUnchangedProjectionLogTime > 2f)
@@ -471,9 +517,6 @@ namespace TokenForge.Client
                 lastUnchangedProjectionLogTime = Time.realtimeSinceStartup;
                 Debug.Log("INFO [DashboardState] projected changed=false");
             }
-
-            var companionSettings = RepositoryCompanionProfileService.CloneDesktopCompanionSettings(
-                approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault());
 
             nativeDesktopCompanionController?.ApplySettings(
                 companionSettings,
@@ -483,7 +526,7 @@ namespace TokenForge.Client
             if (showDashboardIfNeeded && !nativeDashboardShown)
             {
                 nativeDashboardShown = true;
-                nativeDashboardService.ShowDashboardWindow();
+                OpenNativeDashboardCanonical("startup");
             }
         }
 
@@ -530,6 +573,7 @@ namespace TokenForge.Client
             state.syncStat = Math.Max(0, dashboard.Sync);
             state.companionVisible = settings.IsDesktopCompanionEnabled;
             state.wanderEnabled = settings.MotionMode != CompanionDesktopMotionMode.Calm;
+            state.clickThroughEnabled = settings.IsClickThroughEnabled;
             state.clickReactionEnabled = !settings.IsClickThroughEnabled;
             state.companion.name = string.IsNullOrWhiteSpace(dashboard.CharacterName) ? "Token" : dashboard.CharacterName;
             state.companion.stage = companion.Stage.ToString();
@@ -1768,15 +1812,16 @@ namespace TokenForge.Client
 
             Debug.Log("INFO [NativeAction] routed action=" + request.RawAction + " handler=" + request.Action);
             Debug.Log("INFO [DashboardAction] action=" + request.RawAction + " target=" + request.Value + " enabled=true result=received");
+            Debug.Log("INFO [OverlayTrace:" + request.TraceId + "] C# route resolved target=" + request.Action);
             switch (request.Action)
             {
                 case NativeDashboardAction.Dashboard:
                     nativeSelectedNavItem = "dashboard";
                     RunNativeDashboardTask(RefreshAndPublishNativeDashboardAsync, request.RawAction);
-                    nativeDashboardService?.ShowDashboardWindow();
+                    OpenNativeDashboardCanonical(request.RawAction);
                     break;
                 case NativeDashboardAction.ShowDashboard:
-                    nativeDashboardService?.ShowDashboardWindow();
+                    OpenNativeDashboardCanonical(request.RawAction);
                     break;
                 case NativeDashboardAction.ToggleDashboard:
                     nativeDashboardService?.ToggleDashboardWindow();
@@ -1815,6 +1860,16 @@ namespace TokenForge.Client
                 case NativeDashboardAction.SelectRepository:
                     nativeSelectedNavItem = "repository";
                     RunNativeDashboardTask(() => SelectRepositoryFromNativeAsync(request.Value), request.RawAction);
+                    break;
+                case NativeDashboardAction.OpenActiveCompanionDashboard:
+                    nativeSelectedNavItem = "dashboard";
+                    RunNativeDashboardTask(RefreshAndPublishNativeDashboardAsync, request.RawAction);
+                    OpenNativeDashboardCanonical(request.RawAction);
+                    break;
+                case NativeDashboardAction.OpenRepositoryCompanionDashboard:
+                    nativeSelectedNavItem = "dashboard";
+                    RunNativeDashboardTask(() => SelectRepositoryCompanionDashboardFromNativeAsync(request.Value), request.RawAction);
+                    OpenNativeDashboardCanonical(request.RawAction);
                     break;
                 case NativeDashboardAction.AnalyzeRepository:
                     RunNativeDashboardTask(() => RunNativeAnalysisAsync(request.Value, repositoryOnly: true), request.RawAction);
@@ -1882,25 +1937,28 @@ namespace TokenForge.Client
                     RunNativeDashboardTask(DiscardNativeReviewAsync, request.RawAction);
                     break;
                 case NativeDashboardAction.ToggleCompanionVisible:
-                    RunNativeDashboardTask(() => SetCompanionVisibleFromNativeAsync(request.BoolValue(!(approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings?.IsDesktopCompanionEnabled ?? true))), request.RawAction);
+                    RunNativeDashboardTask(() => SetCompanionVisibleFromNativeAsync(request.BoolValue(!(approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings?.IsDesktopCompanionEnabled ?? true)), request.TraceId), request.RawAction);
                     break;
                 case NativeDashboardAction.ShowCompanion:
-                    RunNativeDashboardTask(() => SetCompanionVisibleFromNativeAsync(true), request.RawAction);
+                    RunNativeDashboardTask(() => SetCompanionVisibleFromNativeAsync(true, request.TraceId), request.RawAction);
                     break;
                 case NativeDashboardAction.HideCompanion:
-                    RunNativeDashboardTask(() => SetCompanionVisibleFromNativeAsync(false), request.RawAction);
+                    RunNativeDashboardTask(() => SetCompanionVisibleFromNativeAsync(false, request.TraceId), request.RawAction);
                     break;
                 case NativeDashboardAction.SetWanderEnabled:
-                    RunNativeDashboardTask(() => SetWanderEnabledFromNativeAsync(request.BoolValue(true)), request.RawAction);
+                    RunNativeDashboardTask(() => SetWanderEnabledFromNativeAsync(request.BoolValue(true), request.TraceId), request.RawAction);
                     break;
                 case NativeDashboardAction.EnableWander:
-                    RunNativeDashboardTask(() => SetWanderEnabledFromNativeAsync(true), request.RawAction);
+                    RunNativeDashboardTask(() => SetWanderEnabledFromNativeAsync(true, request.TraceId), request.RawAction);
                     break;
                 case NativeDashboardAction.DisableWander:
-                    RunNativeDashboardTask(() => SetWanderEnabledFromNativeAsync(false), request.RawAction);
+                    RunNativeDashboardTask(() => SetWanderEnabledFromNativeAsync(false, request.TraceId), request.RawAction);
                     break;
                 case NativeDashboardAction.SetClickReactionEnabled:
                     RunNativeDashboardTask(() => SetClickReactionEnabledFromNativeAsync(request.BoolValue(true)), request.RawAction);
+                    break;
+                case NativeDashboardAction.SetClickThroughEnabled:
+                    RunNativeDashboardTask(() => SetClickThroughEnabledFromNativeAsync(request.BoolValue(false)), request.RawAction);
                     break;
                 case NativeDashboardAction.EnableClick:
                     RunNativeDashboardTask(() => SetClickReactionEnabledFromNativeAsync(true), request.RawAction);
@@ -1929,7 +1987,7 @@ namespace TokenForge.Client
                     break;
                 case NativeDashboardAction.ResetLocalState:
                     Debug.Log("INFO [NativeDashboard] reset local state requested status=manualRequired");
-                    nativeDashboardService?.ShowDashboardWindow();
+                    OpenNativeDashboardCanonical(request.RawAction);
                     break;
                 case NativeDashboardAction.Unsupported:
                     Debug.LogWarning("WARN [NativeAction] unknown action=" + request.RawAction);
@@ -2006,6 +2064,28 @@ namespace TokenForge.Client
             var result = await approvedActivityAnalysis.SelectRepositoryCompanionProfileAsync(repositoryHash);
             nativeActionStatusKind = result.IsSuccess ? "success" : "error";
             nativeActionStatusText = result.IsSuccess ? "Active repository changed." : "Repository switch failed: " + SafeNativeText(result.ErrorMessage, result.ErrorCode);
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task SelectRepositoryCompanionDashboardFromNativeAsync(string repositoryHash)
+        {
+            if (approvedActivityAnalysis == null || string.IsNullOrWhiteSpace(repositoryHash))
+            {
+                nativeActionStatusKind = "error";
+                nativeActionStatusText = "Repository companion selection failed: missing repository id.";
+                await RefreshAndPublishNativeDashboardAsync();
+                return;
+            }
+
+            Debug.Log("INFO [DashboardActionRouter] action=open_repository_companion_dashboard resolvedRepository=" + SafeNativeText(repositoryHash, "unknown"));
+            var result = await approvedActivityAnalysis.SelectRepositoryCompanionProfileAsync(repositoryHash);
+            nativeActionStatusKind = result.IsSuccess ? "success" : "error";
+            nativeActionStatusText = result.IsSuccess
+                ? "Repository companion dashboard opened."
+                : "Repository companion switch failed: " + SafeNativeText(result.ErrorMessage, result.ErrorCode);
+            Debug.Log("INFO [RepositoryState] active=" + SafeNativeText(approvedActivityAnalysis.CharacterDashboard?.CurrentRepositoryHash, "none") +
+                      " requested=" + SafeNativeText(repositoryHash, "unknown") +
+                      " dashboardTab=dashboard result=" + (result.IsSuccess ? "selected" : "failed"));
             await RefreshAndPublishNativeDashboardAsync();
         }
 
@@ -2738,8 +2818,22 @@ namespace TokenForge.Client
             await RefreshAndPublishNativeDashboardAsync();
         }
 
-        private async Task SetCompanionVisibleFromNativeAsync(bool visible)
+        private async Task SetCompanionVisibleFromNativeAsync(bool visible, string traceId = "none")
         {
+            Debug.Log("INFO [OverlayTrace:" + SafeNativeText(traceId, "none") + "] AppBootstrapper route invoked target=DesktopCompanionOverlayController.SetVisible visible=" + visible);
+            var oldDesired = nativeCompanionDesiredVisibleInitialized && nativeCompanionDesiredVisible;
+            nativeCompanionDesiredVisible = visible;
+            nativeCompanionDesiredVisibleInitialized = true;
+            nativeCompanionLastProjectionSource = visible ? "button_show" : "button_hide";
+            Debug.Log("INFO [OverlayTrace:" + SafeNativeText(traceId, "none") + "] desired_visible_changed old=" + oldDesired + " new=" + visible + " source=button");
+            var showWithoutRepoWarning = visible && !ActiveRepositoryReadyForNative();
+            if (showWithoutRepoWarning)
+            {
+                nativeActionStatusKind = "warning";
+                nativeActionStatusText = "Companion shown with no active repository. Add a repository to customize growth.";
+                Debug.LogWarning("WARN [OverlayTrace:" + SafeNativeText(traceId, "none") + "] show_requested repoId=none source=button result=using_default_companion");
+            }
+
             if (approvedActivityAnalysis != null)
             {
                 var result = await approvedActivityAnalysis.SetDesktopCompanionEnabledAsync(visible);
@@ -2752,16 +2846,39 @@ namespace TokenForge.Client
                 }
             }
 
-            nativeActionStatusKind = "success";
-            nativeActionStatusText = visible ? "Desktop companion shown." : "Desktop companion hidden.";
+            if (!showWithoutRepoWarning)
+            {
+                nativeActionStatusKind = "success";
+                nativeActionStatusText = visible ? "Desktop companion shown." : "Desktop companion hidden.";
+            }
+
+            Debug.Log("INFO [OverlayTrace:" + SafeNativeText(traceId, "none") + "] MacNativeDashboardService SetCompanionVisible visible=" + visible);
             nativeDashboardService?.SetCompanionVisible(visible);
             await RefreshAndPublishNativeDashboardAsync();
         }
 
-        private async Task SetWanderEnabledFromNativeAsync(bool enabled)
+        private async Task SetWanderEnabledFromNativeAsync(bool enabled, string traceId = "none")
         {
+            Debug.Log("INFO [OverlayTrace:" + SafeNativeText(traceId, "none") + "] AppBootstrapper route invoked target=DesktopCompanionOverlayController.SetWander enabled=" + enabled);
             if (approvedActivityAnalysis != null)
             {
+                if (enabled)
+                {
+                    var oldDesired = nativeCompanionDesiredVisibleInitialized && nativeCompanionDesiredVisible;
+                    nativeCompanionDesiredVisible = true;
+                    nativeCompanionDesiredVisibleInitialized = true;
+                    nativeCompanionLastProjectionSource = "enable_wander";
+                    Debug.Log("INFO [OverlayTrace:" + SafeNativeText(traceId, "none") + "] desired_visible_changed old=" + oldDesired + " new=true source=enable_wander");
+                    var visibleResult = await approvedActivityAnalysis.SetDesktopCompanionEnabledAsync(true);
+                    if (!visibleResult.IsSuccess)
+                    {
+                        nativeActionStatusKind = "error";
+                        nativeActionStatusText = "Wander movement could not show companion: " + SafeNativeText(visibleResult.ErrorMessage, visibleResult.ErrorCode);
+                        await RefreshAndPublishNativeDashboardAsync();
+                        return;
+                    }
+                }
+
                 var result = await approvedActivityAnalysis.SetDesktopCompanionMotionModeAsync(enabled ? CompanionDesktopMotionMode.Normal : CompanionDesktopMotionMode.Calm);
                 if (!result.IsSuccess)
                 {
@@ -2774,6 +2891,12 @@ namespace TokenForge.Client
 
             nativeActionStatusKind = "success";
             nativeActionStatusText = enabled ? "Wander movement enabled." : "Wander movement stopped.";
+            if (enabled)
+            {
+                Debug.Log("INFO [OverlayTrace:" + SafeNativeText(traceId, "none") + "] Enable Wander ensuring overlay visible before motion");
+                nativeDashboardService?.SetCompanionVisible(true);
+            }
+
             await RefreshAndPublishNativeDashboardAsync();
         }
 
@@ -2793,6 +2916,25 @@ namespace TokenForge.Client
 
             nativeActionStatusKind = "success";
             nativeActionStatusText = enabled ? "Click reaction enabled." : "Click reaction disabled.";
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task SetClickThroughEnabledFromNativeAsync(bool enabled)
+        {
+            if (approvedActivityAnalysis != null)
+            {
+                var result = await approvedActivityAnalysis.SetDesktopCompanionClickThroughAsync(enabled);
+                if (!result.IsSuccess)
+                {
+                    nativeActionStatusKind = "error";
+                    nativeActionStatusText = "Click-through save failed: " + SafeNativeText(result.ErrorMessage, result.ErrorCode);
+                    await RefreshAndPublishNativeDashboardAsync();
+                    return;
+                }
+            }
+
+            nativeActionStatusKind = "success";
+            nativeActionStatusText = enabled ? "Click-through enabled." : "Click-through disabled.";
             await RefreshAndPublishNativeDashboardAsync();
         }
 
@@ -3107,6 +3249,40 @@ namespace TokenForge.Client
                 : "<none>";
             Debug.Log("[StartupScene] buildSettingsFirst=" + buildScenePath);
 #endif
+        }
+
+        private void LogRuntimeBuildIdentity()
+        {
+            Debug.Log("INFO [RuntimeIdentity] AppBootstrapperVersionMarker=" + AppBootstrapperVersionMarker);
+            Debug.Log("INFO [RuntimeIdentity] applicationVersion=" + Application.version + " unityVersion=" + Application.unityVersion + " buildGUID=" + Application.buildGUID);
+            Debug.Log("INFO [RuntimeIdentity] dataPath=" + Application.dataPath + " persistentDataPath=" + Application.persistentDataPath);
+            try
+            {
+                var assembly = typeof(AppBootstrapper).GetTypeInfo().Assembly;
+                var location = assembly.Location;
+                Debug.Log("INFO [RuntimeIdentity] csharpAssembly=" + (string.IsNullOrWhiteSpace(location) ? "unavailable" : location));
+                if (!string.IsNullOrWhiteSpace(location) && File.Exists(location))
+                {
+                    Debug.Log("INFO [RuntimeIdentity] csharpAssemblyModified=" + File.GetLastWriteTimeUtc(location).ToString("O") + " hash=" + Sha256ForFile(location));
+                }
+                else
+                {
+                    Debug.Log("WARN [RuntimeIdentity] csharpAssemblyModified=unavailable reason=assemblyLocationMissing");
+                }
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("WARN [RuntimeIdentity] csharpAssembly identity failed: " + exception.GetType().Name);
+            }
+        }
+
+        private static string Sha256ForFile(string path)
+        {
+            using (var stream = File.OpenRead(path))
+            using (var sha = SHA256.Create())
+            {
+                return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", string.Empty).ToLowerInvariant();
+            }
         }
 
         private void MarkBootstrapRoot(GameObject rootObject, string source, string prefabPath)

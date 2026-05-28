@@ -3,6 +3,8 @@
 #include <dlfcn.h>
 #include <limits.h>
 #include <string.h>
+#include <sys/stat.h>
+#import <CommonCrypto/CommonDigest.h>
 
 @class TokenForgeAppLifecycleDelegate;
 @class TokenForgeNativeDashboardController;
@@ -11,6 +13,7 @@ static TokenForgeNativeDashboardController *TokenForgeEnsureNativeDashboardContr
 static void TokenForgeOpenNativeDashboardOnMain(void);
 extern "C" void ShowDesktopCompanionOverlay(void);
 extern "C" void HideDesktopCompanionOverlay(void);
+extern "C" const char *TokenForge_GetOverlayLibraryPath(void);
 extern "C" void SetCompanionOverlayMotionProfile(int motionMode, float idleRadius, float wanderRadius, float wanderSpeed, float decisionIntervalSeconds, bool allowsWandering, float reactionCooldownSeconds);
 extern "C" void SetCompanionOverlayClickThrough(bool clickThrough);
 
@@ -21,6 +24,7 @@ extern "C" void SetCompanionOverlayClickThrough(bool clickThrough);
 @property(nonatomic, strong) NSStatusItem *statusItem;
 @property(nonatomic) BOOL explicitTerminationRequested;
 @property(nonatomic) BOOL observingWindowNotifications;
+@property(nonatomic) BOOL installed;
 @property(nonatomic, strong) NSTimer *statusAnimationTimer;
 @property(nonatomic) NSInteger statusAnimationFrame;
 - (void)install;
@@ -83,6 +87,17 @@ static BOOL TokenForgeDragExceededThreshold = NO;
 static BOOL TokenForgeMotionTickLogged = NO;
 static BOOL TokenForgeMotionPauseLogged = NO;
 static BOOL TokenForgeMenuClickThrough = NO;
+static NSUInteger TokenForgeOverlayTraceCounter = 1000;
+static BOOL TokenForgeRuntimeIdentityLogged = NO;
+static BOOL TokenForgeDebugOverlayDiagnosticsEnabled = YES;
+static BOOL TokenForgeDashboardOpening = NO;
+static BOOL TokenForgeLifecycleInstallDeferred = NO;
+static BOOL TokenForgeDesiredCompanionVisible = NO;
+static BOOL TokenForgeAppLifecycleAllowsOverlay = YES;
+static NSString *TokenForgeLastHideReason = @"none";
+static NSString *TokenForgeLastShowReason = @"startup";
+static NSString *TokenForgeLastProjectionSource = @"startup";
+static NSString *TokenForgeNativePluginVersion = @"native-plugin-lifecycle-v8";
 static NSPoint TokenForgeDragStartMouse = {0, 0};
 static NSPoint TokenForgeDragStartOrigin = {0, 0};
 static NSPoint TokenForgeCompanionAnchor = {0, 0};
@@ -92,6 +107,20 @@ static void TokenForgePersistCompanionFrame(NSRect frame);
 static void TokenForgeTriggerOverlayReaction(NSInteger reaction, NSString *speech);
 static void TokenForgeDrawAvatarInRect(TokenForgeCompanionView *view, NSRect containerRect, NSString *preset, NSInteger frameIndex, NSString *mode);
 static NSImage *TokenForgeAvatarImageForPreset(NSString *preset, NSSize imageSize, NSInteger stage, NSInteger archetype, NSInteger frameIndex, NSString *mode, NSString *theme);
+static const char *TokenForgeNextOverlayTraceId(void);
+static void TokenForgeLogRuntimeIdentityIfNeeded(void);
+static void TokenForgeDumpAllWindows(NSString *reason);
+static void TokenForgeDumpOverlayPanelState(NSString *traceId);
+static BOOL TokenForgeWindowLooksBlank(NSWindow *window);
+static void TokenForgeLogWindowLifecycle(NSString *event, NSWindow *window, NSString *reason);
+static void TokenForgeShowDesktopCompanionOverlayWithTrace(NSString *traceId);
+static void TokenForgeHideDesktopCompanionOverlayWithTrace(NSString *traceId);
+static void TokenForgeSetCompanionOverlayMotionProfileWithTrace(NSString *traceId, int motionMode, float idleRadius, float wanderRadius, float wanderSpeed, float decisionIntervalSeconds, bool allowsWandering, float reactionCooldownSeconds);
+static BOOL TokenForgeAppKitRegistrationReady(void);
+static void TokenForgeRequestLifecycleInstall(NSString *reason);
+static void TokenForgeLogOverlayProjection(NSString *traceId, NSString *source);
+static void TokenForgeScheduleOverlayWatchdogs(NSString *traceId);
+static void TokenForgeCreateCompanionOverlayOnMain(NSString *traceId);
 
 static NSRect TokenForgeAvatarCanonicalBounds(void)
 {
@@ -541,6 +570,24 @@ static NSImage *TokenForgeAvatarImageForPreset(NSString *preset, NSSize imageSiz
     [[NSColor clearColor] setFill];
     NSRectFill(dirtyRect);
 
+    if (TokenForgeDebugOverlayDiagnosticsEnabled && [self.assetType isEqualToString:@"overlay"]) {
+        [[NSColor colorWithCalibratedRed:1.0 green:0.0 blue:0.0 alpha:0.18] setFill];
+        NSRectFill(self.bounds);
+        [[NSColor colorWithCalibratedRed:0.0 green:1.0 blue:0.0 alpha:0.92] setStroke];
+        NSBezierPath *border = [NSBezierPath bezierPathWithRect:NSInsetRect(self.bounds, 1.0, 1.0)];
+        border.lineWidth = 3.0;
+        [border stroke];
+        static BOOL TokenForgeOverlayRenderLogged = NO;
+        if (!TokenForgeOverlayRenderLogged) {
+            TokenForgeOverlayRenderLogged = YES;
+            NSLog(@"INFO [OverlayTrace:render] contentView draw/render confirmed bounds=(%.2f,%.2f %.2fx%.2f) debugRectangle=true",
+                  self.bounds.origin.x,
+                  self.bounds.origin.y,
+                  self.bounds.size.width,
+                  self.bounds.size.height);
+        }
+    }
+
     TokenForgeDrawAvatarInRect(self, self.bounds, self.assetType ?: @"overlay", self.animationState, @"idle");
 
     if (self.speechText.length > 0 && [NSDate timeIntervalSinceReferenceDate] < self.speechExpiresAt) {
@@ -767,7 +814,7 @@ static NSImage *TokenForgeAvatarImageForPreset(NSString *preset, NSSize imageSiz
 @end
 
 @implementation TokenForgeCompanionOverlayWindow
-- (BOOL)canBecomeKeyWindow { return YES; }
+- (BOOL)canBecomeKeyWindow { return NO; }
 - (BOOL)canBecomeMainWindow { return NO; }
 @end
 
@@ -801,10 +848,260 @@ static BOOL TokenForgeMenuCanAnalyze = NO;
 static BOOL TokenForgeMenuCanSync = NO;
 static BOOL TokenForgeMenuCanLevelUp = NO;
 static BOOL TokenForgeMenuAnalysisRunning = NO;
+static BOOL TokenForgeLifecycleInstallInProgress = NO;
+static BOOL TokenForgeDashboardOpenPending = NO;
+static BOOL TokenForgeDumpingWindows = NO;
 static NSString *TokenForgeMenuReaction = @"none";
 static NSString *TokenForgeMenuStatusText = @"Repo: None · AI Agents: 0 connected";
 static NSString *TokenForgeMenuAnimationMode = @"idle";
+static NSString *TokenForgeCurrentDashboardTab = @"dashboard";
 static TokenForgeNativeDashboardController *TokenForgeDashboardController = nil;
+static NSWindow *TokenForgeNativeDashboardWindow = nil;
+
+static const char *TokenForgeNextOverlayTraceId(void)
+{
+    static char trace[32] = {0};
+    TokenForgeOverlayTraceCounter += 1;
+    snprintf(trace, sizeof(trace), "%lu", (unsigned long)TokenForgeOverlayTraceCounter);
+    return trace;
+}
+
+static NSString *TokenForgeFileModifiedTime(NSString *path)
+{
+    if (path.length == 0) {
+        return @"unavailable";
+    }
+
+    NSDictionary<NSFileAttributeKey, id> *attributes = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:nil];
+    NSDate *date = attributes[NSFileModificationDate];
+    return date != nil ? date.description : @"unavailable";
+}
+
+static NSString *TokenForgeFileSHA256(NSString *path)
+{
+    if (path.length == 0) {
+        return @"unavailable";
+    }
+
+    NSData *data = [NSData dataWithContentsOfFile:path];
+    if (data == nil) {
+        return @"unavailable";
+    }
+
+    unsigned char hash[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256(data.bytes, (CC_LONG)data.length, hash);
+    NSMutableString *hex = [NSMutableString stringWithCapacity:CC_SHA256_DIGEST_LENGTH * 2];
+    for (NSInteger index = 0; index < CC_SHA256_DIGEST_LENGTH; index++) {
+        [hex appendFormat:@"%02x", hash[index]];
+    }
+    return hex;
+}
+
+static NSString *TokenForgeNativeLibraryPathString(void)
+{
+    const char *path = TokenForge_GetOverlayLibraryPath();
+    return path != NULL ? [NSString stringWithUTF8String:path] : @"unavailable";
+}
+
+static void TokenForgeLogRuntimeIdentityIfNeeded(void)
+{
+    if (TokenForgeRuntimeIdentityLogged) {
+        return;
+    }
+
+    TokenForgeRuntimeIdentityLogged = YES;
+    NSBundle *bundle = [NSBundle mainBundle];
+    NSString *bundlePath = bundle.bundlePath ?: @"unavailable";
+    NSString *executablePath = bundle.executablePath ?: @"unavailable";
+    NSString *executableName = [bundle objectForInfoDictionaryKey:@"CFBundleExecutable"] ?: @"unavailable";
+    NSString *bundleIdentifier = bundle.bundleIdentifier ?: @"unavailable";
+    NSString *version = [bundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"] ?: @"unavailable";
+    NSString *build = [bundle objectForInfoDictionaryKey:@"CFBundleVersion"] ?: @"unavailable";
+    NSString *dylibPath = TokenForgeNativeLibraryPathString();
+    NSString *managedPath = [bundlePath stringByAppendingPathComponent:@"Contents/Resources/Data/Managed/TokenForge.Client.dll"];
+    NSLog(@"INFO [NativeLifecycle] dylib_loaded no_appkit_touch=true version=%@", TokenForgeNativePluginVersion);
+    NSLog(@"INFO [RuntimeIdentity] CFBundleIdentifier=%@", bundleIdentifier);
+    NSLog(@"INFO [RuntimeIdentity] CFBundleExecutable=%@", executableName);
+    NSLog(@"INFO [RuntimeIdentity] bundlePath=%@", bundlePath);
+    NSLog(@"INFO [RuntimeIdentity] executablePath=%@", executablePath);
+    NSLog(@"INFO [RuntimeIdentity] appVersion=%@ build=%@ executableModified=%@ executableHash=%@", version, build, TokenForgeFileModifiedTime(executablePath), TokenForgeFileSHA256(executablePath));
+    NSLog(@"INFO [RuntimeIdentity] nativeDylibPath=%@ modified=%@ hash=%@ versionMarker=%@", dylibPath, TokenForgeFileModifiedTime(dylibPath), TokenForgeFileSHA256(dylibPath), TokenForgeNativePluginVersion);
+    NSLog(@"INFO [RuntimeIdentity] managedAssemblyPath=%@ modified=%@ hash=%@", managedPath, TokenForgeFileModifiedTime(managedPath), TokenForgeFileSHA256(managedPath));
+    NSLog(@"INFO [RuntimeIdentity] dylibImportName=DesktopCompanionOverlay expectedBundleFile=libDesktopCompanionOverlay.dylib");
+}
+
+static BOOL TokenForgeAppKitRegistrationReady(void)
+{
+    BOOL ready = NSApp != nil && NSApp.delegate != nil;
+    if (ready) {
+        NSLog(@"INFO [NativeLifecycle] app_registration_ready=true delegate=%@", NSStringFromClass([[NSApp delegate] class]));
+    }
+    return ready;
+}
+
+static void TokenForgeRequestLifecycleInstall(NSString *reason)
+{
+    BOOL ready = TokenForgeAppKitRegistrationReady();
+    NSLog(@"INFO [NativeLifecycle] install_delegate requested appReady=%@ reason=%@", ready ? @"true" : @"false", reason ?: @"unknown");
+    if (ready) {
+        TokenForgeLifecycleInstallDeferred = NO;
+        TokenForgeEnsureLifecycleDelegate();
+        return;
+    }
+
+    NSLog(@"INFO [NativeLifecycle] app_registration_ready=false reason=%@", reason ?: @"unknown");
+    if (TokenForgeLifecycleInstallDeferred) {
+        return;
+    }
+
+    TokenForgeLifecycleInstallDeferred = YES;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        TokenForgeLifecycleInstallDeferred = NO;
+        TokenForgeRequestLifecycleInstall(@"deferred_retry");
+    });
+}
+
+static BOOL TokenForgeWindowLooksBlank(NSWindow *window)
+{
+    if (window == nil || ![window.title isEqualToString:@"TokenForge"]) {
+        return NO;
+    }
+
+    if (window == TokenForgeNativeDashboardWindow) {
+        return NO;
+    }
+
+    NSView *contentView = window.contentView;
+    return contentView == nil || contentView.subviews.count == 0;
+}
+
+static void TokenForgeLogWindowLifecycle(NSString *event, NSWindow *window, NSString *reason)
+{
+    if (window == nil) {
+        NSLog(@"INFO [WindowLifecycle] %@ window=nil reason=%@", event ?: @"event", reason ?: @"none");
+        return;
+    }
+
+    NSString *contentClass = window.contentView != nil ? NSStringFromClass([window.contentView class]) : @"nil";
+    NSLog(@"INFO [WindowLifecycle] %@ id=%p title=%@ class=%@ frame=(%.2f,%.2f %.2fx%.2f) contentView=%@ visible=%@ reason=%@",
+          event ?: @"event",
+          window,
+          window.title ?: @"",
+          NSStringFromClass([window class]),
+          window.frame.origin.x,
+          window.frame.origin.y,
+          window.frame.size.width,
+          window.frame.size.height,
+          contentClass,
+          window.isVisible ? @"true" : @"false",
+          reason ?: @"none");
+    if (TokenForgeWindowLooksBlank(window)) {
+        if (TokenForgeDumpingWindows) {
+            NSLog(@"INFO [NativeLifecycle] window_dump readonly=true blank_window_detected=true id=%p reason=%@",
+                  window,
+                  reason ?: @"unknown");
+            return;
+        }
+
+        NSLog(@"WARN [WindowLifecycle] blank TokenForge window detected; redirecting to dashboard route id=%p title=%@ contentView=%@ reason=%@",
+              window,
+              window.title ?: @"",
+              contentClass,
+              reason ?: @"unknown");
+        [window orderOut:nil];
+        if (!TokenForgeDumpingWindows && !TokenForgeLifecycleInstallInProgress && !TokenForgeDashboardOpenPending) {
+            TokenForgeDashboardOpenPending = YES;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                TokenForgeDashboardOpenPending = NO;
+                TokenForgeOpenNativeDashboardOnMain();
+            });
+        }
+    }
+}
+
+static void TokenForgeDumpAllWindows(NSString *reason)
+{
+    NSArray<NSWindow *> *windows = [NSApp windows];
+    NSLog(@"INFO [NativeLifecycle] window_dump readonly=true count=%lu reason=%@", (unsigned long)windows.count, reason ?: @"manual");
+    NSLog(@"INFO [WindowLifecycle] dump begin reason=%@ count=%lu", reason ?: @"manual", (unsigned long)windows.count);
+    TokenForgeDumpingWindows = YES;
+    for (NSWindow *window in windows) {
+        TokenForgeLogWindowLifecycle(@"dump", window, reason ?: @"manual");
+    }
+    TokenForgeDumpingWindows = NO;
+    NSLog(@"INFO [WindowLifecycle] dump end reason=%@", reason ?: @"manual");
+}
+
+static void TokenForgeDumpOverlayPanelState(NSString *traceId)
+{
+    NSString *trace = traceId.length > 0 ? traceId : @"none";
+    if (TokenForgeCompanionWindow == nil) {
+        NSLog(@"INFO [OverlayTrace:%@] panel=nil", trace);
+        return;
+    }
+
+    NSScreen *screen = TokenForgeCompanionWindow.screen ?: [NSScreen mainScreen];
+    NSString *screenName = screen.localizedName ?: @"unknown";
+    NSLog(@"INFO [OverlayTrace:%@] panel.isVisible=%@ alpha=%.2f frame=(%.2f,%.2f %.2fx%.2f) level=%ld screen=%@ ignoresMouseEvents=%@ collectionBehavior=%lu contentView=%@",
+          trace,
+          TokenForgeCompanionWindow.isVisible ? @"1" : @"0",
+          TokenForgeCompanionWindow.alphaValue,
+          TokenForgeCompanionWindow.frame.origin.x,
+          TokenForgeCompanionWindow.frame.origin.y,
+          TokenForgeCompanionWindow.frame.size.width,
+          TokenForgeCompanionWindow.frame.size.height,
+          (long)TokenForgeCompanionWindow.level,
+          screenName,
+          TokenForgeCompanionWindow.ignoresMouseEvents ? @"true" : @"false",
+          (unsigned long)TokenForgeCompanionWindow.collectionBehavior,
+          TokenForgeCompanionWindow.contentView != nil ? NSStringFromClass([TokenForgeCompanionWindow.contentView class]) : @"nil");
+}
+
+static void TokenForgeLogOverlayProjection(NSString *traceId, NSString *source)
+{
+    NSString *trace = traceId.length > 0 ? traceId : @"none";
+    NSString *projectionSource = source.length > 0 ? source : TokenForgeLastProjectionSource ?: @"unknown";
+    BOOL exists = TokenForgeCompanionWindow != nil;
+    BOOL visible = exists && TokenForgeCompanionWindow.isVisible;
+    NSLog(@"INFO [OverlayTrace:%@] projection_applied desiredVisible=%@ nativeVisible=%@ panelExists=%@ appLifecycleAllowed=%@ repositoryCompanionEnabled=%@ motion=%@ clickThrough=%@ source=%@ lastHideReason=%@ lastShowReason=%@",
+          trace,
+          TokenForgeDesiredCompanionVisible ? @"true" : @"false",
+          visible ? @"true" : @"false",
+          exists ? @"true" : @"false",
+          TokenForgeAppLifecycleAllowsOverlay ? @"true" : @"false",
+          TokenForgeMenuCompanionEnabled ? @"true" : @"false",
+          (TokenForgeCompanionAllowsWandering && TokenForgeCompanionMotionMode != 0) ? @"true" : @"false",
+          TokenForgeMenuClickThrough ? @"true" : @"false",
+          projectionSource,
+          TokenForgeLastHideReason ?: @"none",
+          TokenForgeLastShowReason ?: @"none");
+}
+
+static void TokenForgeScheduleOverlayWatchdogs(NSString *traceId)
+{
+    NSString *trace = [traceId.length > 0 ? traceId : @"none" copy];
+    NSArray<NSNumber *> *delays = @[@1, @5, @30];
+    for (NSNumber *delayNumber in delays) {
+        NSInteger delay = delayNumber.integerValue;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            BOOL exists = TokenForgeCompanionWindow != nil;
+            BOOL visible = exists && TokenForgeCompanionWindow.isVisible;
+            NSRect frame = exists ? TokenForgeCompanionWindow.frame : NSZeroRect;
+            CGFloat alpha = exists ? TokenForgeCompanionWindow.alphaValue : 0.0;
+            NSLog(@"INFO [OverlayTrace:%@] panel_watchdog_%lds visible=%@ exists=%@ alpha=%.2f frame=(%.2f,%.2f %.2fx%.2f)",
+                  trace,
+                  (long)delay,
+                  visible ? @"true" : @"false",
+                  exists ? @"true" : @"false",
+                  alpha,
+                  frame.origin.x,
+                  frame.origin.y,
+                  frame.size.width,
+                  frame.size.height);
+            TokenForgeLogOverlayProjection(trace, [NSString stringWithFormat:@"watchdog_%lds", (long)delay]);
+        });
+    }
+}
 
 static NSDictionary *TokenForgeParseJsonDictionary(const char *json)
 {
@@ -987,6 +1284,7 @@ static void TokenForgeSendMenuAction(const char *action)
 
 static void TokenForgeSendDashboardAction(const char *action)
 {
+    NSLog(@"INFO [NativeAction] received action=%s currentTab=%@", action != NULL ? action : "<null>", TokenForgeCurrentDashboardTab ?: @"dashboard");
     if (TokenForgeDashboardActionClicked != nil) {
         TokenForgeDashboardActionClicked(action);
     }
@@ -1139,35 +1437,73 @@ static void TokenForgeEnsureCompanionMotionTimer(void)
     NSLog(@"INFO [DesktopOverlay] movementTimer started interval=%.2f", 1.0 / 30.0);
 }
 
-static void TokenForgeCreateCompanionOverlayOnMain(void)
+static void TokenForgeCreateCompanionOverlayOnMain(NSString *traceId)
 {
-    TokenForgeEnsureLifecycleDelegate();
+    TokenForgeLogRuntimeIdentityIfNeeded();
+    NSString *trace = traceId.length > 0 ? traceId : @"none";
+    if (!TokenForgeAppKitRegistrationReady()) {
+        NSLog(@"INFO [NativeLifecycle] open_dashboard deferred reason=app_not_ready");
+        NSLog(@"INFO [OverlayTrace:%@] native_show_deferred reason=app_not_ready", trace);
+        TokenForgeRequestLifecycleInstall(@"overlay_create");
+        return;
+    }
+
+    TokenForgeRequestLifecycleInstall(@"overlay_create");
     if (TokenForgeCompanionWindow != nil) {
         NSLog(@"INFO [DesktopCompanion] strongReference panel=%@ view=%@ controller=%@", TokenForgeCompanionWindow != nil ? @"true" : @"false", TokenForgeCompanionContentView != nil ? @"true" : @"false", TokenForgeLifecycleDelegate != nil ? @"true" : @"false");
         return;
     }
 
     NSPoint origin = TokenForgeLoadCompanionOrigin();
-    NSRect frame = TokenForgeClampFrameToVisibleFrame(NSMakeRect(origin.x, origin.y, TokenForgeCompanionSize.width, TokenForgeCompanionSize.height));
+    NSRect requestedFrame = NSMakeRect(origin.x, origin.y, TokenForgeCompanionSize.width, TokenForgeCompanionSize.height);
+    NSRect frame = TokenForgeClampFrameToVisibleFrame(requestedFrame);
     TokenForgeCompanionAnchor = frame.origin;
+    NSRect visibleFrame = TokenForgeVisibleFrameForFrame(frame);
+    NSLog(@"INFO [DesktopOverlay] screenClamp requested=(%.2f,%.2f %.2fx%.2f) visibleFrame=(%.2f,%.2f %.2fx%.2f) clamped=(%.2f,%.2f %.2fx%.2f)",
+          requestedFrame.origin.x,
+          requestedFrame.origin.y,
+          requestedFrame.size.width,
+          requestedFrame.size.height,
+          visibleFrame.origin.x,
+          visibleFrame.origin.y,
+          visibleFrame.size.width,
+          visibleFrame.size.height,
+          frame.origin.x,
+          frame.origin.y,
+          frame.size.width,
+          frame.size.height);
     NSPanel *panel = [[NSPanel alloc] initWithContentRect:frame
                                                 styleMask:NSWindowStyleMaskBorderless | NSWindowStyleMaskNonactivatingPanel
                                                   backing:NSBackingStoreBuffered
                                                     defer:NO];
     panel.releasedWhenClosed = NO;
+    panel.hidesOnDeactivate = NO;
+    panel.floatingPanel = YES;
+    panel.worksWhenModal = YES;
+    panel.becomesKeyOnlyIfNeeded = NO;
     TokenForgeCompanionWindow = panel;
     TokenForgeCompanionWindow.backgroundColor = [NSColor clearColor];
     TokenForgeCompanionWindow.opaque = NO;
+    TokenForgeCompanionWindow.alphaValue = 1.0;
     TokenForgeCompanionWindow.hasShadow = YES;
-    TokenForgeCompanionWindow.level = MAX(NSFloatingWindowLevel, NSStatusWindowLevel);
+    TokenForgeCompanionWindow.level = NSStatusWindowLevel;
     TokenForgeCompanionWindow.acceptsMouseMovedEvents = YES;
-    TokenForgeCompanionWindow.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary;
-    TokenForgeCompanionWindow.ignoresMouseEvents = NO;
+    TokenForgeCompanionWindow.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary | NSWindowCollectionBehaviorStationary | NSWindowCollectionBehaviorIgnoresCycle;
+    TokenForgeCompanionWindow.ignoresMouseEvents = TokenForgeMenuClickThrough;
     TokenForgeCompanionContentView = [[TokenForgeCompanionView alloc] initWithFrame:NSMakeRect(0, 0, TokenForgeCompanionSize.width, TokenForgeCompanionSize.height)];
     TokenForgeCompanionContentView.visualThemeId = @"orange_cat";
+    TokenForgeCompanionContentView.assetType = @"overlay";
     TokenForgeCompanionContentView.wantsLayer = YES;
     TokenForgeCompanionContentView.layerContentsRedrawPolicy = NSViewLayerContentsRedrawOnSetNeedsDisplay;
     TokenForgeCompanionWindow.contentView = TokenForgeCompanionContentView;
+    TokenForgeLogWindowLifecycle(@"created", TokenForgeCompanionWindow, @"companionOverlay");
+    NSLog(@"INFO [OverlayTrace:%@] panel_create traceId=%@ ptr=%p level=%ld collectionBehavior=%lu releasedWhenClosed=%@ canBecomeKey=false",
+          trace,
+          trace,
+          TokenForgeCompanionWindow,
+          (long)TokenForgeCompanionWindow.level,
+          (unsigned long)TokenForgeCompanionWindow.collectionBehavior,
+          TokenForgeCompanionWindow.releasedWhenClosed ? @"true" : @"false");
     NSLog(@"INFO [DesktopCompanion] window created level=%ld frame=%.2f,%.2f %.2fx%.2f", (long)TokenForgeCompanionWindow.level, frame.origin.x, frame.origin.y, frame.size.width, frame.size.height);
     NSScreen *screen = TokenForgeCompanionWindow.screen ?: [NSScreen mainScreen];
     NSLog(@"INFO [DesktopCompanion] panelCreated id=%p frame=(%.2f,%.2f %.2fx%.2f) screen=(%.2f,%.2f %.2fx%.2f) level=%ld visible=%@",
@@ -1186,7 +1522,7 @@ static void TokenForgeCreateCompanionOverlayOnMain(void)
           TokenForgeCompanionWindow != nil ? @"true" : @"false",
           TokenForgeCompanionContentView != nil ? @"true" : @"false",
           TokenForgeLifecycleDelegate != nil ? @"true" : @"false");
-    NSLog(@"INFO [DesktopOverlay] create window independent=true level=%ld behavior=canJoinAllSpaces,fullScreenAuxiliary style=borderless,transparent,nonactivating", (long)TokenForgeCompanionWindow.level);
+    NSLog(@"INFO [DesktopOverlay] create window independent=true level=%ld behavior=canJoinAllSpaces,fullScreenAuxiliary,stationary,ignoresCycle style=borderless,transparent,nonactivating hidesOnDeactivate=false", (long)TokenForgeCompanionWindow.level);
     NSLog(@"INFO [RuntimePath] overlayController=independent-panel-v1");
 }
 
@@ -1412,6 +1748,7 @@ static NSDictionary *TokenForgeDefaultDashboardState(void)
         @"syncStat": @0,
         @"companionVisible": @YES,
         @"wanderEnabled": @YES,
+        @"clickThroughEnabled": @NO,
         @"clickReactionEnabled": @YES,
         @"statusText": @"Repo: None · AI Agents: 0 connected",
         @"companion": @{@"name": @"Token", @"stage": @"Egg", @"stageIndex": @0, @"level": @1, @"xp": @0, @"xpToNextLevel": @250, @"totalLifetimeXP": @0, @"canLevelUp": @NO, @"evolveActionVisible": @NO, @"evolveActionHiddenReason": @"currentXP below requirement", @"xpStatusText": @"0 XP · 250 XP required", @"carryForwardText": @"", @"xpProgressRatio": @0.0, @"levelUpStatusText": @"Earn more XP to level up.", @"levelUpDisabledReason": @"Earn enough XP before leveling up.", @"dashboardAnimationState": @"subtleIdle", @"mood": @"active", @"skin": @"orange_cat", @"motion": @{@"repositoryId": @"", @"activityLevel": @"idle", @"movementSpeed": @0.35, @"bounceAmplitude": @2.0, @"idleFrequency": @0.6, @"pulseFrequency": @0.2, @"reaction": @"none", @"mood": @"idle", @"reasonSummary": @"No recent aggregate activity.", @"updatedAt": @""}},
@@ -1781,6 +2118,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     if (self != nil) {
         self.state = TokenForgeDefaultDashboardState();
         self.selectedNavItem = @"dashboard";
+        TokenForgeCurrentDashboardTab = self.selectedNavItem;
         self.activityFilterValue = @"all";
     }
     return self;
@@ -1788,15 +2126,20 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
 
 - (void)showDashboard
 {
+    TokenForgeLogRuntimeIdentityIfNeeded();
+    NSLog(@"INFO [WindowLifecycle] openDashboard route=nativeDashboardController");
     [self ensureDashboardWindow];
     [NSApp activateIgnoringOtherApps:YES];
     [self.dashboardWindow makeKeyAndOrderFront:nil];
     [self.dashboardWindow orderFrontRegardless];
+    TokenForgeLogWindowLifecycle(@"orderFront", self.dashboardWindow, @"openDashboard");
+    TokenForgeDumpAllWindows(@"openDashboard");
 }
 
 - (void)hideDashboard
 {
     [self.dashboardWindow orderOut:nil];
+    TokenForgeLogWindowLifecycle(@"orderOut", self.dashboardWindow, @"hideDashboard");
 }
 
 - (void)toggleDashboard
@@ -1820,6 +2163,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
 {
     self.state = TokenForgeMergeDashboardState(self.state, state);
     self.selectedNavItem = TokenForgeDashboardString(self.state, @"selectedNavItem", self.selectedNavItem ?: @"dashboard");
+    TokenForgeCurrentDashboardTab = self.selectedNavItem;
     [self rebuildDashboardIfNeeded];
     [self rebuildSettingsIfNeeded];
     NSLog(@"INFO [NativeDashboard] state updated repository=%@ codex=%@ pending=%ld",
@@ -1879,6 +2223,11 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     self.dashboardWindow.minSize = NSMakeSize(920, 620);
     self.dashboardWindow.delegate = self;
     self.dashboardWindow.releasedWhenClosed = NO;
+    self.dashboardWindow.restorable = NO;
+    self.dashboardWindow.restorationClass = nil;
+    self.dashboardWindow.identifier = @"TokenForge.NativeDashboard";
+    TokenForgeNativeDashboardWindow = self.dashboardWindow;
+    TokenForgeLogWindowLifecycle(@"created", self.dashboardWindow, @"dashboard");
     if (savedFrame.length == 0) {
         [self.dashboardWindow center];
     }
@@ -1906,6 +2255,10 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     self.settingsWindow.level = NSFloatingWindowLevel + 1;
     self.settingsWindow.delegate = self;
     self.settingsWindow.releasedWhenClosed = NO;
+    self.settingsWindow.restorable = NO;
+    self.settingsWindow.restorationClass = nil;
+    self.settingsWindow.identifier = @"TokenForge.NativeSettings";
+    TokenForgeLogWindowLifecycle(@"created", self.settingsWindow, @"settings");
     if (savedFrame.length == 0) {
         [self.settingsWindow center];
     }
@@ -1919,6 +2272,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     }
 
     self.dashboardWindow.contentView = [self buildDashboardRootView];
+    TokenForgeLogWindowLifecycle(@"contentViewAssigned", self.dashboardWindow, @"dashboardRebuild");
 }
 
 - (void)rebuildSettingsIfNeeded
@@ -1957,13 +2311,15 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     sidebar.state = NSVisualEffectStateActive;
     sidebar.wantsLayer = YES;
     sidebar.layer.backgroundColor = TokenForgeSidebarBackgroundColor().CGColor;
-    [sidebar.widthAnchor constraintEqualToConstant:264.0].active = YES;
+    CGFloat sidebarWidth = 300.0;
+    [sidebar.widthAnchor constraintEqualToConstant:sidebarWidth].active = YES;
     [split addArrangedSubview:sidebar];
 
     NSStackView *sidebarStack = TokenForgeDashboardVerticalStack(10.0);
     sidebarStack.alignment = NSLayoutAttributeWidth;
     [sidebar addSubview:sidebarStack];
-    TokenForgePinSubview(sidebarStack, sidebar, 22, 12, 16, 12);
+    TokenForgePinSubview(sidebarStack, sidebar, 22, 16, 16, 16);
+    NSLog(@"INFO [DashboardLayout] sidebar_width=%.2f", sidebarWidth);
     [self populateSidebar:sidebarStack];
 
     NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:NSZeroRect];
@@ -1995,23 +2351,38 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     NSString *name = TokenForgeDashboardString(companion, @"name", @"Token");
     NSString *syncText = TokenForgeDashboardString(self.state, @"syncStatusText", @"Sync optional");
 
-    NSView *thumbCard = TokenForgeDashboardCard();
     NSDictionary *repository = TokenForgeDashboardDictionary(self.state, @"repository");
-    [thumbCard.heightAnchor constraintGreaterThanOrEqualToConstant:112.0].active = YES;
-    NSStackView *thumbStack = TokenForgeDashboardHorizontalStack(10.0);
+    NSButton *thumbCard = TokenForgeDashboardButton(@"", self, @selector(openActiveCompanionDashboard:));
+    thumbCard.bordered = NO;
+    thumbCard.wantsLayer = YES;
+    thumbCard.layer.backgroundColor = TokenForgeCardBackgroundColor().CGColor;
+    thumbCard.layer.cornerRadius = 8.0;
+    thumbCard.layer.borderColor = [NSColor colorWithCalibratedWhite:0.0 alpha:0.08].CGColor;
+    thumbCard.layer.borderWidth = 1.0;
+    thumbCard.toolTip = @"Open the active companion dashboard.";
+    thumbCard.identifier = TokenForgeDashboardString(repository, @"id", @"");
+    [thumbCard.heightAnchor constraintGreaterThanOrEqualToConstant:126.0].active = YES;
+    NSStackView *thumbStack = TokenForgeDashboardHorizontalStack(12.0);
     thumbStack.distribution = NSStackViewDistributionFill;
+    thumbStack.alignment = NSLayoutAttributeTop;
     [thumbCard addSubview:thumbStack];
-    TokenForgePinSubview(thumbStack, thumbCard, 14, 12, 14, 12);
+    TokenForgePinSubview(thumbStack, thumbCard, 16, 14, 16, 14);
     TokenForgeCompanionView *icon = [[TokenForgeCompanionView alloc] initWithFrame:NSMakeRect(0, 0, 46, 46)];
     icon.translatesAutoresizingMaskIntoConstraints = NO;
     icon.stage = MAX(0, MIN(4, TokenForgeDashboardInteger(companion, @"stageIndex", 2)));
-    [icon.widthAnchor constraintEqualToConstant:48.0].active = YES;
-    [icon.heightAnchor constraintEqualToConstant:48.0].active = YES;
+    icon.visualThemeId = TokenForgeDashboardString(companion, @"skin", @"orange_cat");
+    [icon.widthAnchor constraintEqualToConstant:44.0].active = YES;
+    [icon.heightAnchor constraintEqualToConstant:44.0].active = YES;
     [thumbStack addArrangedSubview:icon];
     NSStackView *labels = TokenForgeDashboardVerticalStack(2.0);
     labels.alignment = NSLayoutAttributeLeading;
-    [labels addArrangedSubview:TokenForgeDashboardLabel(name, 15.0, NSFontWeightSemibold, TokenForgeLightCardPrimaryTextColor(), 1)];
-    [labels addArrangedSubview:TokenForgeDashboardLabel([NSString stringWithFormat:@"● Active · %@", syncText], 11.0, NSFontWeightRegular, [NSColor systemGreenColor], 1)];
+    [labels setContentCompressionResistancePriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationHorizontal];
+    NSTextField *nameLabel = TokenForgeDashboardLabel(name, 15.0, NSFontWeightSemibold, TokenForgeLightCardPrimaryTextColor(), 2);
+    nameLabel.lineBreakMode = NSLineBreakByWordWrapping;
+    [nameLabel setContentCompressionResistancePriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [labels addArrangedSubview:nameLabel];
+    [labels addArrangedSubview:TokenForgeDashboardLabel(@"● Active", 11.0, NSFontWeightRegular, [NSColor systemGreenColor], 1)];
+    [labels addArrangedSubview:TokenForgeDashboardLabel(syncText, 10.5, NSFontWeightRegular, TokenForgeMutedTextColor(), 1)];
     [labels addArrangedSubview:TokenForgeDashboardLabel([NSString stringWithFormat:@"%@ · Lv %ld", TokenForgeDashboardString(companion, @"stage", @"Egg"), (long)TokenForgeDashboardInteger(companion, @"level", 1)], 11.0, NSFontWeightRegular, TokenForgeMutedTextColor(), 1)];
     if (TokenForgeDashboardBool(companion, @"canLevelUp", NO)) {
         [labels addArrangedSubview:TokenForgeDashboardLabel(@"Ready to evolve", 11.0, NSFontWeightSemibold, [NSColor systemOrangeColor], 1)];
@@ -2026,6 +2397,24 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     [labels addArrangedSubview:TokenForgeDashboardLabel(repositoryLabel, 11.0, NSFontWeightMedium, TokenForgeMutedTextColor(), 2)];
     [thumbStack addArrangedSubview:labels];
     [stack addArrangedSubview:thumbCard];
+    CGFloat profileNameAvailableWidth = 300.0 - 32.0 - 28.0 - 44.0 - 12.0;
+    NSSize measuredName = [name boundingRectWithSize:NSMakeSize(profileNameAvailableWidth, CGFLOAT_MAX)
+                                             options:NSStringDrawingUsesLineFragmentOrigin
+                                          attributes:@{NSFontAttributeName: nameLabel.font}
+                                             context:nil].size;
+    CGFloat profileLineHeight = fabs(nameLabel.font.ascender) + fabs(nameLabel.font.descender) + nameLabel.font.leading;
+    BOOL profileNameClipped = measuredName.height > (profileLineHeight * 2.2);
+    NSLog(@"INFO [DashboardLayout] profile_card_frame=auto minHeight=126.00");
+    NSLog(@"INFO [DashboardLayout] profile_name_rect=auto availableWidth=%.2f measured=(%.2f,%.2f) clipped=%@ value=%@",
+          profileNameAvailableWidth,
+          measuredName.width,
+          measuredName.height,
+          profileNameClipped ? @"true" : @"false",
+          name);
+    if (profileNameClipped) {
+        NSLog(@"WARN [DashboardLayout] text_clipping_detected field=profileName value=%@", name);
+    }
+    NSLog(@"INFO [DashboardLayout] renderer_version=clean-grid-v5");
 
     NSArray *repositories = TokenForgeDashboardArray(self.state, @"repositories");
     [stack addArrangedSubview:TokenForgeDashboardLabel(@"Repository Companions", 12.0, NSFontWeightSemibold, TokenForgeSidebarMutedTextColor(), 1)];
@@ -2329,6 +2718,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     row.layer.borderColor = (canLevelUp ? [NSColor systemOrangeColor] : [NSColor colorWithCalibratedWhite:1.0 alpha:selected ? 0.20 : 0.10]).CGColor;
     row.layer.borderWidth = canLevelUp ? 1.5 : 1.0;
     [row.heightAnchor constraintGreaterThanOrEqualToConstant:64.0].active = YES;
+    NSLog(@"INFO [DashboardLayout] repo_item_frame=auto minHeight=64.00 name=%@", repoName);
 
     NSStackView *content = TokenForgeDashboardHorizontalStack(8.0);
     content.distribution = NSStackViewDistributionFill;
@@ -2347,7 +2737,10 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     copy.alignment = NSLayoutAttributeLeading;
     [copy setContentHuggingPriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
     [copy setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
-    [copy addArrangedSubview:TokenForgeDashboardLabel(repoName, 12.0, NSFontWeightSemibold, TokenForgeDarkSidebarTextColor(), 1)];
+    NSTextField *repoNameLabel = TokenForgeDashboardLabel(repoName, 12.0, NSFontWeightSemibold, TokenForgeDarkSidebarTextColor(), 2);
+    repoNameLabel.lineBreakMode = NSLineBreakByWordWrapping;
+    [repoNameLabel setContentCompressionResistancePriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [copy addArrangedSubview:repoNameLabel];
     [copy addArrangedSubview:TokenForgeDashboardLabel([NSString stringWithFormat:@"%@ · Lv %ld", TokenForgeDashboardString(repository, @"stage", @"Egg"), (long)TokenForgeDashboardInteger(repository, @"level", 1)], 10.5, NSFontWeightRegular, TokenForgeSidebarMutedTextColor(), 1)];
     NSMutableArray<NSString *> *badges = [NSMutableArray array];
     if (selected) [badges addObject:@"Active"];
@@ -2475,6 +2868,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     NSString *activity = TokenForgeDashboardString(motion, @"activityLevel", @"idle");
     BOOL visible = TokenForgeDashboardBool(self.state, @"companionVisible", YES);
     BOOL wandering = TokenForgeDashboardBool(self.state, @"wanderEnabled", YES);
+    BOOL clickThrough = TokenForgeDashboardBool(self.state, @"clickThroughEnabled", NO);
     BOOL clickReaction = TokenForgeDashboardBool(self.state, @"clickReactionEnabled", YES);
     NSStackView *stack = nil;
     NSView *card = TokenForgeCardWithStack(&stack, 16.0, 8.0);
@@ -2489,8 +2883,8 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
             : TokenForgeFriendlyDashboardSummary(TokenForgeDashboardString(motion, @"reasonSummary", @"Recent Git + AI activity sets a calm movement pace."), @"Recent Git + AI activity sets a calm movement pace."));
     NSString *speed = [activity isEqualToString:@"high"] ? @"Fast" : ([activity isEqualToString:@"active"] ? @"Active" : @"Calm");
     NSString *detail = visible && wandering
-        ? [NSString stringWithFormat:@"Speed: %@. Click reaction %@.", speed, clickReaction ? @"on" : @"off"]
-        : [NSString stringWithFormat:@"%@ Click reaction %@.", reason, clickReaction ? @"on" : @"off"];
+        ? [NSString stringWithFormat:@"Speed: %@. Click reaction %@. Click-through %@.", speed, clickReaction ? @"on" : @"off", clickThrough ? @"on" : @"off"]
+        : [NSString stringWithFormat:@"%@ Click reaction %@. Click-through %@.", reason, clickReaction ? @"on" : @"off", clickThrough ? @"on" : @"off"];
     [stack addArrangedSubview:TokenForgeLightCardCaptionLabel(detail, 3)];
     NSString *failureReason = @"none";
     if (visible && TokenForgeCompanionWindow == nil) {
@@ -2505,7 +2899,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     NSString *runtimeStatus = [NSString stringWithFormat:@"Overlay %@ · wander %@ · click %@ · screen %@ · position %.0f, %.0f · reason %@",
                                (TokenForgeCompanionWindow != nil && TokenForgeCompanionWindow.isVisible) ? @"visible" : @"not visible",
                                wandering ? @"enabled" : @"disabled",
-                               clickReaction ? @"enabled" : @"disabled",
+                               clickThrough ? @"through" : (clickReaction ? @"reaction" : @"disabled"),
                                screenName,
                                position.x,
                                position.y,
@@ -2518,6 +2912,16 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     [buttons addArrangedSubview:TokenForgeSecondaryButton(@"Reset Position", self, @selector(resetCompanionPosition:))];
     [buttons addArrangedSubview:TokenForgeSecondaryButton(@"Settings", self, @selector(settings:))];
     [stack addArrangedSubview:buttons];
+    NSStackView *debugButtons = TokenForgeDashboardHorizontalStack(8.0);
+    [debugButtons addArrangedSubview:TokenForgeSecondaryButton(@"DEBUG: Direct Show Native Overlay", self, @selector(debugDirectShowNativeOverlay:))];
+    [debugButtons addArrangedSubview:TokenForgeSecondaryButton(@"DEBUG: Direct Hide Native Overlay", self, @selector(debugDirectHideNativeOverlay:))];
+    [debugButtons addArrangedSubview:TokenForgeSecondaryButton(@"DEBUG: Direct Start Wander", self, @selector(debugDirectStartWander:))];
+    [debugButtons addArrangedSubview:TokenForgeSecondaryButton(@"DEBUG: Direct Stop Wander", self, @selector(debugDirectStopWander:))];
+    [stack addArrangedSubview:debugButtons];
+    NSStackView *dumpButtons = TokenForgeDashboardHorizontalStack(8.0);
+    [dumpButtons addArrangedSubview:TokenForgeSecondaryButton(@"DEBUG: Dump All TokenForge Windows", self, @selector(debugDumpAllWindows:))];
+    [dumpButtons addArrangedSubview:TokenForgeSecondaryButton(@"DEBUG: Dump Native Overlay Panel State", self, @selector(debugDumpOverlayPanelState:))];
+    [stack addArrangedSubview:dumpButtons];
     NSLog(@"INFO [DesktopOverlay] hidden reason=%@", visible ? @"none" : @"companionVisibleOff");
     return card;
 }
@@ -3102,6 +3506,25 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     }
 }
 
+- (BOOL)windowShouldClose:(NSWindow *)sender
+{
+    if (sender == self.dashboardWindow) {
+        [sender orderOut:nil];
+        TokenForgeLogWindowLifecycle(@"windowShouldCloseIntercepted", sender, @"dashboardXHide");
+        NSLog(@"INFO [AppLifecycle] dashboardWindowClosed keepAppRunning=true");
+        NSLog(@"INFO [WindowLifecycle] dashboard X close mappedTo=hideDashboard");
+        return NO;
+    }
+
+    if (sender == self.settingsWindow) {
+        [sender orderOut:nil];
+        TokenForgeLogWindowLifecycle(@"windowShouldCloseIntercepted", sender, @"settingsXHide");
+        return NO;
+    }
+
+    return YES;
+}
+
 - (void)windowDidMove:(NSNotification *)notification { [self persistWindowFrame:notification.object]; }
 - (void)windowDidResize:(NSNotification *)notification { [self persistWindowFrame:notification.object]; }
 
@@ -3117,6 +3540,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
 - (void)setSelectedNav:(NSString *)nav action:(const char *)action showDashboard:(BOOL)showDashboard
 {
     self.selectedNavItem = nav ?: @"dashboard";
+    TokenForgeCurrentDashboardTab = self.selectedNavItem;
     NSMutableDictionary *next = [self.state mutableCopy];
     next[@"selectedNavItem"] = self.selectedNavItem;
     self.state = next;
@@ -3191,12 +3615,25 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
 - (void)levelUpCompanion:(id)sender { TokenForgeSendDashboardAction("companion.levelUp"); }
 - (void)connectRepository:(id)sender { [self setSelectedNav:@"repository" action:"repository.add" showDashboard:YES]; }
 - (void)connectCodexAgent:(id)sender { [self setSelectedNav:@"aiAgents" action:"agent.connect:codex" showDashboard:YES]; }
+- (void)openActiveCompanionDashboard:(id)sender
+{
+    self.selectedNavItem = @"dashboard";
+    TokenForgeCurrentDashboardTab = self.selectedNavItem;
+    NSMutableDictionary *next = [self.state mutableCopy];
+    next[@"selectedNavItem"] = self.selectedNavItem;
+    self.state = next;
+    NSLog(@"INFO [SidebarCompanions] open active companion dashboard repo=%@", [(NSButton *)sender identifier] ?: @"active");
+    [self rebuildDashboardIfNeeded];
+    TokenForgeSendDashboardAction("open_active_companion_dashboard");
+}
 - (void)sidebarRepositorySelected:(id)sender
 {
     NSString *value = [(NSButton *)sender identifier] ?: @"";
-    NSString *payload = [NSString stringWithFormat:@"repository.setActive:%@", value];
+    NSString *payload = [NSString stringWithFormat:@"open_repository_companion_dashboard:%@", value];
     NSLog(@"INFO [SidebarCompanions] select repo=%@", value.length > 0 ? value : @"unknown");
     NSLog(@"INFO [SidebarCompanions] activeChanged refreshDashboard=true refreshOverlay=true");
+    self.selectedNavItem = @"dashboard";
+    TokenForgeCurrentDashboardTab = self.selectedNavItem;
     self.activityFilterValue = value.length > 0 ? [@"repo:" stringByAppendingString:value] : @"active";
     TokenForgeSendDashboardAction(payload.UTF8String);
 }
@@ -3218,16 +3655,22 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
 - (void)setActivityFilterAction:(id)sender { self.activityFilterValue = [(NSButton *)sender toolTip] ?: @"all"; [self rebuildDashboardIfNeeded]; }
 - (void)toggleCompanionVisible:(id)sender { BOOL enabled = [self settingsBoolValueFromSender:sender fallback:TokenForgeDashboardBool(self.state, @"companionVisible", YES)]; [self setStateBool:@"companionVisible" enabled:enabled]; if (enabled) { ShowDesktopCompanionOverlay(); } else { HideDesktopCompanionOverlay(); } NSLog(@"INFO [Settings] companionVisible changed value=%@", enabled ? @"true" : @"false"); TokenForgeSendDashboardAction(enabled ? "show_companion" : "hide_companion"); }
 - (void)toggleWanderEnabled:(id)sender { BOOL enabled = [self settingsBoolValueFromSender:sender fallback:TokenForgeDashboardBool(self.state, @"wanderEnabled", YES)]; [self setStateBool:@"wanderEnabled" enabled:enabled]; SetCompanionOverlayMotionProfile(enabled ? 1 : 0, 5.0, enabled ? 32.0 : 0.0, enabled ? 18.0 : 0.0, 3.4, enabled, 1.1); NSLog(@"INFO [Settings] wanderEnabled changed value=%@", enabled ? @"true" : @"false"); TokenForgeSendDashboardAction(enabled ? "enable_wander" : "disable_wander"); }
-- (void)toggleClickReactionEnabled:(id)sender { BOOL enabled = [self settingsBoolValueFromSender:sender fallback:TokenForgeDashboardBool(self.state, @"clickReactionEnabled", YES)]; [self setStateBool:@"clickReactionEnabled" enabled:enabled]; SetCompanionOverlayClickThrough(!enabled); NSLog(@"INFO [Settings] clickReactionEnabled changed value=%@", enabled ? @"true" : @"false"); TokenForgeSendDashboardAction(enabled ? "enable_click" : "disable_click"); }
-- (void)showCompanionFromDashboard:(id)sender { [self setStateBool:@"companionVisible" enabled:YES]; ShowDesktopCompanionOverlay(); if (TokenForgeDashboardBool(self.state, @"wanderEnabled", YES)) { SetCompanionOverlayMotionProfile(1, 5.0, 32.0, 18.0, 3.4, true, 1.1); } NSLog(@"INFO [DesktopOverlay] show requested visibleSetting=true source=motionCard"); TokenForgeSendDashboardAction("show_companion"); }
-- (void)hideCompanionFromDashboard:(id)sender { [self setStateBool:@"companionVisible" enabled:NO]; HideDesktopCompanionOverlay(); NSLog(@"INFO [DesktopOverlay] hidden reason=companionVisibleOff"); TokenForgeSendDashboardAction("hide_companion"); }
-- (void)enableWanderFromDashboard:(id)sender { [self setStateBool:@"wanderEnabled" enabled:YES]; if (TokenForgeDashboardBool(self.state, @"companionVisible", YES)) { SetCompanionOverlayMotionProfile(1, 5.0, 32.0, 18.0, 3.4, true, 1.1); } NSLog(@"INFO [DesktopOverlay] movementTimer started interval=%.2f source=motionCard", 1.0 / 30.0); TokenForgeSendDashboardAction("enable_wander"); }
-- (void)disableWanderFromDashboard:(id)sender { [self setStateBool:@"wanderEnabled" enabled:NO]; SetCompanionOverlayMotionProfile(0, 0.0, 0.0, 0.0, 3.4, false, 1.1); NSLog(@"INFO [DesktopCompanion] wander stopped source=motionCard"); TokenForgeSendDashboardAction("disable_wander"); }
-- (void)enableClickReactionFromDashboard:(id)sender { [self setStateBool:@"clickReactionEnabled" enabled:YES]; SetCompanionOverlayClickThrough(false); NSLog(@"INFO [DesktopCompanion] click-through disabled source=motionCard"); TokenForgeSendDashboardAction("enable_click"); }
-- (void)disableClickReactionFromDashboard:(id)sender { [self setStateBool:@"clickReactionEnabled" enabled:NO]; SetCompanionOverlayClickThrough(true); NSLog(@"INFO [DesktopCompanion] click-through enabled source=motionCard"); TokenForgeSendDashboardAction("disable_click"); }
+- (void)toggleClickReactionEnabled:(id)sender { BOOL enabled = [self settingsBoolValueFromSender:sender fallback:TokenForgeDashboardBool(self.state, @"clickReactionEnabled", YES)]; [self setStateBool:@"clickThroughEnabled" enabled:!enabled]; [self setStateBool:@"clickReactionEnabled" enabled:enabled]; SetCompanionOverlayClickThrough(!enabled); NSLog(@"INFO [Settings] clickReactionEnabled changed value=%@", enabled ? @"true" : @"false"); TokenForgeSendDashboardAction(enabled ? "enable_click" : "disable_click"); }
+- (void)showCompanionFromDashboard:(id)sender { const char *trace = TokenForgeNextOverlayTraceId(); NSString *traceString = [NSString stringWithUTF8String:trace]; NSLog(@"INFO [OverlayTrace:%@] Dashboard button click action=show_companion", traceString); [self setStateBool:@"companionVisible" enabled:YES]; TokenForgeShowDesktopCompanionOverlayWithTrace(traceString); if (TokenForgeDashboardBool(self.state, @"wanderEnabled", YES)) { TokenForgeSetCompanionOverlayMotionProfileWithTrace(traceString, 1, 5.0, 32.0, 18.0, 3.4, true, 1.1); } NSLog(@"INFO [DesktopOverlay] show requested visibleSetting=true source=motionCard"); NSString *payload = [NSString stringWithFormat:@"show_companion:%@", traceString]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)hideCompanionFromDashboard:(id)sender { const char *trace = TokenForgeNextOverlayTraceId(); NSString *traceString = [NSString stringWithUTF8String:trace]; NSLog(@"INFO [OverlayTrace:%@] Dashboard button click action=hide_companion", traceString); [self setStateBool:@"companionVisible" enabled:NO]; TokenForgeHideDesktopCompanionOverlayWithTrace(traceString); NSLog(@"INFO [DesktopOverlay] hidden reason=companionVisibleOff"); NSString *payload = [NSString stringWithFormat:@"hide_companion:%@", traceString]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)enableWanderFromDashboard:(id)sender { const char *trace = TokenForgeNextOverlayTraceId(); NSString *traceString = [NSString stringWithUTF8String:trace]; NSLog(@"INFO [OverlayTrace:%@] Dashboard button click action=enable_wander", traceString); [self setStateBool:@"companionVisible" enabled:YES]; [self setStateBool:@"wanderEnabled" enabled:YES]; TokenForgeShowDesktopCompanionOverlayWithTrace(traceString); TokenForgeSetCompanionOverlayMotionProfileWithTrace(traceString, 1, 5.0, 32.0, 18.0, 3.4, true, 1.1); NSLog(@"INFO [DesktopOverlay] movementTimer started interval=%.2f source=motionCard", 1.0 / 30.0); NSString *payload = [NSString stringWithFormat:@"enable_wander:%@", traceString]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)disableWanderFromDashboard:(id)sender { const char *trace = TokenForgeNextOverlayTraceId(); NSString *traceString = [NSString stringWithUTF8String:trace]; NSLog(@"INFO [OverlayTrace:%@] Dashboard button click action=disable_wander", traceString); [self setStateBool:@"wanderEnabled" enabled:NO]; TokenForgeSetCompanionOverlayMotionProfileWithTrace(traceString, 0, 0.0, 0.0, 0.0, 3.4, false, 1.1); NSLog(@"INFO [DesktopCompanion] wander stopped source=motionCard"); NSString *payload = [NSString stringWithFormat:@"disable_wander:%@", traceString]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)enableClickReactionFromDashboard:(id)sender { [self setStateBool:@"clickThroughEnabled" enabled:NO]; [self setStateBool:@"clickReactionEnabled" enabled:YES]; SetCompanionOverlayClickThrough(false); NSLog(@"INFO [DesktopCompanion] click-through disabled source=motionCard"); TokenForgeSendDashboardAction("enable_click"); }
+- (void)disableClickReactionFromDashboard:(id)sender { [self setStateBool:@"clickThroughEnabled" enabled:YES]; [self setStateBool:@"clickReactionEnabled" enabled:NO]; SetCompanionOverlayClickThrough(true); NSLog(@"INFO [DesktopCompanion] click-through enabled source=motionCard"); TokenForgeSendDashboardAction("disable_click"); }
 - (void)toggleLaunchAtLogin:(id)sender { NSLog(@"INFO [NativeDashboard] launch at login unavailable in unsigned build"); }
 - (void)changeSkin:(id)sender { NSString *skin = [(NSButton *)sender toolTip] ?: @"orange_cat"; [self setSelectedCompanionSkin:skin]; NSString *payload = [NSString stringWithFormat:@"changeCompanionSkin:%@", skin]; TokenForgeSendDashboardAction(payload.UTF8String); }
 - (void)resetCompanionPosition:(id)sender { TokenForgeResetCompanionFrame(); TokenForgeSendDashboardAction("reset_companion_position"); }
+- (void)debugDirectShowNativeOverlay:(id)sender { NSString *trace = [NSString stringWithFormat:@"debug-%s", TokenForgeNextOverlayTraceId()]; NSLog(@"INFO [OverlayTrace:%@] DEBUG Direct Show Native Overlay", trace); TokenForgeShowDesktopCompanionOverlayWithTrace(trace); }
+- (void)debugDirectHideNativeOverlay:(id)sender { NSString *trace = [NSString stringWithFormat:@"debug-%s", TokenForgeNextOverlayTraceId()]; NSLog(@"INFO [OverlayTrace:%@] DEBUG Direct Hide Native Overlay", trace); TokenForgeHideDesktopCompanionOverlayWithTrace(trace); }
+- (void)debugDirectStartWander:(id)sender { NSString *trace = [NSString stringWithFormat:@"debug-%s", TokenForgeNextOverlayTraceId()]; NSLog(@"INFO [OverlayTrace:%@] DEBUG Direct Start Wander", trace); TokenForgeShowDesktopCompanionOverlayWithTrace(trace); TokenForgeSetCompanionOverlayMotionProfileWithTrace(trace, 1, 5.0, 140.0, 32.0, 1.6, true, 1.1); }
+- (void)debugDirectStopWander:(id)sender { NSString *trace = [NSString stringWithFormat:@"debug-%s", TokenForgeNextOverlayTraceId()]; NSLog(@"INFO [OverlayTrace:%@] DEBUG Direct Stop Wander", trace); TokenForgeSetCompanionOverlayMotionProfileWithTrace(trace, 0, 0.0, 0.0, 0.0, 3.4, false, 1.1); }
+- (void)debugDumpAllWindows:(id)sender { TokenForgeDumpAllWindows(@"debugButton"); }
+- (void)debugDumpOverlayPanelState:(id)sender { TokenForgeDumpOverlayPanelState(@"debugButton"); }
 - (void)closeSettings:(id)sender { [self.settingsWindow orderOut:nil]; }
 - (void)resetLocalState:(id)sender { TokenForgeSendDashboardAction("reset_local_state"); }
 - (void)quit:(id)sender { TokenForgeSendDashboardAction("quit"); TokenForgeEnsureLifecycleDelegate().explicitTerminationRequested = YES; [NSApp terminate:nil]; }
@@ -3240,19 +3683,86 @@ static TokenForgeNativeDashboardController *TokenForgeEnsureNativeDashboardContr
         TokenForgeDashboardController = [[TokenForgeNativeDashboardController alloc] init];
     }
 
-    TokenForgeEnsureLifecycleDelegate();
+    TokenForgeRequestLifecycleInstall(@"native_dashboard_controller");
     return TokenForgeDashboardController;
 }
 
 static void TokenForgeOpenNativeDashboardOnMain(void)
 {
+    if (TokenForgeDashboardOpening) {
+        NSLog(@"INFO [NativeLifecycle] prevent_reentrant_open traceId=dashboard");
+        return;
+    }
+
+    if (!TokenForgeAppKitRegistrationReady()) {
+        NSLog(@"INFO [NativeLifecycle] open_dashboard deferred reason=app_not_ready");
+        if (!TokenForgeDashboardOpenPending) {
+            TokenForgeDashboardOpenPending = YES;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                TokenForgeDashboardOpenPending = NO;
+                TokenForgeOpenNativeDashboardOnMain();
+            });
+        }
+        return;
+    }
+
+    TokenForgeDashboardOpening = YES;
+    NSLog(@"INFO [NativeLifecycle] open_dashboard executed traceId=dashboard");
     [TokenForgeEnsureNativeDashboardController() showDashboard];
+    TokenForgeDashboardOpening = NO;
 }
 
 @implementation TokenForgeAppLifecycleDelegate
 
+- (void)applicationWillFinishLaunching:(NSNotification *)notification
+{
+    [[NSUserDefaults standardUserDefaults] setBool:NO forKey:@"NSQuitAlwaysKeepsWindows"];
+    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"ApplePersistenceIgnoreState"];
+    NSLog(@"INFO [WindowLifecycle] applicationWillFinishLaunching restoration=disabled");
+
+    if (self.originalAppDelegate != nil && [self.originalAppDelegate respondsToSelector:@selector(applicationWillFinishLaunching:)]) {
+        [self.originalAppDelegate applicationWillFinishLaunching:notification];
+    }
+}
+
+- (BOOL)application:(NSApplication *)application shouldSaveApplicationState:(NSCoder *)coder
+{
+    NSLog(@"INFO [WindowLifecycle] shouldSaveApplicationState=false");
+    return NO;
+}
+
+- (BOOL)application:(NSApplication *)application shouldRestoreApplicationState:(NSCoder *)coder
+{
+    NSLog(@"INFO [WindowLifecycle] shouldRestoreApplicationState=false route=openDashboard");
+    if (!TokenForgeDashboardOpenPending) {
+        TokenForgeDashboardOpenPending = YES;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            TokenForgeDashboardOpenPending = NO;
+            TokenForgeOpenNativeDashboardOnMain();
+        });
+    }
+
+    return NO;
+}
+
+- (BOOL)applicationSupportsSecureRestorableState:(NSApplication *)application
+{
+    return YES;
+}
+
 - (void)install
 {
+    if (self.installed) {
+        [self installMainWindowHook];
+        return;
+    }
+
+    if (TokenForgeLifecycleInstallInProgress) {
+        return;
+    }
+
+    TokenForgeLifecycleInstallInProgress = YES;
+    TokenForgeLogRuntimeIdentityIfNeeded();
     id<NSApplicationDelegate> currentDelegate = [NSApp delegate];
     if (currentDelegate != self) {
         self.originalAppDelegate = currentDelegate;
@@ -3263,6 +3773,8 @@ static void TokenForgeOpenNativeDashboardOnMain(void)
     [self installWindowNotifications];
     [self installMainWindowHook];
     NSLog(@"INFO [AppLifecycle] shouldTerminateAfterLastWindowClosed=false");
+    self.installed = YES;
+    TokenForgeLifecycleInstallInProgress = NO;
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [self installMainWindowHook];
@@ -3484,6 +3996,7 @@ static void TokenForgeOpenNativeDashboardOnMain(void)
 
 - (void)windowDidBecomeMain:(NSNotification *)notification
 {
+    TokenForgeLogWindowLifecycle(@"didBecomeMain", (NSWindow *)notification.object, @"notification");
     if (TokenForgeLooksLikeMainWindow((NSWindow *)notification.object)) {
         [self installMainWindowHook];
     }
@@ -3491,6 +4004,7 @@ static void TokenForgeOpenNativeDashboardOnMain(void)
 
 - (void)windowDidBecomeKey:(NSNotification *)notification
 {
+    TokenForgeLogWindowLifecycle(@"didBecomeKey", (NSWindow *)notification.object, @"notification");
     if (TokenForgeLooksLikeMainWindow((NSWindow *)notification.object)) {
         [self installMainWindowHook];
     }
@@ -3498,6 +4012,9 @@ static void TokenForgeOpenNativeDashboardOnMain(void)
 
 - (void)showMainWindow
 {
+    NSLog(@"INFO [WindowLifecycle] showMainWindow redirectedTo=openDashboard");
+    TokenForgeOpenNativeDashboardOnMain();
+    return;
     [self installMainWindowHook];
     [NSApp unhide:nil];
     [NSApp activateIgnoringOtherApps:YES];
@@ -3510,10 +4027,14 @@ static void TokenForgeOpenNativeDashboardOnMain(void)
     self.mainWindow = window;
     [window makeKeyAndOrderFront:nil];
     [window orderFrontRegardless];
+    TokenForgeLogWindowLifecycle(@"orderFront", window, @"legacyShowMainWindow");
 }
 
 - (void)hideMainWindow
 {
+    NSLog(@"INFO [WindowLifecycle] hideMainWindow redirectedTo=hideDashboard");
+    [TokenForgeEnsureNativeDashboardController() hideDashboard];
+    return;
     [self installMainWindowHook];
     NSWindow *window = self.mainWindow ?: TokenForgeFindMainWindow();
     if (window != nil) {
@@ -3548,6 +4069,7 @@ static void TokenForgeOpenNativeDashboardOnMain(void)
     self.statusAnimationTimer = nil;
     NSLog(@"INFO [MenuBarCompanion] animation stopped reason=quit");
     NSLog(@"INFO [DesktopOverlay] quit cleanup completed");
+    NSLog(@"INFO [OverlayTrace] app_terminate overlay_cleanup=true");
 
     if (self.originalAppDelegate != nil && [self.originalAppDelegate respondsToSelector:@selector(applicationShouldTerminate:)]) {
         return [self.originalAppDelegate applicationShouldTerminate:sender];
@@ -3558,19 +4080,35 @@ static void TokenForgeOpenNativeDashboardOnMain(void)
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification
 {
+    NSLog(@"INFO [NativeLifecycle] app_registration_ready=true notification=applicationDidFinishLaunching");
+    TokenForgeRequestLifecycleInstall(@"applicationDidFinishLaunching");
     [self installMainWindowHook];
     if (self.originalAppDelegate != nil && [self.originalAppDelegate respondsToSelector:@selector(applicationDidFinishLaunching:)]) {
         [self.originalAppDelegate applicationDidFinishLaunching:notification];
     }
 }
 
+- (void)applicationWillResignActive:(NSNotification *)notification
+{
+    NSLog(@"INFO [OverlayTrace] app_resign_active keep_overlay=%@", TokenForgeDesiredCompanionVisible ? @"true" : @"false");
+    if (self.originalAppDelegate != nil && [self.originalAppDelegate respondsToSelector:@selector(applicationWillResignActive:)]) {
+        [self.originalAppDelegate applicationWillResignActive:notification];
+    }
+}
+
+- (void)applicationWillHide:(NSNotification *)notification
+{
+    NSLog(@"INFO [OverlayTrace] app_hide keep_overlay=%@", TokenForgeDesiredCompanionVisible ? @"true" : @"false");
+    if (self.originalAppDelegate != nil && [self.originalAppDelegate respondsToSelector:@selector(applicationWillHide:)]) {
+        [self.originalAppDelegate applicationWillHide:notification];
+    }
+}
+
 - (BOOL)applicationShouldHandleReopen:(NSApplication *)sender hasVisibleWindows:(BOOL)flag
 {
-    [self showMainWindow];
-    if (self.originalAppDelegate != nil && [self.originalAppDelegate respondsToSelector:@selector(applicationShouldHandleReopen:hasVisibleWindows:)]) {
-        [self.originalAppDelegate applicationShouldHandleReopen:sender hasVisibleWindows:flag];
-    }
-
+    NSLog(@"INFO [WindowLifecycle] applicationShouldHandleReopen hasVisibleWindows=%@ route=openDashboard", flag ? @"true" : @"false");
+    TokenForgeDumpAllWindows(@"beforeReopen");
+    TokenForgeOpenNativeDashboardOnMain();
     return YES;
 }
 
@@ -3586,6 +4124,11 @@ static void TokenForgeOpenNativeDashboardOnMain(void)
 - (BOOL)windowShouldClose:(NSWindow *)sender
 {
     if (self.explicitTerminationRequested || sender != self.mainWindow) {
+        if (sender != self.mainWindow && TokenForgeWindowLooksBlank(sender)) {
+            [sender orderOut:nil];
+            TokenForgeOpenNativeDashboardOnMain();
+            return NO;
+        }
         if (self.originalMainWindowDelegate != nil && [self.originalMainWindowDelegate respondsToSelector:@selector(windowShouldClose:)]) {
             return [self.originalMainWindowDelegate windowShouldClose:sender];
         }
@@ -3618,7 +4161,7 @@ static void TokenForgeOpenNativeDashboardOnMain(void)
     TokenForgeSendMenuAction("toggleCompanionVisible:true");
     TokenForgeMenuCompanionEnabled = YES;
     TokenForgeMenuClickThrough = NO;
-    TokenForgeCreateCompanionOverlayOnMain();
+    TokenForgeCreateCompanionOverlayOnMain(@"status-item");
     TokenForgeCompanionWindow.ignoresMouseEvents = NO;
     [TokenForgeCompanionWindow makeKeyAndOrderFront:nil];
     [TokenForgeCompanionWindow orderFrontRegardless];
@@ -3733,6 +4276,11 @@ static TokenForgeAppLifecycleDelegate *TokenForgeEnsureLifecycleDelegate(void)
         TokenForgeLifecycleDelegate = [[TokenForgeAppLifecycleDelegate alloc] init];
     }
 
+    if (!TokenForgeAppKitRegistrationReady()) {
+        TokenForgeRequestLifecycleInstall(@"ensure_delegate_not_ready");
+        return TokenForgeLifecycleDelegate;
+    }
+
     [TokenForgeLifecycleDelegate install];
     return TokenForgeLifecycleDelegate;
 }
@@ -3740,7 +4288,8 @@ static TokenForgeAppLifecycleDelegate *TokenForgeEnsureLifecycleDelegate(void)
 extern "C" bool InstallTokenForgeMacAppLifecycle()
 {
     dispatch_async(dispatch_get_main_queue(), ^{
-        TokenForgeEnsureLifecycleDelegate();
+        TokenForgeLogRuntimeIdentityIfNeeded();
+        TokenForgeRequestLifecycleInstall(@"InstallTokenForgeMacAppLifecycle");
     });
     return true;
 }
@@ -3884,10 +4433,11 @@ extern "C" void TokenForge_SetMenuBarStatus(const char *json)
 
 extern "C" void TokenForge_SetCompanionVisible(bool visible)
 {
+    NSLog(@"INFO [OverlayTrace:csharp] Native entered TokenForge_SetCompanionVisible visible=%d", visible ? 1 : 0);
     if (visible) {
-        ShowDesktopCompanionOverlay();
+        TokenForgeShowDesktopCompanionOverlayWithTrace(@"csharp");
     } else {
-        HideDesktopCompanionOverlay();
+        TokenForgeHideDesktopCompanionOverlayWithTrace(@"csharp");
     }
 }
 
@@ -3939,10 +4489,10 @@ extern "C" void QuitTokenForgeApp()
 extern "C" bool CreateDesktopCompanionOverlay()
 {
     if ([NSThread isMainThread]) {
-        TokenForgeCreateCompanionOverlayOnMain();
+        TokenForgeCreateCompanionOverlayOnMain(@"create");
     } else {
         dispatch_sync(dispatch_get_main_queue(), ^{
-            TokenForgeCreateCompanionOverlayOnMain();
+            TokenForgeCreateCompanionOverlayOnMain(@"create");
         });
     }
 
@@ -3951,14 +4501,64 @@ extern "C" bool CreateDesktopCompanionOverlay()
 
 extern "C" void ShowDesktopCompanionOverlay()
 {
+    TokenForgeShowDesktopCompanionOverlayWithTrace(@"direct");
+}
+
+static void TokenForgeShowDesktopCompanionOverlayWithTrace(NSString *traceId)
+{
     void (^block)(void) = ^{
+        NSString *trace = traceId.length > 0 ? traceId : @"direct";
+        BOOL oldDesired = TokenForgeDesiredCompanionVisible;
+        TokenForgeDesiredCompanionVisible = YES;
+        TokenForgeLastShowReason = @"show_requested";
+        TokenForgeLastProjectionSource = @"native_show";
+        NSLog(@"INFO [OverlayTrace:%@] show_requested traceId=%@ repoId=%@ source=button", trace, trace, TokenForgeMenuRepositoryAlias ?: @"Not selected");
+        NSLog(@"INFO [OverlayTrace:%@] desired_visible_changed old=%@ new=true source=native_show", trace, oldDesired ? @"true" : @"false");
+        NSLog(@"INFO [OverlayTrace:%@] native_show_enter traceId=%@", trace, trace);
+        NSLog(@"INFO [OverlayTrace:%@] Native entered ShowDesktopCompanionOverlay visible=1", trace);
         NSLog(@"INFO [DesktopCompanion] action=show requested source=motionCard thread=%@", [NSThread isMainThread] ? @"main" : @"background");
         NSLog(@"INFO [DesktopCompanion] show requested visible=true repo=%@", TokenForgeMenuRepositoryAlias ?: @"Not selected");
-        TokenForgeCreateCompanionOverlayOnMain();
+        if (!TokenForgeAppKitRegistrationReady()) {
+            NSLog(@"INFO [NativeLifecycle] open_dashboard deferred reason=app_not_ready");
+            NSLog(@"INFO [OverlayTrace:%@] native_show_deferred reason=app_not_ready", trace);
+            TokenForgeRequestLifecycleInstall(@"overlay_show");
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                TokenForgeShowDesktopCompanionOverlayWithTrace(trace);
+            });
+            return;
+        }
+        TokenForgeCreateCompanionOverlayOnMain(trace);
+        if (TokenForgeCompanionWindow == nil) {
+            NSLog(@"WARN [OverlayTrace:%@] native_show_aborted reason=panel_create_deferred", trace);
+            return;
+        }
         TokenForgeMenuCompanionEnabled = YES;
         [TokenForgeEnsureLifecycleDelegate() updateStatusItemMenu];
+        NSRect frame = TokenForgeClampFrameToVisibleFrame(TokenForgeCompanionWindow.frame);
+        if (!NSEqualRects(frame, TokenForgeCompanionWindow.frame)) {
+            [TokenForgeCompanionWindow setFrame:frame display:NO];
+            TokenForgeCompanionAnchor = frame.origin;
+        }
+
+        TokenForgeCompanionWindow.alphaValue = 1.0;
         TokenForgeCompanionWindow.ignoresMouseEvents = TokenForgeMenuClickThrough;
+        TokenForgeCompanionWindow.level = NSStatusWindowLevel;
+        TokenForgeCompanionWindow.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary | NSWindowCollectionBehaviorStationary | NSWindowCollectionBehaviorIgnoresCycle;
         NSLog(@"INFO [DesktopCompanion] click-through %@", TokenForgeMenuClickThrough ? @"true" : @"false");
+        NSLog(@"INFO [OverlayTrace:%@] panel=%@ frame={{%.2f,%.2f},{%.2f,%.2f}} screen=%@",
+              trace,
+              TokenForgeCompanionWindow.isVisible ? @"reuse" : @"create-or-reuse",
+              TokenForgeCompanionWindow.frame.origin.x,
+              TokenForgeCompanionWindow.frame.origin.y,
+              TokenForgeCompanionWindow.frame.size.width,
+              TokenForgeCompanionWindow.frame.size.height,
+              (TokenForgeCompanionWindow.screen.localizedName ?: NSScreen.mainScreen.localizedName ?: @"unknown"));
+        NSLog(@"INFO [OverlayTrace:%@] panel level=%ld collectionBehavior=%lu alpha=%.2f ignoresMouseEvents=%@",
+              trace,
+              (long)TokenForgeCompanionWindow.level,
+              (unsigned long)TokenForgeCompanionWindow.collectionBehavior,
+              TokenForgeCompanionWindow.alphaValue,
+              TokenForgeCompanionWindow.ignoresMouseEvents ? @"true" : @"false");
         NSLog(@"INFO [DesktopOverlay] show requested visibleSetting=true");
         NSLog(@"INFO [DesktopOverlay] show visibleSetting=true windowVisible=true frame=(%.2f,%.2f %.2fx%.2f)",
               TokenForgeCompanionWindow.frame.origin.x,
@@ -3967,12 +4567,14 @@ extern "C" void ShowDesktopCompanionOverlay()
               TokenForgeCompanionWindow.frame.size.height);
         BOOL visibleBefore = TokenForgeCompanionWindow.isVisible;
         [TokenForgeCompanionWindow orderFrontRegardless];
-        [TokenForgeCompanionWindow orderFront:nil];
+        TokenForgeLogWindowLifecycle(@"orderFrontRegardless", TokenForgeCompanionWindow, [NSString stringWithFormat:@"trace=%@", trace]);
         NSLog(@"INFO [DesktopCompanion] orderFront called visibleBefore=%@ visibleAfter=%@",
               visibleBefore ? @"true" : @"false",
               TokenForgeCompanionWindow.isVisible ? @"true" : @"false");
         NSLog(@"INFO [DesktopOverlay] orderFrontRegardless called");
+        [TokenForgeCompanionContentView setNeedsDisplay:YES];
         [TokenForgeCompanionWindow displayIfNeeded];
+        NSLog(@"INFO [OverlayTrace:%@] contentView draw/render requested class=%@", trace, NSStringFromClass([TokenForgeCompanionContentView class]));
         if (TokenForgeCompanionAllowsWandering && TokenForgeCompanionMotionMode != 0 && TokenForgeCompanionWanderSpeed > 0.0) {
             TokenForgeEnsureCompanionMotionTimer();
         }
@@ -3990,19 +4592,46 @@ extern "C" void ShowDesktopCompanionOverlay()
               TokenForgeCompanionWindow.frame.origin.y,
               TokenForgeCompanionWindow.frame.size.width,
               TokenForgeCompanionWindow.frame.size.height);
+        NSLog(@"INFO [OverlayTrace:%@] orderFrontRegardless completed isVisible=%@ orderedIndex=%ld",
+              trace,
+              TokenForgeCompanionWindow.isVisible ? @"1" : @"0",
+              (long)[[NSApp orderedWindows] indexOfObject:TokenForgeCompanionWindow]);
+        NSLog(@"INFO [OverlayTrace:%@] panel_order_front traceId=%@ visible=%@", trace, trace, TokenForgeCompanionWindow.isVisible ? @"true" : @"false");
+        if (TokenForgeCompanionWindow.isVisible) {
+            NSLog(@"INFO [OverlayTrace:%@] panel_did_become_visible traceId=%@", trace, trace);
+        }
+        TokenForgeDumpOverlayPanelState(trace);
+        TokenForgeLogOverlayProjection(trace, @"native_show");
+        TokenForgeScheduleOverlayWatchdogs(trace);
     };
     if ([NSThread isMainThread]) block(); else dispatch_async(dispatch_get_main_queue(), block);
 }
 
 extern "C" void HideDesktopCompanionOverlay()
 {
+    TokenForgeHideDesktopCompanionOverlayWithTrace(@"direct");
+}
+
+static void TokenForgeHideDesktopCompanionOverlayWithTrace(NSString *traceId)
+{
     void (^block)(void) = ^{
+        NSString *trace = traceId.length > 0 ? traceId : @"direct";
+        BOOL oldDesired = TokenForgeDesiredCompanionVisible;
+        TokenForgeDesiredCompanionVisible = NO;
+        TokenForgeLastHideReason = @"companionVisibleOff";
+        TokenForgeLastProjectionSource = @"native_hide";
+        NSLog(@"INFO [OverlayTrace:%@] desired_visible_changed old=%@ new=false source=native_hide", trace, oldDesired ? @"true" : @"false");
+        NSLog(@"INFO [OverlayTrace:%@] Native entered HideDesktopCompanionOverlay visible=0", trace);
         TokenForgeMenuCompanionEnabled = NO;
         [TokenForgeEnsureLifecycleDelegate() updateStatusItemMenu];
         [TokenForgeCompanionWindow orderOut:nil];
+        NSLog(@"INFO [OverlayTrace:%@] panel_order_out traceId=%@ reason=companionVisibleOff", trace, trace);
+        TokenForgeLogWindowLifecycle(@"orderOut", TokenForgeCompanionWindow, [NSString stringWithFormat:@"trace=%@", trace]);
         NSLog(@"INFO [DesktopCompanion] hidden reason=companionVisibleOff");
         NSLog(@"INFO [DesktopCompanion] hidden reason=companionVisibleOff visible=%@", TokenForgeCompanionWindow.isVisible ? @"true" : @"false");
         NSLog(@"INFO [DesktopOverlay] hide reason=companionVisibleOff");
+        TokenForgeDumpOverlayPanelState(trace);
+        TokenForgeLogOverlayProjection(trace, @"native_hide");
     };
     if ([NSThread isMainThread]) block(); else dispatch_async(dispatch_get_main_queue(), block);
 }
@@ -4043,7 +4672,18 @@ extern "C" void SetCompanionOverlaySize(float width, float height)
 
 extern "C" void SetCompanionOverlayMotionProfile(int motionMode, float idleRadius, float wanderRadius, float wanderSpeed, float decisionIntervalSeconds, bool allowsWandering, float reactionCooldownSeconds)
 {
+    TokenForgeSetCompanionOverlayMotionProfileWithTrace(@"direct", motionMode, idleRadius, wanderRadius, wanderSpeed, decisionIntervalSeconds, allowsWandering, reactionCooldownSeconds);
+}
+
+static void TokenForgeSetCompanionOverlayMotionProfileWithTrace(NSString *traceId, int motionMode, float idleRadius, float wanderRadius, float wanderSpeed, float decisionIntervalSeconds, bool allowsWandering, float reactionCooldownSeconds)
+{
     dispatch_async(dispatch_get_main_queue(), ^{
+        NSString *trace = traceId.length > 0 ? traceId : @"direct";
+        NSLog(@"INFO [OverlayTrace:%@] Native entered SetCompanionOverlayMotionProfile mode=%d allowsWandering=%@ speed=%.2f",
+              trace,
+              motionMode,
+              allowsWandering ? @"true" : @"false",
+              wanderSpeed);
         TokenForgeCompanionMotionMode = motionMode;
         TokenForgeCompanionIdleRadius = MAX(0.0, MIN(24.0, idleRadius));
         TokenForgeCompanionWanderRadius = MAX(0.0, MIN(360.0, wanderRadius));
@@ -4052,6 +4692,18 @@ extern "C" void SetCompanionOverlayMotionProfile(int motionMode, float idleRadiu
         TokenForgeCompanionAllowsWandering = allowsWandering;
         TokenForgeCompanionReactionCooldown = MAX(0.4, MIN(4.0, reactionCooldownSeconds));
         if (allowsWandering && motionMode != 0 && TokenForgeCompanionWanderSpeed > 0.0) {
+            TokenForgeCreateCompanionOverlayOnMain(trace);
+            if (TokenForgeCompanionWindow == nil) {
+                NSLog(@"WARN [OverlayTrace:%@] motion_start_deferred reason=panel_not_ready", trace);
+                return;
+            }
+            if (!TokenForgeCompanionWindow.isVisible) {
+                TokenForgeMenuCompanionEnabled = YES;
+                TokenForgeCompanionWindow.alphaValue = 1.0;
+                [TokenForgeCompanionWindow orderFrontRegardless];
+                NSLog(@"INFO [OverlayTrace:%@] panel_order_front traceId=%@ visible=%@ reason=motion_start", trace, trace, TokenForgeCompanionWindow.isVisible ? @"true" : @"false");
+            }
+
             TokenForgeEnsureCompanionMotionTimer();
             TokenForgeMotionTickLogged = NO;
             NSLog(@"INFO [DesktopCompanion] movement started speed=%.2f", TokenForgeCompanionWanderSpeed);
@@ -4067,11 +4719,16 @@ extern "C" void SetCompanionOverlayMotionProfile(int motionMode, float idleRadiu
                   targetFrame.size.width,
                   targetFrame.size.height,
                   TokenForgeCompanionMotionTimer != nil ? @"true" : @"false");
+            NSLog(@"INFO [OverlayTrace:%@] motionEnabled=true timerActive=%@ panelVisible=%@",
+                  trace,
+                  TokenForgeCompanionMotionTimer != nil ? @"true" : @"false",
+                  TokenForgeCompanionWindow.isVisible ? @"true" : @"false");
         } else {
             [TokenForgeCompanionMotionTimer invalidate];
             TokenForgeCompanionMotionTimer = nil;
             TokenForgeCompanionVelocity = NSMakePoint(0, 0);
             NSLog(@"INFO [DesktopCompanion] movement stopped reason=settingOff");
+            NSLog(@"INFO [OverlayTrace:%@] motionEnabled=false overlayStillVisible=%@", trace, TokenForgeCompanionWindow.isVisible ? @"true" : @"false");
         }
     });
 }
@@ -4116,8 +4773,12 @@ extern "C" void SetCompanionOverlayVisualTheme(const char *visualThemeId)
 extern "C" void SetCompanionOverlayClickThrough(bool clickThrough)
 {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (TokenForgeCompanionWindow == nil) return;
         TokenForgeMenuClickThrough = clickThrough;
+        if (TokenForgeCompanionWindow == nil) {
+            NSLog(@"INFO [DesktopCompanion] click-through %@ pending window=nil", clickThrough ? @"enabled" : @"disabled");
+            return;
+        }
+
         if (TokenForgeIsDraggingOverlay && clickThrough) {
             TokenForgeCompanionWindow.ignoresMouseEvents = NO;
             NSLog(@"INFO [CompanionDrag] click-through deferred during drag");

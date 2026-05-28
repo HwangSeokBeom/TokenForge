@@ -62,7 +62,42 @@ else
   exit 1
 fi
 
-codesign_args=(--force --deep --options runtime --entitlements "${ENTITLEMENTS_PATH}" --identifier "${BUNDLE_ID}" --sign "${SIGN_IDENTITY}")
+find "${APP_PATH}" -name .DS_Store -delete
+echo "TokenForge macOS xattr audit before signing"
+xattr -lr "${APP_PATH}" 2>/dev/null || true
+
+remove_xattr_name() {
+  local name="$1"
+  while IFS= read -r item; do
+    if ! xattr -d "${name}" "${item}" 2>/dev/null; then
+      echo "WARN failed to remove xattr '${name}' from ${item}" >&2
+    fi
+  done < <(find "${APP_PATH}" -xattrname "${name}" -print 2>/dev/null || true)
+}
+
+xattr -cr "${APP_PATH}" 2>/dev/null || true
+xattr -c "${APP_PATH}" 2>/dev/null || true
+remove_xattr_name com.apple.quarantine
+remove_xattr_name com.apple.FinderInfo
+remove_xattr_name com.apple.ResourceFork
+remove_xattr_name 'com.apple.fileprovider.fpfs#P'
+remove_xattr_name 'com.apple.fileprovider.fpfs#C'
+remove_xattr_name com.apple.provenance
+
+remaining_xattrs="$(xattr -lr "${APP_PATH}" 2>/dev/null || true)"
+if [[ -n "${remaining_xattrs}" ]]; then
+  echo "TokenForge macOS xattr audit after cleanup"
+  echo "${remaining_xattrs}"
+  if echo "${remaining_xattrs}" | grep -E 'com.apple.(quarantine|FinderInfo|ResourceFork|fileprovider)' >/dev/null; then
+    echo "WARN disallowed signing xattrs remain after cleanup; codesign may reject this bundle." >&2
+  fi
+fi
+
+codesign_args=(--force --deep --entitlements "${ENTITLEMENTS_PATH}" --identifier "${BUNDLE_ID}" --sign "${SIGN_IDENTITY}")
+
+if [[ "${SIGN_MODE}" == "developer-id" ]]; then
+  codesign_args+=(--options runtime)
+fi
 
 if [[ "${SIGN_IDENTITY}" != "-" ]]; then
   codesign_args+=(--timestamp)
@@ -79,7 +114,8 @@ if [[ "${DRY_RUN}" == "true" ]]; then
 fi
 
 codesign "${codesign_args[@]}" "${APP_PATH}"
-codesign --verify --deep --strict "${APP_PATH}"
+codesign --verify --deep --strict --verbose=4 "${APP_PATH}"
+codesign -dv --verbose=4 "${APP_PATH}" 2>&1 || true
 codesign -d --entitlements :- "${APP_PATH}" >/dev/null 2>&1 || true
 
 echo "TokenForge macOS signing summary"
@@ -92,5 +128,9 @@ else
   echo "Identity: ad-hoc"
 fi
 echo "Entitlements: present"
-echo "Hardened runtime: enabled"
+if [[ "${SIGN_MODE}" == "developer-id" ]]; then
+  echo "Hardened runtime: enabled"
+else
+  echo "Hardened runtime: disabled for local ad-hoc player validation"
+fi
 echo "Result: signed and verified"

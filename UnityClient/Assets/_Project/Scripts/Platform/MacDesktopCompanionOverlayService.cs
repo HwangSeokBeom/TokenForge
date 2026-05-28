@@ -19,6 +19,7 @@ namespace TokenForge.Client.Platform
         private bool createAttempted;
         private bool clickCallbackRegistered;
         private bool? lastClickThrough;
+        private string lastMotionProfileSignature = string.Empty;
         private string lastLoggedMessage = string.Empty;
 
         public event Action Clicked;
@@ -200,6 +201,19 @@ namespace TokenForge.Client.Platform
 
             var motion = profile.MotionProfile ?? new CompanionMotionProfile();
             var reaction = profile.ReactionProfile ?? new CompanionReactionProfile();
+            var signature = string.Join("|",
+                ((int)motion.DefaultMode).ToString(),
+                motion.IdleRadius.ToString("0.###"),
+                motion.WanderRadius.ToString("0.###"),
+                motion.WanderSpeed.ToString("0.###"),
+                motion.DecisionIntervalSeconds.ToString("0.###"),
+                motion.AllowsWandering ? "1" : "0",
+                reaction.CooldownSeconds.ToString("0.###"));
+            if (string.Equals(lastMotionProfileSignature, signature, StringComparison.Ordinal))
+            {
+                return;
+            }
+
             try
             {
                 NativeSetMotionProfile(
@@ -210,6 +224,7 @@ namespace TokenForge.Client.Platform
                     motion.DecisionIntervalSeconds,
                     motion.AllowsWandering,
                     reaction.CooldownSeconds);
+                lastMotionProfileSignature = signature;
             }
             catch (Exception exception)
             {
@@ -292,6 +307,7 @@ namespace TokenForge.Client.Platform
             createAttempted = false;
             clickCallbackRegistered = false;
             lastClickThrough = null;
+            lastMotionProfileSignature = string.Empty;
         }
 
         private void RaiseClicked()

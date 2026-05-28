@@ -30,6 +30,8 @@ namespace TokenForge.Client.Platform
         ManageAgents,
         LevelUpCompanion,
         SelectRepository,
+        OpenActiveCompanionDashboard,
+        OpenRepositoryCompanionDashboard,
         AnalyzeRepository,
         DisconnectRepository,
         DetectAgent,
@@ -52,6 +54,7 @@ namespace TokenForge.Client.Platform
         EnableWander,
         DisableWander,
         SetClickReactionEnabled,
+        SetClickThroughEnabled,
         EnableClick,
         DisableClick,
         ResetCompanionPosition,
@@ -61,16 +64,18 @@ namespace TokenForge.Client.Platform
 
     public sealed class NativeDashboardActionRequest
     {
-        public NativeDashboardActionRequest(NativeDashboardAction action, string rawAction, string value = "")
+        public NativeDashboardActionRequest(NativeDashboardAction action, string rawAction, string value = "", string traceId = "")
         {
             Action = action;
             RawAction = rawAction ?? string.Empty;
             Value = value ?? string.Empty;
+            TraceId = string.IsNullOrWhiteSpace(traceId) ? "none" : traceId.Trim();
         }
 
         public NativeDashboardAction Action { get; }
         public string RawAction { get; }
         public string Value { get; }
+        public string TraceId { get; }
 
         public bool BoolValue(bool fallback = false)
         {
@@ -126,6 +131,7 @@ namespace TokenForge.Client.Platform
         public int syncStat;
         public bool companionVisible = true;
         public bool wanderEnabled = true;
+        public bool clickThroughEnabled;
         public bool clickReactionEnabled = true;
         public string appName = "TokenForge";
         public string connection = "local";

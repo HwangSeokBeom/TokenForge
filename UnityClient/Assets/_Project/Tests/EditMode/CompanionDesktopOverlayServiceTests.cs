@@ -345,13 +345,14 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
-        public void StageMotionProfilesKeepEggMostlyIdleAndAllowBabyWandering()
+        public void StageMotionProfilesKeepEarlyStagesSlowAndAllowEnabledWandering()
         {
             var egg = CompanionVisualProfileResolver.Resolve(new CompanionState { Stage = CompanionStage.Egg }, CompanionDesktopMotionMode.Normal);
             var baby = CompanionVisualProfileResolver.Resolve(new CompanionState { Stage = CompanionStage.Baby, TotalXp = 500 }, CompanionDesktopMotionMode.Normal);
 
-            Assert.IsFalse(egg.MotionProfile.AllowsWandering);
-            Assert.LessOrEqual(egg.MotionProfile.WanderRadius, 24f);
+            Assert.IsTrue(egg.MotionProfile.AllowsWandering);
+            Assert.LessOrEqual(egg.MotionProfile.WanderRadius, 32f);
+            Assert.Less(egg.MotionProfile.WanderSpeed, baby.MotionProfile.WanderSpeed);
             Assert.AreEqual(CompanionReaction.Tap, egg.ReactionProfile.PrimaryClickReaction);
             Assert.IsTrue(baby.MotionProfile.AllowsWandering);
             Assert.Greater(baby.MotionProfile.WanderRadius, egg.MotionProfile.WanderRadius);
