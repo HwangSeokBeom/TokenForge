@@ -7,7 +7,7 @@ namespace TokenForge.Client.Platform
         event Action<NativeDashboardActionRequest> ActionRequested;
         bool IsAvailable { get; }
         bool Install();
-        void ShowDashboardWindow();
+        void ShowDashboardWindow(string source = "csharp.showDashboard");
         void HideDashboardWindow();
         void ToggleDashboardWindow();
         void ShowSettingsWindow();

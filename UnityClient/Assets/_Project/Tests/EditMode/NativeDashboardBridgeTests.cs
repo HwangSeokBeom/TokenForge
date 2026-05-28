@@ -744,11 +744,43 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("[DashboardLifecycle][WARN_DUPLICATE] count=", source);
             StringAssert.Contains("TokenForgeCleanupDuplicateDashboardWindows", source);
             StringAssert.Contains("TokenForgeCleanupStaleUnityDashboardWindows", source);
-            StringAssert.Contains("TokenForgeOpenNativeDashboardOnMainWithSource(@\"dockReopen\")", source);
+            StringAssert.Contains("TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(@\"dockReopen\", NO)", source);
             StringAssert.Contains("TokenForgeOpenNativeDashboardOnMainWithSource(@\"menuBar.openDashboard\")", source);
-            StringAssert.Contains("TokenForgeOpenNativeDashboardOnMainWithSource(@\"csharp.showDashboard\")", source);
+            StringAssert.Contains("TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(@\"csharp.showDashboard\", YES)", source);
             StringAssert.Contains("hideDashboardFromSource:@\"dashboardX\"", source);
             StringAssert.Contains("blank TokenForge window detected; orderOut without dashboard reopen", source);
+        }
+
+        [Test]
+        public void NativeRuntimeVerificationSuppressesCrashReopenAndReportLoops()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+            var bootstrapper = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/AppBootstrapper.cs"));
+            var dashboardService = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/Platform/MacNativeDashboardService.cs"));
+
+            StringAssert.Contains("TOKENFORGE_VERIFY_RUNTIME", source);
+            StringAssert.Contains("-TokenForgeVerifyRuntime", source);
+            StringAssert.Contains("[RuntimeVerify][ENABLED]", source);
+            StringAssert.Contains("[CrashRecovery][SUPPRESSED_REPORT_UI] reason=verificationMode", source);
+            StringAssert.Contains("[DashboardLifecycle][SUPPRESS_REOPEN] reason=verificationMode", source);
+            StringAssert.Contains("[OverlayWatchdog][SUPPRESSED] reason=verificationModeWarmup", source);
+            StringAssert.Contains("[WindowsDump][LAUNCH_STABLE]", source);
+            StringAssert.Contains("[AppLifecycle][SUPPRESS_QUIT] reason=verificationMode", source);
+            StringAssert.Contains("LaunchInProgress", source);
+            StringAssert.Contains("NormalTerminationAt", source);
+            StringAssert.Contains("LastAbnormalTerminationAt", source);
+            StringAssert.Contains("ReportIssueAutoPresented", source);
+            StringAssert.Contains("applicationWillTerminate", source);
+            StringAssert.Contains("shouldRestoreApplicationState=false route=suppressed", source);
+            StringAssert.Contains("reportIssueAutoPresent=false route=manualOnly", source);
+            StringAssert.Contains("manualOpen requested=true autoPresent=false nonBlocking=true", source);
+            StringAssert.Contains("TokenForge_ShowDashboardWindowWithSource", source);
+
+            StringAssert.Contains("IsRuntimeVerificationMode", bootstrapper);
+            StringAssert.Contains("ApplyNativeShellState(showDashboardIfNeeded: false)", bootstrapper);
+            StringAssert.Contains("source=initialOverlayProjection", bootstrapper);
+            StringAssert.Contains("manualOpen requested=true autoPresent=false nonBlocking=true source=nativeDashboard", bootstrapper);
+            StringAssert.Contains("NativeShowDashboardWindowWithSource", dashboardService);
         }
 
         [Test]

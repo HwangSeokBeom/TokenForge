@@ -103,6 +103,7 @@ namespace TokenForge.Client
         private bool nativeCompanionDesiredVisibleInitialized;
         private string nativeCompanionLastProjectionSource = "startup";
         private bool nativeExplicitQuitRequested;
+        private bool runtimeVerificationMode;
 
 #if UNITY_EDITOR
         public static bool DisableEditorAssetPrefabLookupForTests { get; set; }
@@ -143,6 +144,13 @@ namespace TokenForge.Client
         private void Awake()
         {
             unityMainThreadId = Thread.CurrentThread.ManagedThreadId;
+            runtimeVerificationMode = IsRuntimeVerificationMode();
+            if (runtimeVerificationMode)
+            {
+                Debug.Log("INFO [RuntimeVerify][ENABLED] source=AppBootstrapper dashboardAutoOpen=false overlayAutoShow=false");
+                Debug.Log("INFO [CrashRecovery][SUPPRESSED_REPORT_UI] reason=verificationMode source=AppBootstrapper");
+            }
+
             Debug.Log("INFO [Startup] AppBootstrapper begin");
             Debug.Log("INFO " + LogPrefix + " TokenForge bootstrap starting.");
             LogRuntimeBuildIdentity();
@@ -178,7 +186,7 @@ namespace TokenForge.Client
                 Debug.Log("INFO [NativeDashboard] mode=macOSPlayer source=AppKit");
                 Debug.Log("INFO [BootstrapRoot] productUI=disabled reason=nativeShell");
                 EnsureNativeDashboardShell();
-                ApplyNativeShellState(showDashboardIfNeeded: true);
+                ApplyNativeShellState(showDashboardIfNeeded: false);
             }
             else if (bootstrapRoot != null)
             {
@@ -444,7 +452,7 @@ namespace TokenForge.Client
         {
             nativeDashboardShown = true;
             Debug.Log("INFO [WindowLifecycle] openDashboard route reason=" + SafeNativeText(reason, "unknown"));
-            nativeDashboardService?.ShowDashboardWindow();
+            nativeDashboardService?.ShowDashboardWindow(SafeNativeText(reason, "csharp.showDashboard"));
         }
 
         private void HandleNativeCompanionPositionChanged(Vector2 position)
@@ -476,9 +484,13 @@ namespace TokenForge.Client
                 approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault());
             if (!nativeCompanionDesiredVisibleInitialized)
             {
-                nativeCompanionDesiredVisible = companionSettings.IsDesktopCompanionEnabled;
+                nativeCompanionDesiredVisible = runtimeVerificationMode ? false : companionSettings.IsDesktopCompanionEnabled;
                 nativeCompanionDesiredVisibleInitialized = true;
-                nativeCompanionLastProjectionSource = "initial_profile";
+                nativeCompanionLastProjectionSource = runtimeVerificationMode ? "verificationMode" : "initial_profile";
+                if (runtimeVerificationMode && companionSettings.IsDesktopCompanionEnabled)
+                {
+                    Debug.Log("INFO [DashboardLifecycle][SUPPRESS_REOPEN] reason=verificationMode source=initialOverlayProjection");
+                }
             }
 
             if (nativeCompanionDesiredVisible && !companionSettings.IsDesktopCompanionEnabled)
@@ -2001,6 +2013,7 @@ namespace TokenForge.Client
                     Application.OpenURL("https://github.com/HwangSeokBeom/TokenForge");
                     break;
                 case NativeDashboardAction.ReportIssue:
+                    Debug.Log("INFO [ReportIssue] manualOpen requested=true autoPresent=false nonBlocking=true source=nativeDashboard");
                     Application.OpenURL("https://github.com/HwangSeokBeom/TokenForge/issues");
                     break;
                 case NativeDashboardAction.Quit:
@@ -3307,6 +3320,47 @@ namespace TokenForge.Client
             }
         }
 
+        private static bool IsRuntimeVerificationMode()
+        {
+            var env = Environment.GetEnvironmentVariable("TOKENFORGE_VERIFY_RUNTIME");
+            if (IsTruthy(env))
+            {
+                return true;
+            }
+
+            var args = Environment.GetCommandLineArgs();
+            for (var index = 0; index < args.Length; index++)
+            {
+                var arg = args[index] ?? string.Empty;
+                if (string.Equals(arg, "-TokenForgeVerifyRuntime", StringComparison.OrdinalIgnoreCase))
+                {
+                    return index + 1 >= args.Length || IsTruthy(args[index + 1]);
+                }
+
+                const string prefix = "-TokenForgeVerifyRuntime=";
+                if (arg.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    return IsTruthy(arg.Substring(prefix.Length));
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IsTruthy(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            value = value.Trim();
+            return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "on", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static string Sha256ForFile(string path)
         {
             using (var stream = File.OpenRead(path))
@@ -3951,7 +4005,7 @@ namespace TokenForge.Client
         {
             if (UseNativeMacDashboardShell)
             {
-                ApplyNativeShellState(showDashboardIfNeeded: true);
+                ApplyNativeShellState(showDashboardIfNeeded: false);
                 IsVisibleUiValidated = nativeDashboardService != null && nativeDashboardService.IsAvailable;
                 IsRenderedFrameSmokeSkippedForBatchMode = true;
                 IsBootstrapComplete = IsVisibleUiValidated;

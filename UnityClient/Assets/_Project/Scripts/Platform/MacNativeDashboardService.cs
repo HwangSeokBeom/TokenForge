@@ -52,9 +52,21 @@ namespace TokenForge.Client.Platform
             }
         }
 
-        public void ShowDashboardWindow()
+        public void ShowDashboardWindow(string source = "csharp.showDashboard")
         {
-            InvokeNative(NativeShowDashboardWindow);
+            if (!EnsureInstalled())
+            {
+                return;
+            }
+
+            try
+            {
+                NativeShowDashboardWindowWithSource(SafeNativeSource(source, "csharp.showDashboard"));
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("WARN " + LogPrefix + " native call failed: " + exception.GetType().Name);
+            }
         }
 
         public void HideDashboardWindow()
@@ -469,12 +481,22 @@ namespace TokenForge.Client.Platform
             return string.IsNullOrWhiteSpace(value) ? "none" : value.Trim();
         }
 
+        private static string SafeNativeSource(string value, string fallback)
+        {
+            value = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+            value = value.Replace('\n', ' ').Replace('\r', ' ');
+            return value.Length <= 96 ? value : value.Substring(0, 96);
+        }
+
 #if UNITY_STANDALONE_OSX && !UNITY_EDITOR
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate void NativeDashboardActionCallback(string action);
 
         [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_ShowDashboardWindow")]
         private static extern void NativeShowDashboardWindow();
+
+        [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_ShowDashboardWindowWithSource")]
+        private static extern void NativeShowDashboardWindowWithSource(string source);
 
         [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_HideDashboardWindow")]
         private static extern void NativeHideDashboardWindow();
@@ -502,6 +524,7 @@ namespace TokenForge.Client.Platform
 #else
         private delegate void NativeDashboardActionCallback(string action);
         private static void NativeShowDashboardWindow() { }
+        private static void NativeShowDashboardWindowWithSource(string source) { }
         private static void NativeHideDashboardWindow() { }
         private static void NativeToggleDashboardWindow() { }
         private static void NativeShowSettingsWindow() { }

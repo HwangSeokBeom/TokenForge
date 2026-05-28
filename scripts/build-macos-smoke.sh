@@ -46,8 +46,23 @@ mkdir -p "$(dirname "${BUILD_OUTPUT}")"
 LOCK_FILE="${UNITY_PROJECT_PATH}/Temp/UnityLockfile"
 if [[ -f "${LOCK_FILE}" ]]; then
   echo "Unity project lock detected: ${LOCK_FILE}" >&2
+  echo "Clean rebuild is blocked until this lock is released." >&2
   echo "Processes that may hold the lock:" >&2
-  lsof "${LOCK_FILE}" 2>/dev/null || ps aux | grep -i "[U]nity" >&2 || true
+  if command -v lsof >/dev/null 2>&1; then
+    if ! lsof "${LOCK_FILE}" >&2; then
+      echo "lsof could not read lock holders in this environment." >&2
+    fi
+  else
+    echo "lsof is not available." >&2
+  fi
+  echo "Unity-related process probe:" >&2
+  if command -v pgrep >/dev/null 2>&1; then
+    pgrep -fl "Unity|Unity Hub|Unity Licensing|LicensingClient" >&2 || echo "No Unity-related processes visible to pgrep, or process listing is denied." >&2
+  else
+    echo "pgrep is not available." >&2
+  fi
+  echo "Manual action required: quit Unity Editor/Hub/Licensing Client before deleting the lockfile." >&2
+  echo "If fileproviderd appears above, move the project out of iCloud/File Provider/Dropbox/OneDrive sync paths before rebuilding." >&2
   print_summary "blocked: unity project lock"
   exit 2
 fi
