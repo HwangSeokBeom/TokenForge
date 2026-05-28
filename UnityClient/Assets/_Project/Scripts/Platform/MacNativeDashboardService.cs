@@ -206,10 +206,12 @@ namespace TokenForge.Client.Platform
                     return true;
                 case "show_dashboard":
                 case "showDashboard":
+                case "dashboard.open":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ShowDashboard, rawAction, value);
                     return true;
                 case "hide_dashboard":
                 case "hideDashboard":
+                case "dashboard.close":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.HideDashboard, rawAction, value);
                     return true;
                 case "repository":
@@ -396,9 +398,11 @@ namespace TokenForge.Client.Platform
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ToggleCompanionVisible, rawAction, value);
                     return true;
                 case "show_companion":
+                case "desktop.show":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ShowCompanion, rawAction, "true", OverlayTraceId(value));
                     return true;
                 case "hide_companion":
+                case "desktop.hide":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.HideCompanion, rawAction, "false", OverlayTraceId(value));
                     return true;
                 case "changeCompanionSkin":
@@ -414,9 +418,11 @@ namespace TokenForge.Client.Platform
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.SetWanderEnabled, rawAction, value);
                     return true;
                 case "enable_wander":
+                case "desktop.movement.enable":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.EnableWander, rawAction, "true", OverlayTraceId(value));
                     return true;
                 case "disable_wander":
+                case "desktop.movement.pause":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.DisableWander, rawAction, "false", OverlayTraceId(value));
                     return true;
                 case "setClickReactionEnabled":
@@ -428,6 +434,15 @@ namespace TokenForge.Client.Platform
                 case "set_click_through_enabled":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.SetClickThroughEnabled, rawAction, value);
                     return true;
+                case "desktop.drag.enable":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.EnableDrag, rawAction, "true");
+                    return true;
+                case "desktop.clickThrough.disable":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.DisableClickThrough, rawAction, "false");
+                    return true;
+                case "desktop.clickThrough.enable":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.EnableClickThrough, rawAction, "true");
+                    return true;
                 case "enable_click":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.EnableClick, rawAction, "true");
                     return true;
@@ -436,9 +451,11 @@ namespace TokenForge.Client.Platform
                     return true;
                 case "resetCompanionPosition":
                 case "reset_companion_position":
+                case "desktop.position.reset":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ResetCompanionPosition, rawAction, value);
                     return true;
                 case "quit":
+                case "app.quit":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.Quit, rawAction, value);
                     return true;
                 default:

@@ -53,6 +53,9 @@ namespace TokenForge.Client.Platform
         SetWanderEnabled,
         EnableWander,
         DisableWander,
+        EnableDrag,
+        EnableClickThrough,
+        DisableClickThrough,
         SetClickReactionEnabled,
         SetClickThroughEnabled,
         EnableClick,
@@ -104,7 +107,7 @@ namespace TokenForge.Client.Platform
         public string appTitle = "TokenForge";
         public string subtitle = "Turn your development activity into companion growth.";
         public bool isLocalMode = true;
-        public string syncStatusText = "Sync optional";
+        public string syncStatusText = "Optional sync";
         public string selectedNavItem = "dashboard";
         public bool primaryActionEnabled = true;
         public bool hasActiveRepository;
@@ -131,8 +134,16 @@ namespace TokenForge.Client.Platform
         public int syncStat;
         public bool companionVisible = true;
         public bool wanderEnabled = true;
+        public bool desiredVisible = true;
+        public bool actualVisible;
+        public bool movementEnabled = true;
+        public bool dragEnabled = true;
         public bool clickThroughEnabled;
         public bool clickReactionEnabled = true;
+        public bool explicitQuitRequested;
+        public bool dashboardVisible = true;
+        public string activeRepositoryId = string.Empty;
+        public string lastKnownFrame = string.Empty;
         public string appName = "TokenForge";
         public string connection = "local";
         public string sync = "optional";

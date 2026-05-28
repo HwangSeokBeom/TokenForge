@@ -347,12 +347,12 @@ namespace TokenForge.Client.UI
             SetText(startGrowthLabel, hasPendingReview ? "Review Activity\nA summary is ready for approval." : "Activity\nAdd a repository or connect an AI agent to begin.");
             SetText(startRecentSessionsLabel, "AI Agents\n" + CodexStatus());
             SetText(startPrivacySummaryLabel, PrivacyCopy);
-            SetText(startRunStatusLabel, "Sync optional");
+            SetText(startRunStatusLabel, "Optional sync");
             SetButtonLabel(startGameButton, "Run Analysis");
             SetButtonLabel(startAnalyzeRepositoryButton, "Add Repository");
             SetButtonLabel(startAnalyzeAgentLogsButton, "Connect AI Agent");
             SetButtonLabel(startReviewAnalysisButton, "Review Activity");
-            SetButtonLabel(startSyncProgressButton, "Sync optional");
+            SetButtonLabel(startSyncProgressButton, "Optional sync");
             SetButton(startGameButton, true);
             SetButton(startAnalyzeRepositoryButton, true);
             SetButton(startAnalyzeAgentLogsButton, true);
@@ -379,7 +379,7 @@ namespace TokenForge.Client.UI
             SetButtonLabel(dashboardSourcesConnectAgentButton, "Connect AI Agent");
             SetButtonLabel(dashboardSaveSessionButton, hasPendingReview ? "Approve Growth" : "Review Activity");
             SetButtonLabel(dashboardDiscardReviewButton, "Discard");
-            SetButtonLabel(dashboardSyncButton, "Sync optional");
+            SetButtonLabel(dashboardSyncButton, "Optional sync");
             SetButtonLabel(dashboardHistoryButton, "Connect AI Agent");
             SetButtonLabel(dashboardSettingsButton, "Settings");
             SetButtonLabel(dashboardBackButton, "Dashboard");

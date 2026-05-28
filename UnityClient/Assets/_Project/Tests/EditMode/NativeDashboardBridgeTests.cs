@@ -140,6 +140,18 @@ namespace TokenForge.Client.Tests
 
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("reset_companion_position", out var reset));
             Assert.AreEqual(NativeDashboardAction.ResetCompanionPosition, reset.Action);
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("desktop.show", out var desktopShow));
+            Assert.AreEqual(NativeDashboardAction.ShowCompanion, desktopShow.Action);
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("desktop.movement.enable", out var desktopMovement));
+            Assert.AreEqual(NativeDashboardAction.EnableWander, desktopMovement.Action);
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("desktop.drag.enable", out var drag));
+            Assert.AreEqual(NativeDashboardAction.EnableDrag, drag.Action);
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("desktop.clickThrough.enable", out var desktopClickThrough));
+            Assert.AreEqual(NativeDashboardAction.EnableClickThrough, desktopClickThrough.Action);
         }
 
         [Test]
@@ -587,7 +599,7 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("[RepositoriesUI] render repoCards count", source);
             StringAssert.Contains("[AIUsageUI] render provider", source);
             StringAssert.Contains("[DesktopCompanion] orderFront completed", source);
-            StringAssert.Contains("[DesktopCompanion] tick old=", source);
+            StringAssert.Contains("[DesktopCompanion] animation start old=", source);
             StringAssert.Contains("[MenuBarCompanion] animation started", source);
             StringAssert.Contains("View Growth", source);
             StringAssert.Contains("TokenForgeMenuCanLevelUp", source);
@@ -673,30 +685,97 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void NativeDesktopOverlayDragIsGatedToPanelContentOnly()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("TokenForgeCompanionViewRoleDesktopOverlayPanelContent", source);
+            StringAssert.Contains("TokenForgeCompanionViewRoleDashboardHeroPreview", source);
+            StringAssert.Contains("TokenForgeCompanionViewRoleDashboardSidebarPreview", source);
+            StringAssert.Contains("TokenForgeIsDesktopOverlayPanelContentView", source);
+            StringAssert.Contains("TokenForge.DesktopCompanion", source);
+            StringAssert.Contains("[OverlayDrag][BEGIN] role=", source);
+            StringAssert.Contains("[OverlayDrag][IGNORE] role=", source);
+            StringAssert.Contains("[OverlayDrag][UPDATE] role=", source);
+            StringAssert.Contains("[OverlayDrag][END] role=", source);
+            StringAssert.Contains("[OverlayMovement][PAUSE] reason=drag", source);
+            StringAssert.Contains("[OverlayMovement][RESUME] reason=dragEnded", source);
+            StringAssert.Contains("[OverlayProjection][SUPPRESSED_POSITION_APPLY] reason=dragging", source);
+            StringAssert.Contains("[OverlayProjection][SUPPRESSED_SIZE_APPLY] reason=dragging", source);
+            StringAssert.Contains("[OverlayLifecycle][DEFER_HIDE] reason=dragging", source);
+            StringAssert.Contains("[OverlayWatchdog][SUPPRESSED] reason=dragging", source);
+            StringAssert.Contains("[OverlayLifecycle][SUPPRESSED_RECREATE] reason=dragging", source);
+            StringAssert.Contains("TokenForgePendingOverlayActionHide", source);
+            StringAssert.Contains("TokenForgePendingOverlayActionDestroy", source);
+            StringAssert.Contains("TokenForgePendingOverlayActionResetPosition", source);
+            StringAssert.Contains("TokenForgeOverlayDragFinalizing", source);
+            StringAssert.Contains("TokenForgeOverlayDragPersistedThisGesture", source);
+            StringAssert.Contains("[OverlayLifecycle][APPLY_DEFERRED_DESTROY]", source);
+            StringAssert.Contains("[OverlayLifecycle][APPLY_DEFERRED_RESET_POSITION]", source);
+            StringAssert.Contains("[OverlayState][DEFER_CLICK_THROUGH] reason=dragging", source);
+            StringAssert.Contains("[OverlayState][APPLY] desiredDrag=", source);
+            StringAssert.Contains("[OverlayState][PROJECT] visible=", source);
+            StringAssert.Contains("TokenForgeDashboardLayoutHashForState", source);
+            StringAssert.Contains("[DashboardLayout][STABLE_DURING_DRAG]", source);
+            StringAssert.Contains("[DashboardLayout][WARN] changedDuringOverlayDrag", source);
+        }
+
+        [Test]
+        public void NativeDashboardLifecycleUsesSingleCanonicalWindow()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("TokenForgeNativeDashboardWindow", source);
+            StringAssert.Contains("TokenForgeDashboardWindowIdentifier", source);
+            StringAssert.Contains("openOrFocusDashboardFromSource", source);
+            StringAssert.Contains("hideDashboardFromSource", source);
+            StringAssert.Contains("[DashboardLifecycle] open.request source=", source);
+            StringAssert.Contains("[DashboardLifecycle] open.focusExisting windowNumber=", source);
+            StringAssert.Contains("[DashboardLifecycle] open.createNew reason=", source);
+            StringAssert.Contains("[DashboardLifecycle] close.request source=", source);
+            StringAssert.Contains("[DashboardLifecycle] windowWillClose windowNumber=", source);
+            StringAssert.Contains("[DashboardLifecycle] canonical.nil reason=windowWillClose", source);
+            StringAssert.Contains("[DashboardLifecycle][WARN] duplicateDashboardWindows count=", source);
+            StringAssert.Contains("[DashboardLifecycle] windowsDump phase=", source);
+            StringAssert.Contains("[DashboardLifecycle][OPEN] source=", source);
+            StringAssert.Contains("[DashboardLifecycle][FOCUS_EXISTING] source=", source);
+            StringAssert.Contains("[DashboardLifecycle][CLOSE] source=", source);
+            StringAssert.Contains("[DashboardLifecycle][SUPPRESS_REOPEN] reason=recentExplicitClose", source);
+            StringAssert.Contains("[DashboardLifecycle][WARN_DUPLICATE] count=", source);
+            StringAssert.Contains("TokenForgeCleanupDuplicateDashboardWindows", source);
+            StringAssert.Contains("TokenForgeCleanupStaleUnityDashboardWindows", source);
+            StringAssert.Contains("TokenForgeOpenNativeDashboardOnMainWithSource(@\"dockReopen\")", source);
+            StringAssert.Contains("TokenForgeOpenNativeDashboardOnMainWithSource(@\"menuBar.openDashboard\")", source);
+            StringAssert.Contains("TokenForgeOpenNativeDashboardOnMainWithSource(@\"csharp.showDashboard\")", source);
+            StringAssert.Contains("hideDashboardFromSource:@\"dashboardX\"", source);
+            StringAssert.Contains("blank TokenForge window detected; orderOut without dashboard reopen", source);
+        }
+
+        [Test]
         public void NativeMotionCardProvidesImmediateRuntimeActions()
         {
             var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
 
-            StringAssert.Contains("Show Companion", source);
-            StringAssert.Contains("Hide Companion", source);
-            StringAssert.Contains("Enable Wander", source);
-            StringAssert.Contains("Disable Wander", source);
-            StringAssert.Contains("Enable Click", source);
-            StringAssert.Contains("Disable Click", source);
+            StringAssert.Contains("Show on Desktop", source);
+            StringAssert.Contains("Hide", source);
+            StringAssert.Contains("Enable Movement", source);
+            StringAssert.Contains("Pause Movement", source);
+            StringAssert.Contains("Enable Drag", source);
+            StringAssert.Contains("Click-through", source);
             StringAssert.Contains("Reset Position", source);
             StringAssert.Contains("showCompanionFromDashboard", source);
             StringAssert.Contains("enableWanderFromDashboard", source);
             StringAssert.Contains("disableWanderFromDashboard", source);
             StringAssert.Contains("SetCompanionOverlayMotionProfile", source);
             StringAssert.Contains("ShowDesktopCompanionOverlay", source);
-            StringAssert.Contains("show_companion", source);
-            StringAssert.Contains("hide_companion", source);
-            StringAssert.Contains("enable_wander", source);
-            StringAssert.Contains("disable_wander", source);
-            StringAssert.Contains("enable_click", source);
-            StringAssert.Contains("disable_click", source);
-            StringAssert.Contains("reset_companion_position", source);
-            StringAssert.Contains("Companion is hidden. Show it to let Token wander on your desktop.", source);
+            StringAssert.Contains("desktop.show", source);
+            StringAssert.Contains("desktop.hide", source);
+            StringAssert.Contains("desktop.movement.enable", source);
+            StringAssert.Contains("desktop.movement.pause", source);
+            StringAssert.Contains("desktop.drag.enable", source);
+            StringAssert.Contains("desktop.clickThrough.enable", source);
+            StringAssert.Contains("desktop.position.reset", source);
+            StringAssert.Contains("showButtonRequired", source);
         }
 
         [Test]

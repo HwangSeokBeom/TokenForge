@@ -49,7 +49,7 @@ namespace TokenForge.Client
             "TokenForge",
             "Turn your coding activity into a growing desktop companion",
             "Local-first",
-            "Sync optional",
+            "Optional sync",
             "Run Analysis",
             "Add Repository",
             "Connect AI Agent",
@@ -102,6 +102,7 @@ namespace TokenForge.Client
         private bool nativeCompanionDesiredVisible;
         private bool nativeCompanionDesiredVisibleInitialized;
         private string nativeCompanionLastProjectionSource = "startup";
+        private bool nativeExplicitQuitRequested;
 
 #if UNITY_EDITOR
         public static bool DisableEditorAssetPrefabLookupForTests { get; set; }
@@ -554,7 +555,7 @@ namespace TokenForge.Client
             state.appTitle = "TokenForge";
             state.subtitle = "Track Git and AI-assisted work as companion growth.";
             state.isLocalMode = true;
-            state.syncStatusText = state.sync == "connected" ? "Safe sync connected" : "Sync optional";
+            state.syncStatusText = state.sync == "connected" ? "Safe sync connected" : "Optional sync";
             state.selectedNavItem = string.IsNullOrWhiteSpace(nativeSelectedNavItem) ? "dashboard" : nativeSelectedNavItem;
             state.primaryActionEnabled = true;
             state.isAnalysisRunning = nativeAnalysisInProgress;
@@ -575,6 +576,15 @@ namespace TokenForge.Client
             state.wanderEnabled = settings.MotionMode != CompanionDesktopMotionMode.Calm;
             state.clickThroughEnabled = settings.IsClickThroughEnabled;
             state.clickReactionEnabled = !settings.IsClickThroughEnabled;
+            state.desiredVisible = nativeCompanionDesiredVisibleInitialized ? nativeCompanionDesiredVisible : settings.IsDesktopCompanionEnabled;
+            state.actualVisible = nativeDesktopCompanionController != null && nativeDesktopCompanionController.OverlayState == CompanionDesktopOverlayState.Active;
+            state.movementEnabled = state.wanderEnabled;
+            state.dragEnabled = !state.clickThroughEnabled;
+            state.explicitQuitRequested = nativeExplicitQuitRequested;
+            state.dashboardVisible = nativeDashboardShown;
+            state.lastKnownFrame = settings.HasSavedOverlayPosition
+                ? settings.LastOverlayPositionX.ToString("0.#") + "," + settings.LastOverlayPositionY.ToString("0.#")
+                : string.Empty;
             state.companion.name = string.IsNullOrWhiteSpace(dashboard.CharacterName) ? "Token" : dashboard.CharacterName;
             state.companion.stage = companion.Stage.ToString();
             state.companion.stageIndex = (int)companion.Stage;
@@ -608,6 +618,7 @@ namespace TokenForge.Client
             state.repository.connected = repositoryConnected;
             state.hasActiveRepository = repositoryConnected;
             state.repository.id = repositoryConnected ? dashboard.CurrentRepositoryHash ?? string.Empty : string.Empty;
+            state.activeRepositoryId = state.repository.id;
             state.repository.name = repositoryConnected ? SafeNativeText(dashboard.CurrentRepositoryAlias, "Repository") : string.Empty;
             state.repository.status = repositoryConnected ? "active" : "not_selected";
             state.repositoryStatus = state.repository.status;
@@ -1827,6 +1838,7 @@ namespace TokenForge.Client
                     nativeDashboardService?.ToggleDashboardWindow();
                     break;
                 case NativeDashboardAction.HideDashboard:
+                    nativeDashboardShown = false;
                     nativeDashboardService?.HideDashboardWindow();
                     break;
                 case NativeDashboardAction.Settings:
@@ -1960,6 +1972,15 @@ namespace TokenForge.Client
                 case NativeDashboardAction.SetClickThroughEnabled:
                     RunNativeDashboardTask(() => SetClickThroughEnabledFromNativeAsync(request.BoolValue(false)), request.RawAction);
                     break;
+                case NativeDashboardAction.EnableDrag:
+                    RunNativeDashboardTask(() => SetDragEnabledFromNativeAsync(true), request.RawAction);
+                    break;
+                case NativeDashboardAction.EnableClickThrough:
+                    RunNativeDashboardTask(() => SetClickThroughEnabledFromNativeAsync(true), request.RawAction);
+                    break;
+                case NativeDashboardAction.DisableClickThrough:
+                    RunNativeDashboardTask(() => SetClickThroughEnabledFromNativeAsync(false), request.RawAction);
+                    break;
                 case NativeDashboardAction.EnableClick:
                     RunNativeDashboardTask(() => SetClickReactionEnabledFromNativeAsync(true), request.RawAction);
                     break;
@@ -1983,6 +2004,8 @@ namespace TokenForge.Client
                     Application.OpenURL("https://github.com/HwangSeokBeom/TokenForge/issues");
                     break;
                 case NativeDashboardAction.Quit:
+                    nativeExplicitQuitRequested = true;
+                    Debug.Log("INFO [AppLifecycle] explicitQuitRequested=true source=nativeDashboard action=" + request.RawAction);
                     lifecycleService?.Quit();
                     break;
                 case NativeDashboardAction.ResetLocalState:
@@ -2860,25 +2883,9 @@ namespace TokenForge.Client
         private async Task SetWanderEnabledFromNativeAsync(bool enabled, string traceId = "none")
         {
             Debug.Log("INFO [OverlayTrace:" + SafeNativeText(traceId, "none") + "] AppBootstrapper route invoked target=DesktopCompanionOverlayController.SetWander enabled=" + enabled);
+            var oldVisible = nativeCompanionDesiredVisibleInitialized && nativeCompanionDesiredVisible;
             if (approvedActivityAnalysis != null)
             {
-                if (enabled)
-                {
-                    var oldDesired = nativeCompanionDesiredVisibleInitialized && nativeCompanionDesiredVisible;
-                    nativeCompanionDesiredVisible = true;
-                    nativeCompanionDesiredVisibleInitialized = true;
-                    nativeCompanionLastProjectionSource = "enable_wander";
-                    Debug.Log("INFO [OverlayTrace:" + SafeNativeText(traceId, "none") + "] desired_visible_changed old=" + oldDesired + " new=true source=enable_wander");
-                    var visibleResult = await approvedActivityAnalysis.SetDesktopCompanionEnabledAsync(true);
-                    if (!visibleResult.IsSuccess)
-                    {
-                        nativeActionStatusKind = "error";
-                        nativeActionStatusText = "Wander movement could not show companion: " + SafeNativeText(visibleResult.ErrorMessage, visibleResult.ErrorCode);
-                        await RefreshAndPublishNativeDashboardAsync();
-                        return;
-                    }
-                }
-
                 var result = await approvedActivityAnalysis.SetDesktopCompanionMotionModeAsync(enabled ? CompanionDesktopMotionMode.Normal : CompanionDesktopMotionMode.Calm);
                 if (!result.IsSuccess)
                 {
@@ -2890,18 +2897,26 @@ namespace TokenForge.Client
             }
 
             nativeActionStatusKind = "success";
-            nativeActionStatusText = enabled ? "Wander movement enabled." : "Wander movement stopped.";
-            if (enabled)
-            {
-                Debug.Log("INFO [OverlayTrace:" + SafeNativeText(traceId, "none") + "] Enable Wander ensuring overlay visible before motion");
-                nativeDashboardService?.SetCompanionVisible(true);
-            }
-
+            nativeActionStatusText = enabled
+                ? (oldVisible ? "Movement enabled." : "Movement enabled. Use Show on Desktop when you want Token visible.")
+                : "Movement paused.";
+            Debug.Log("INFO [DashboardAction] action=desktop.movement." + (enabled ? "enable" : "pause") +
+                      " repositoryId=" + SafeNativeText(approvedActivityAnalysis?.CharacterDashboard?.CurrentRepositoryHash, "none") +
+                      " previousVisible=" + oldVisible +
+                      " nextVisible=" + (nativeCompanionDesiredVisibleInitialized && nativeCompanionDesiredVisible) +
+                      " movementEnabled=" + enabled +
+                      " nativeResult=settingsSaved");
             await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private Task SetDragEnabledFromNativeAsync(bool enabled)
+        {
+            return SetClickThroughEnabledFromNativeAsync(!enabled);
         }
 
         private async Task SetClickReactionEnabledFromNativeAsync(bool enabled)
         {
+            var previous = approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings?.IsClickThroughEnabled ?? false;
             if (approvedActivityAnalysis != null)
             {
                 var result = await approvedActivityAnalysis.SetDesktopCompanionClickThroughAsync(!enabled);
@@ -2915,12 +2930,20 @@ namespace TokenForge.Client
             }
 
             nativeActionStatusKind = "success";
-            nativeActionStatusText = enabled ? "Click reaction enabled." : "Click reaction disabled.";
+            nativeActionStatusText = enabled
+                ? "Drag enabled. Click-through disabled while repositioning."
+                : "Click-through enabled. Drag is disabled.";
+            Debug.Log("INFO [DashboardAction] action=" + (enabled ? "desktop.drag.enable" : "desktop.clickThrough.enable") +
+                      " previousClickThrough=" + previous +
+                      " nextClickThrough=" + (!enabled) +
+                      " dragEnabled=" + enabled +
+                      " nativeResult=settingsSaved");
             await RefreshAndPublishNativeDashboardAsync();
         }
 
         private async Task SetClickThroughEnabledFromNativeAsync(bool enabled)
         {
+            var previous = approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings?.IsClickThroughEnabled ?? false;
             if (approvedActivityAnalysis != null)
             {
                 var result = await approvedActivityAnalysis.SetDesktopCompanionClickThroughAsync(enabled);
@@ -2934,7 +2957,15 @@ namespace TokenForge.Client
             }
 
             nativeActionStatusKind = "success";
-            nativeActionStatusText = enabled ? "Click-through enabled." : "Click-through disabled.";
+            nativeActionStatusText = enabled
+                ? "Click-through enabled. Drag is disabled."
+                : "Drag enabled. Click-through disabled while repositioning.";
+            Debug.Log("INFO [DashboardAction] action=" + (enabled ? "desktop.clickThrough.enable" : "desktop.drag.enable") +
+                      " repositoryId=" + SafeNativeText(approvedActivityAnalysis?.CharacterDashboard?.CurrentRepositoryHash, "none") +
+                      " previousClickThrough=" + previous +
+                      " nextClickThrough=" + enabled +
+                      " dragEnabled=" + (!enabled) +
+                      " nativeResult=settingsSaved");
             await RefreshAndPublishNativeDashboardAsync();
         }
 
