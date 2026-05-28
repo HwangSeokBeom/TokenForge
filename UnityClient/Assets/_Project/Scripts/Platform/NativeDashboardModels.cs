@@ -44,10 +44,16 @@ namespace TokenForge.Client.Platform
         ViewReviewDetails,
         ReviewActivity,
         ToggleCompanionVisible,
+        ShowCompanion,
+        HideCompanion,
         ChangeCompanionSkin,
         SetLaunchAtLogin,
         SetWanderEnabled,
+        EnableWander,
+        DisableWander,
         SetClickReactionEnabled,
+        EnableClick,
+        DisableClick,
         ResetCompanionPosition,
         ResetLocalState,
         Unsupported
@@ -251,6 +257,9 @@ namespace TokenForge.Client.Platform
         public bool canLevelUp;
         public string xpStatusText = "0 XP · 250 XP required";
         public string recentGrowthSource = "None";
+        public int recentGitXP;
+        public int recentAiXP;
+        public string estimatedTokenActivity = "Unknown";
         public string motionMood = "idle";
         public string motionReason = "No recent aggregate activity.";
         public bool canViewGrowth = true;
@@ -299,6 +308,20 @@ namespace TokenForge.Client.Platform
         public string safeCandidateSummary = "No local source selected";
         public string selectedSourceLabel = "No local source selected";
         public string lastAnalyzedAt = "Not analyzed";
+        public bool approvedSource;
+        public string estimatedTokenActivity = "Unknown";
+        public string estimatedTokensText = "unavailable";
+        public string sessionCountText = "0";
+        public string interactionCountText = "0";
+        public string recentAnalyzedRepository = "Unassigned";
+        public string repositoryAttributionSummary = "No recent repository attribution";
+        public int pendingXP;
+        public int savedXP;
+        public string confidence = "Unknown";
+        public string warningsText = "None";
+        public bool canApprove;
+        public bool canViewUsage = true;
+        public bool canSaveGrowth;
         public string lastErrorSafeMessage = string.Empty;
         public string disabledReason = "Detect or choose a folder before analyzing.";
         public string unsupportedReason = string.Empty;

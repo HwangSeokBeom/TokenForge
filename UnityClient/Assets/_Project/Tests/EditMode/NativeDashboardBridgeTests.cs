@@ -105,6 +105,33 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void TryParseAction_MapsCanonicalCompanionRuntimeActions()
+        {
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("show_companion", out var show));
+            Assert.AreEqual(NativeDashboardAction.ShowCompanion, show.Action);
+            Assert.IsTrue(show.BoolValue(false));
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("hide_companion", out var hide));
+            Assert.AreEqual(NativeDashboardAction.HideCompanion, hide.Action);
+            Assert.IsFalse(hide.BoolValue(true));
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("enable_wander", out var enableWander));
+            Assert.AreEqual(NativeDashboardAction.EnableWander, enableWander.Action);
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("disable_wander", out var disableWander));
+            Assert.AreEqual(NativeDashboardAction.DisableWander, disableWander.Action);
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("enable_click", out var enableClick));
+            Assert.AreEqual(NativeDashboardAction.EnableClick, enableClick.Action);
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("disable_click", out var disableClick));
+            Assert.AreEqual(NativeDashboardAction.DisableClick, disableClick.Action);
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("reset_companion_position", out var reset));
+            Assert.AreEqual(NativeDashboardAction.ResetCompanionPosition, reset.Action);
+        }
+
+        [Test]
         public void NativeDesktopCompanionSettingsPersistAndRestore()
         {
             var directory = Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName());
@@ -161,8 +188,69 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("evolveActionVisible", json);
             StringAssert.Contains("xpProgressRatio", json);
             StringAssert.Contains("motion", json);
+            StringAssert.Contains("recentGitXP", json);
+            StringAssert.Contains("recentAiXP", json);
+            StringAssert.Contains("estimatedTokenActivity", json);
+            StringAssert.Contains("repositoryAttributionSummary", json);
             StringAssert.Contains("AI Agents: 0 connected", json);
             Assert.IsFalse(json.Contains("Cdx 0%"));
+        }
+
+        [Test]
+        public void NativeDashboardState_ProjectsRuntimeVisibleEvolveAndAgentUsageFields()
+        {
+            var state = NativeDashboardState.CreateDefault();
+            state.companion.xp = 1200;
+            state.companion.xpToNextLevel = 419;
+            state.companion.canLevelUp = true;
+            state.companion.evolveActionVisible = true;
+            state.companion.xpStatusText = "1200 XP · 419 XP required · Ready to evolve";
+            state.companion.carryForwardText = "781 XP will carry over after evolution";
+            state.repositories = new[]
+            {
+                new NativeRepositoryListItem
+                {
+                    id = "repo-a",
+                    name = "TokenForge",
+                    stage = "Junior",
+                    level = 2,
+                    currentXP = 1200,
+                    requiredXP = 419,
+                    canLevelUp = true,
+                    canEvolve = true,
+                    recentGitXP = 33,
+                    recentAiXP = 101,
+                    estimatedTokenActivity = "Medium"
+                }
+            };
+            state.agentProviders = new[]
+            {
+                new NativeAgentProviderState
+                {
+                    id = "codex",
+                    displayName = "Codex",
+                    connected = true,
+                    approvedSource = true,
+                    estimatedTokenActivity = "Medium",
+                    estimatedTokensText = "unavailable",
+                    sessionCountText = "1",
+                    interactionCountText = "Large",
+                    recentAnalyzedRepository = "TokenForge",
+                    repositoryAttributionSummary = "TokenForge: +101 XP · token activity Medium",
+                    pendingXP = 101
+                }
+            };
+
+            var json = state.ToJson();
+
+            StringAssert.Contains("evolveActionVisible", json);
+            StringAssert.Contains("Ready to evolve", json);
+            StringAssert.Contains("781 XP will carry over", json);
+            StringAssert.Contains("recentGitXP", json);
+            StringAssert.Contains("recentAiXP", json);
+            StringAssert.Contains("repositoryAttributionSummary", json);
+            StringAssert.Contains("estimatedTokensText", json);
+            Assert.IsFalse(json.Contains("1200/419 XP"));
         }
 
         [Test]
@@ -483,6 +571,13 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("startDashboardPreviewAnimation", source);
             StringAssert.Contains("xpProgressRatio", source);
             StringAssert.Contains("Evolve Token", source);
+            StringAssert.Contains("[DashboardUI] render hero evolveVisible", source);
+            StringAssert.Contains("[DashboardUI] evolve button added", source);
+            StringAssert.Contains("[RepositoriesUI] render repoCards count", source);
+            StringAssert.Contains("[AIUsageUI] render provider", source);
+            StringAssert.Contains("[DesktopCompanion] orderFront completed", source);
+            StringAssert.Contains("[DesktopCompanion] tick old=", source);
+            StringAssert.Contains("[MenuBarCompanion] animation started", source);
             StringAssert.Contains("View Growth", source);
             StringAssert.Contains("TokenForgeMenuCanLevelUp", source);
             StringAssert.Contains("NSSwitch", source);
@@ -500,6 +595,196 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("agent.autoDetect", source);
             StringAssert.Contains("AI Agents: 0 connected", source);
             Assert.IsFalse(source.Contains("Native shell preferences"));
+        }
+
+        [Test]
+        public void NativeDashboardRendererUsesCleanGridRuntimePath()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("dashboardRenderer=clean-grid-v4", source);
+            StringAssert.Contains("gridVersion=clean-v3", source);
+            StringAssert.Contains("cardFrames aligned=true gap=22", source);
+            StringAssert.Contains("rowHeights consistent=true", source);
+            StringAssert.Contains("heroCardWithCompanion", source);
+            StringAssert.Contains("repositoryStatusCardWithRepository", source);
+            StringAssert.Contains("aiAgentsStatusCardWithAgents", source);
+            StringAssert.Contains("companionMotionCardWithCompanion", source);
+            StringAssert.Contains("recentActivityTimelineCardWithActivity", source);
+            StringAssert.Contains("TokenForgeFriendlyDashboardSummary", source);
+            Assert.IsFalse(source.Contains("Evolve hidden:"));
+        }
+
+        [Test]
+        public void NativeDashboardHeroDefinesAvatarBoundsAndAnimationLogs()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("TokenForgeAvatarPreviewView", source);
+            StringAssert.Contains("TokenForgeDashboardHeroAvatarContainerView", source);
+            StringAssert.Contains("TokenForgeAvatarCanonicalBounds", source);
+            StringAssert.Contains("TokenForgeAvatarFinalDrawingRect", source);
+            StringAssert.Contains("TokenForgeDrawAvatarInRect", source);
+            StringAssert.Contains("safePadding = 32.0", source);
+            StringAssert.Contains("constraintGreaterThanOrEqualToConstant:250.0", source);
+            StringAssert.Contains("constraintLessThanOrEqualToConstant:430.0", source);
+            StringAssert.Contains("[AvatarPreview] sourceSize=", source);
+            StringAssert.Contains("[AvatarRenderer] preset=", source);
+            StringAssert.Contains("parts=head/body/headset/legs/shadow allInsideFinalRect=", source);
+            StringAssert.Contains("assetType=hero notMenuBar", source);
+            StringAssert.Contains("[DashboardHero] relayout width=", source);
+            StringAssert.Contains("withinSafeBounds=", source);
+            StringAssert.Contains("warningShake", source);
+            StringAssert.Contains("attentionBounce", source);
+            StringAssert.Contains("activityPulse", source);
+        }
+
+        [Test]
+        public void NativeDesktopOverlayIsIndependentAndKeepsRunningAfterWindowClose()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("NSWindowStyleMaskNonactivatingPanel", source);
+            StringAssert.Contains("NSFloatingWindowLevel", source);
+            StringAssert.Contains("releasedWhenClosed = NO", source);
+            StringAssert.Contains("strongReference panel=", source);
+            StringAssert.Contains("orderFront called visibleBefore=", source);
+            StringAssert.Contains("[DesktopOverlay] create window independent=true", source);
+            StringAssert.Contains("[DesktopOverlay] orderFrontRegardless completed", source);
+            StringAssert.Contains("[DesktopOverlay] show requested visibleSetting=true", source);
+            StringAssert.Contains("[AppLifecycle] shouldTerminateAfterLastWindowClosed=false", source);
+            StringAssert.Contains("[AppLifecycle] lastWindowClosed keepRunning=true", source);
+            StringAssert.Contains("[DesktopOverlay] movementTimer started interval=", source);
+            StringAssert.Contains("[DesktopOverlay] tick oldOrigin=", source);
+            StringAssert.Contains("[DesktopOverlay] tick oldFrame=", source);
+            StringAssert.Contains("[DesktopOverlay] boundsClamped screen=", source);
+            StringAssert.Contains("[DesktopOverlay] quit cleanup completed", source);
+        }
+
+        [Test]
+        public void NativeMotionCardProvidesImmediateRuntimeActions()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("Show Companion", source);
+            StringAssert.Contains("Hide Companion", source);
+            StringAssert.Contains("Enable Wander", source);
+            StringAssert.Contains("Disable Wander", source);
+            StringAssert.Contains("Enable Click", source);
+            StringAssert.Contains("Disable Click", source);
+            StringAssert.Contains("Reset Position", source);
+            StringAssert.Contains("showCompanionFromDashboard", source);
+            StringAssert.Contains("enableWanderFromDashboard", source);
+            StringAssert.Contains("disableWanderFromDashboard", source);
+            StringAssert.Contains("SetCompanionOverlayMotionProfile", source);
+            StringAssert.Contains("ShowDesktopCompanionOverlay", source);
+            StringAssert.Contains("show_companion", source);
+            StringAssert.Contains("hide_companion", source);
+            StringAssert.Contains("enable_wander", source);
+            StringAssert.Contains("disable_wander", source);
+            StringAssert.Contains("enable_click", source);
+            StringAssert.Contains("disable_click", source);
+            StringAssert.Contains("reset_companion_position", source);
+            StringAssert.Contains("Companion is hidden. Show it to let Token wander on your desktop.", source);
+        }
+
+        [Test]
+        public void NativeMenuBarCompanionAnimatesImageFrames()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("TokenForgeCreateStatusCompanionImage(NSInteger stage, NSInteger archetype, NSInteger frameIndex, NSString *mode)", source);
+            StringAssert.Contains("TokenForgeAvatarImageForPreset(@\"menuBar\"", source);
+            StringAssert.Contains("TokenForgeAvatarCacheKey(@\"menuBar\"", source);
+            StringAssert.Contains("NSImage *newImage = TokenForgeCreateStatusCompanionImage(animatedStage, animatedArchetype, self.statusAnimationFrame, mode)", source);
+            StringAssert.Contains("[MenuBarCompanion] timerStarted interval=", source);
+            StringAssert.Contains("[MenuBarCompanion] tick frameIndex=", source);
+            StringAssert.Contains("[MenuBarCompanion] buttonImageUpdated changed=", source);
+            StringAssert.Contains("[MenuBarCompanion] cacheKey=", source);
+            StringAssert.Contains("[MenuBarCompanion] animation started mode=", source);
+            StringAssert.Contains("[MenuBarCompanion] frame index=", source);
+            StringAssert.Contains("[MenuBarCompanion] reaction started type=", source);
+            StringAssert.Contains("[MenuBarCompanion] animation stopped reason=", source);
+        }
+
+        [Test]
+        public void NativeCompanionBridgeExportsRuntimeEntryPoints()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("extern \"C\" bool CreateDesktopCompanionOverlay", source);
+            StringAssert.Contains("extern \"C\" void ShowDesktopCompanionOverlay", source);
+            StringAssert.Contains("extern \"C\" void HideDesktopCompanionOverlay", source);
+            StringAssert.Contains("extern \"C\" void SetCompanionOverlayMotionProfile", source);
+            StringAssert.Contains("extern \"C\" void SetCompanionOverlayClickThrough", source);
+            StringAssert.Contains("extern \"C\" void TokenForge_SetOverlayClickEnabled", source);
+            StringAssert.Contains("extern \"C\" void ResetCompanionOverlayPosition", source);
+            StringAssert.Contains("extern \"C\" void TokenForge_RegisterOverlayClickedCallback", source);
+            StringAssert.Contains("extern \"C\" void TokenForge_RegisterOverlayDoubleClickedCallback", source);
+            StringAssert.Contains("extern \"C\" void TokenForge_RegisterOverlayDragEndedCallback", source);
+        }
+
+        [Test]
+        public void NativeCompanionLifecycleUsesMainThreadStrongPanelAndCommonTimers()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("dispatch_get_main_queue()", source);
+            StringAssert.Contains("panel.releasedWhenClosed = NO", source);
+            StringAssert.Contains("TokenForgeCompanionWindow = panel", source);
+            StringAssert.Contains("orderFrontRegardless", source);
+            StringAssert.Contains("orderFront:nil", source);
+            StringAssert.Contains("NSRunLoopCommonModes", source);
+            StringAssert.Contains("TokenForgeCompanionMotionTimer", source);
+            StringAssert.Contains("TokenForgeAvatarCacheKey", source);
+            StringAssert.Contains("preset", source);
+            StringAssert.Contains("frameIndex", source);
+            StringAssert.Contains("mode", source);
+        }
+
+        [Test]
+        public void NativeDashboardAvoidsRawEnumTextOnMainCards()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            Assert.IsFalse(source.Contains("category Test"));
+            Assert.IsFalse(source.Contains("stat Focus"));
+            Assert.IsFalse(source.Contains("sessions One"));
+            Assert.IsFalse(source.Contains("interactions Large"));
+            Assert.IsFalse(source.Contains("Codex | token activity"));
+            StringAssert.Contains("No repository-attributed AI growth yet.", source);
+            StringAssert.Contains("Analyze AI activity to review estimated token-based growth.", source);
+        }
+
+        [Test]
+        public void NativeSidebarCompanionSwitcherIsInRuntimeRenderer()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("Repository Companions", source);
+            StringAssert.Contains("sidebarCompanionMiniItem", source);
+            StringAssert.Contains("[SidebarCompanions] render count=", source);
+            StringAssert.Contains("[SidebarCompanions] item repo=", source);
+            StringAssert.Contains("[SidebarCompanions] select repo=", source);
+            StringAssert.Contains("repository.setActive:", source);
+            StringAssert.Contains("Active repository", source);
+            StringAssert.Contains("row.toolTip = [NSString stringWithFormat:@\"%@ · %@ · Lv %ld%@\"", source);
+            StringAssert.Contains("Evolve", source);
+        }
+
+        [Test]
+        public void NativeProjectionDoesNotInventAiRepositoryAttribution()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/AppBootstrapper.cs"));
+            var viewModelSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/UI/ApprovedActivityAnalysisViewModel.cs"));
+
+            StringAssert.Contains("return RepositoryAliasForHash(repositoryHash);", source);
+            StringAssert.Contains("Unassigned: +", source);
+            StringAssert.Contains("repository attribution unavailable", source);
+            StringAssert.Contains("FriendlyNativeSummary", source);
+            StringAssert.Contains("state.subtitle = \"Track Git and AI-assisted work as companion growth.\"", source);
+            StringAssert.Contains("? string.Empty", viewModelSource);
+            Assert.IsFalse(source.Contains("repositoryHash = approvedActivityAnalysis?.CharacterDashboard?.CurrentRepositoryHash"));
         }
 
         [Test]

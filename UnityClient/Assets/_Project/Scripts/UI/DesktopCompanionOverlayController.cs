@@ -258,6 +258,21 @@ namespace TokenForge.Client.UI
                 profile.ReactionProfile.PrimaryClickReaction = CompanionReaction.GrowthSaved;
                 profile.ReactionProfile.DefaultSpeech = "Growth saved.";
             }
+            else if (motion.Reaction == CompanionMotionReaction.AiPulse ||
+                     motion.Reaction == CompanionMotionReaction.TokenPulse)
+            {
+                profile.IdleAnimation = CompanionAnimationState.GrowthPulse;
+                profile.MotionProfile.WanderSpeed *= 1.15f;
+                profile.ReactionProfile.PrimaryClickReaction = CompanionReaction.Attention;
+                profile.ReactionProfile.DefaultSpeech = "AI activity detected.";
+            }
+            else if (motion.Reaction == CompanionMotionReaction.WarningShake)
+            {
+                profile.IdleAnimation = CompanionAnimationState.HatchShake;
+                profile.MotionProfile.WanderSpeed *= 0.55f;
+                profile.ReactionProfile.PrimaryClickReaction = CompanionReaction.Attention;
+                profile.ReactionProfile.DefaultSpeech = "Review attention items.";
+            }
         }
 
         private static IDesktopCompanionOverlayService CreateDefaultService()

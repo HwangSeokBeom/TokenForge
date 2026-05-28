@@ -474,10 +474,6 @@ namespace TokenForge.Client
 
             var companionSettings = RepositoryCompanionProfileService.CloneDesktopCompanionSettings(
                 approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault());
-            if (!state.hasActiveRepository)
-            {
-                companionSettings.IsDesktopCompanionEnabled = false;
-            }
 
             nativeDesktopCompanionController?.ApplySettings(
                 companionSettings,
@@ -513,7 +509,7 @@ namespace TokenForge.Client
             state.stateRevision = ++nativeProjectionRevision;
             state.sync = approvedActivityAnalysis != null && approvedActivityAnalysis.AuthState == AuthState.LoggedIn ? "connected" : "optional";
             state.appTitle = "TokenForge";
-            state.subtitle = "Turn your development activity into companion growth.";
+            state.subtitle = "Track Git and AI-assisted work as companion growth.";
             state.isLocalMode = true;
             state.syncStatusText = state.sync == "connected" ? "Safe sync connected" : "Sync optional";
             state.selectedNavItem = string.IsNullOrWhiteSpace(nativeSelectedNavItem) ? "dashboard" : nativeSelectedNavItem;
@@ -526,7 +522,7 @@ namespace TokenForge.Client
             state.hasPendingReview = pendingNativeReview != null;
             state.pendingEstimatedXP = Math.Max(0, pendingNativeReview?.EstimatedXpDelta ?? 0);
             state.warningCount = Math.Max(0, (approvedActivityAnalysis?.RetryQueueSummary?.PendingCount ?? 0) + (approvedActivityAnalysis?.TombstoneSummary?.PendingDeleteCount ?? 0));
-            state.lastRunSummary = SafeNativeText(dashboard.LatestSafeSessionSummary, "No saved growth yet. Run Analysis on a repository or AI agent log to generate your first XP.");
+            state.lastRunSummary = FriendlyNativeSummary(dashboard.LatestSafeSessionSummary, "No saved growth yet. Run Analysis on a repository or AI agent log to generate your first XP.");
             state.codeStat = Math.Max(0, dashboard.Code);
             state.focusStat = Math.Max(0, dashboard.Focus);
             state.debugStat = Math.Max(0, dashboard.Debug);
@@ -591,7 +587,7 @@ namespace TokenForge.Client
             state.agents.privacyText = "Local aggregate only";
             state.primaryActionEnabled = !nativeAnalysisInProgress && (state.repository.canAnalyze || state.agentProviders.Any(provider => provider.canAnalyze));
             state.providerUsagePercentages = BuildNativeProviderUsagePercentages();
-            state.activity.todaySummary = SafeNativeText(dashboard.LatestSafeSessionSummary, "No activity yet");
+            state.activity.todaySummary = FriendlyNativeSummary(dashboard.LatestSafeSessionSummary, "No activity yet");
             state.activity.state = ActivityStateText(repositoryConnected, state.agents.connectedCount > 0, dashboard.HasSavedRun, state.pendingReviewCount > 0);
             state.activity.code = Math.Max(0, dashboard.Code);
             state.activity.focus = Math.Max(0, dashboard.Focus);
@@ -637,6 +633,7 @@ namespace TokenForge.Client
             }
             state.statusText = NativeStatusText(state);
             EnforceNativeDashboardInvariants(state);
+            Debug.Log("INFO [Projection] revision=" + state.stateRevision + " activeRepo=" + SafeNativeText(state.repository.id, "none") + " repoCount=" + (state.repositories?.Length ?? 0));
             return state;
         }
 
@@ -680,6 +677,9 @@ namespace TokenForge.Client
                         ? Math.Max(0, item.CurrentXp) + " XP · " + Math.Max(1, item.XpRequiredForNextLevel) + " XP required · Ready to evolve"
                         : Math.Max(0, item.CurrentXp) + "/" + Math.Max(1, item.XpRequiredForNextLevel) + " XP",
                     recentGrowthSource = SafeNativeText(item.RecentGrowthSource, "None"),
+                    recentGitXP = Math.Max(0, item.RecentGitXp),
+                    recentAiXP = Math.Max(0, item.RecentAiXp),
+                    estimatedTokenActivity = TokenActivityLabel(item.EstimatedTokenActivity),
                     motionMood = SafeNativeText(item.MotionState?.Mood, "idle"),
                     motionReason = SafeNativeText(item.MotionState?.ReasonSummary, "No recent aggregate activity."),
                     canViewGrowth = true,
@@ -771,6 +771,10 @@ namespace TokenForge.Client
                             : AgentProviderStatusForNative(source);
                     var disabledReason = AgentDisabledReasonForNative(source);
                     var sourceLabel = string.IsNullOrWhiteSpace(source.SafeLabel) ? "No local source selected" : source.SafeLabel;
+                    var pending = PendingProviderXp(providerType);
+                    var saved = SavedProviderXp(providerType);
+                    var tokenActivity = EstimatedTokenActivityForProvider(providerType);
+                    var repositoryAttribution = RepositoryAttributionForProvider(providerType);
                     return new NativeAgentProviderState
                     {
                         id = NativeProviderId(providerType),
@@ -795,12 +799,215 @@ namespace TokenForge.Client
                         safeCandidateSummary = sourceLabel,
                         selectedSourceLabel = sourceLabel,
                         lastAnalyzedAt = source.LastScanTimeUtc == null ? "Not analyzed" : source.LastScanTimeUtc.Value.UtcDateTime.ToString("yyyy-MM-dd"),
+                        approvedSource = hasValidSource,
+                        estimatedTokenActivity = TokenActivityLabel(tokenActivity),
+                        estimatedTokensText = "unavailable",
+                        sessionCountText = CountBucketLabel(ProviderSessionBucket(providerType)),
+                        interactionCountText = CountBucketLabel(ProviderInteractionBucket(providerType)),
+                        recentAnalyzedRepository = RecentRepositoryForProvider(providerType),
+                        repositoryAttributionSummary = repositoryAttribution,
+                        pendingXP = pending,
+                        savedXP = saved,
+                        confidence = ProviderConfidenceLabel(providerType),
+                        warningsText = source.WarningCount > 0 ? source.WarningCount + " warning" + (source.WarningCount == 1 ? string.Empty : "s") : "None",
+                        canApprove = !ready && hasValidSource,
+                        canViewUsage = true,
+                        canSaveGrowth = pending > 0 && stateHasPendingProvider(providerType),
                         lastErrorSafeMessage = status == "failed" ? SafeNativeText(source.StatusLabel, "Analysis failed safely.") : string.Empty,
                         disabledReason = ready ? string.Empty : disabledReason,
                         unsupportedReason = ready ? string.Empty : AgentUnsupportedReasonForNative(source)
                     };
                 })
                 .ToArray();
+        }
+
+        private bool stateHasPendingProvider(AgentProviderType providerType)
+        {
+            var pending = approvedActivityAnalysis?.PendingNativeActivityReview;
+            if (pending == null)
+            {
+                return false;
+            }
+
+            return PendingReviewSessionsForNative(pending)
+                .Any(session => MacAgentSourceDetector.NormalizeProvider(session.AgentActivitySummary?.ProviderType ?? AgentProviderType.Unknown) == MacAgentSourceDetector.NormalizeProvider(providerType));
+        }
+
+        private int PendingProviderXp(AgentProviderType providerType)
+        {
+            var pending = approvedActivityAnalysis?.PendingNativeActivityReview;
+            if (pending == null)
+            {
+                return 0;
+            }
+
+            var normalized = MacAgentSourceDetector.NormalizeProvider(providerType);
+            var sessions = PendingReviewSessionsForNative(pending)
+                .Where(session => MacAgentSourceDetector.NormalizeProvider(session.AgentActivitySummary?.ProviderType ?? AgentProviderType.Unknown) == normalized)
+                .Select(session => session.SessionId)
+                .ToHashSet(StringComparer.Ordinal);
+            if (sessions.Count == 0)
+            {
+                return 0;
+            }
+
+            var growthResults = pending.GrowthResults ?? new List<CharacterGrowthResult>();
+            if (growthResults.Count == 0 && pending.GrowthResult != null)
+            {
+                growthResults = new List<CharacterGrowthResult> { pending.GrowthResult };
+            }
+
+            return growthResults
+                .Where(growth => growth != null && sessions.Contains(growth.SessionId))
+                .Sum(growth => Math.Max(0, growth.ExpGained));
+        }
+
+        private int SavedProviderXp(AgentProviderType providerType)
+        {
+            var normalized = MacAgentSourceDetector.NormalizeProvider(providerType);
+            return (approvedActivityAnalysis?.RecentSessions ?? new List<RecentSafeSessionSummary>())
+                .Where(summary => summary != null && MacAgentSourceDetector.NormalizeProvider(summary.AgentProviderType) == normalized)
+                .Take(12)
+                .Sum(summary => Math.Max(0, summary.ExpGained));
+        }
+
+        private TokenUsageBucket EstimatedTokenActivityForProvider(AgentProviderType providerType)
+        {
+            var normalized = MacAgentSourceDetector.NormalizeProvider(providerType);
+            var pending = approvedActivityAnalysis?.PendingNativeActivityReview;
+            var pendingBucket = PendingReviewSessionsForNative(pending)
+                .Where(session => MacAgentSourceDetector.NormalizeProvider(session.AgentActivitySummary?.ProviderType ?? AgentProviderType.Unknown) == normalized)
+                .Select(session => session.TokenUsageBucket)
+                .OrderByDescending(bucket => (int)bucket)
+                .FirstOrDefault();
+            return pendingBucket;
+        }
+
+        private CountBucket ProviderSessionBucket(AgentProviderType providerType)
+        {
+            var normalized = MacAgentSourceDetector.NormalizeProvider(providerType);
+            return PendingReviewSessionsForNative(approvedActivityAnalysis?.PendingNativeActivityReview)
+                .Where(session => MacAgentSourceDetector.NormalizeProvider(session.AgentActivitySummary?.ProviderType ?? AgentProviderType.Unknown) == normalized)
+                .Select(session => session.AgentActivitySummary?.SessionCountBucket ?? CountBucket.Unknown)
+                .OrderByDescending(bucket => (int)bucket)
+                .FirstOrDefault();
+        }
+
+        private CountBucket ProviderInteractionBucket(AgentProviderType providerType)
+        {
+            var normalized = MacAgentSourceDetector.NormalizeProvider(providerType);
+            return PendingReviewSessionsForNative(approvedActivityAnalysis?.PendingNativeActivityReview)
+                .Where(session => MacAgentSourceDetector.NormalizeProvider(session.AgentActivitySummary?.ProviderType ?? AgentProviderType.Unknown) == normalized)
+                .Select(session => session.AgentActivitySummary?.InteractionCountBucket ?? CountBucket.Unknown)
+                .OrderByDescending(bucket => (int)bucket)
+                .FirstOrDefault();
+        }
+
+        private string RecentRepositoryForProvider(AgentProviderType providerType)
+        {
+            var normalized = MacAgentSourceDetector.NormalizeProvider(providerType);
+            var repositoryHash = PendingReviewSessionsForNative(approvedActivityAnalysis?.PendingNativeActivityReview)
+                .Where(session => MacAgentSourceDetector.NormalizeProvider(session.AgentActivitySummary?.ProviderType ?? AgentProviderType.Unknown) == normalized)
+                .Select(RepositoryCompanionProfileService.SafeRepositoryHashForSession)
+                .FirstOrDefault(hash => !string.IsNullOrWhiteSpace(hash));
+
+            return RepositoryAliasForHash(repositoryHash);
+        }
+
+        private string RepositoryAttributionForProvider(AgentProviderType providerType)
+        {
+            var normalized = MacAgentSourceDetector.NormalizeProvider(providerType);
+            var pending = approvedActivityAnalysis?.PendingNativeActivityReview;
+            var sessions = PendingReviewSessionsForNative(pending)
+                .Where(session => MacAgentSourceDetector.NormalizeProvider(session.AgentActivitySummary?.ProviderType ?? AgentProviderType.Unknown) == normalized)
+                .ToList();
+            if (sessions.Count > 0)
+            {
+                var sessionIds = sessions.Select(session => session.SessionId).ToHashSet(StringComparer.Ordinal);
+                var growthResults = pending?.GrowthResults ?? new List<CharacterGrowthResult>();
+                if (growthResults.Count == 0 && pending?.GrowthResult != null)
+                {
+                    growthResults = new List<CharacterGrowthResult> { pending.GrowthResult };
+                }
+
+                var xp = growthResults
+                    .Where(growth => growth != null && sessionIds.Contains(growth.SessionId))
+                    .Sum(growth => Math.Max(0, growth.ExpGained));
+                var repository = RepositoryAliasForHash(sessions.Select(RepositoryCompanionProfileService.SafeRepositoryHashForSession).FirstOrDefault(hash => !string.IsNullOrWhiteSpace(hash)));
+                var bucket = sessions.Select(session => session.TokenUsageBucket).OrderByDescending(bucketValue => (int)bucketValue).FirstOrDefault();
+                return repository + ": +" + xp + " XP · token activity " + TokenActivityLabel(bucket);
+            }
+
+            var saved = SavedProviderXp(providerType);
+            return saved > 0
+                ? "Unassigned: +" + saved + " XP saved · repository attribution unavailable"
+                : "No recent repository attribution";
+        }
+
+        private string ProviderConfidenceLabel(AgentProviderType providerType)
+        {
+            var normalized = MacAgentSourceDetector.NormalizeProvider(providerType);
+            var confidence = PendingReviewSessionsForNative(approvedActivityAnalysis?.PendingNativeActivityReview)
+                .Where(session => MacAgentSourceDetector.NormalizeProvider(session.AgentActivitySummary?.ProviderType ?? AgentProviderType.Unknown) == normalized)
+                .Select(session => session.Confidence)
+                .OrderByDescending(value => (int)value)
+                .FirstOrDefault();
+            return confidence == ProviderConfidence.Unknown ? "Unknown" : confidence.ToString();
+        }
+
+        private static List<AgentWorkSession> PendingReviewSessionsForNative(PendingNativeActivityReview pending)
+        {
+            if (pending == null)
+            {
+                return new List<AgentWorkSession>();
+            }
+
+            var sessions = pending.SafeSessions ?? new List<AgentWorkSession>();
+            if (sessions.Count == 0 && pending.SafeSession != null)
+            {
+                sessions = new List<AgentWorkSession> { pending.SafeSession };
+            }
+
+            return sessions.Where(session => session != null).ToList();
+        }
+
+        private string RepositoryAliasForHash(string repositoryHash)
+        {
+            if (string.IsNullOrWhiteSpace(repositoryHash))
+            {
+                return "Unassigned";
+            }
+
+            var item = (approvedActivityAnalysis?.RepositoryCompanions ?? new List<RepositoryCompanionDisplayItem>())
+                .FirstOrDefault(repository => string.Equals(repository.RepositoryHash, repositoryHash, StringComparison.Ordinal));
+            return SafeNativeText(item?.SafeRepositoryAlias, "Active repository");
+        }
+
+        private static string TokenActivityLabel(TokenUsageBucket bucket)
+        {
+            switch (bucket)
+            {
+                case TokenUsageBucket.Small: return "Low";
+                case TokenUsageBucket.Medium: return "Medium";
+                case TokenUsageBucket.Large:
+                case TokenUsageBucket.Huge: return "High";
+                case TokenUsageBucket.None: return "None";
+                default: return "Unknown";
+            }
+        }
+
+        private static string CountBucketLabel(CountBucket bucket)
+        {
+            switch (bucket)
+            {
+                case CountBucket.One: return "1";
+                case CountBucket.Small: return "Small";
+                case CountBucket.Medium: return "Medium";
+                case CountBucket.Large:
+                case CountBucket.Huge: return "Large";
+                case CountBucket.None: return "0";
+                default: return "unavailable";
+            }
         }
 
         private static string ActivityStateText(bool repositoryConnected, bool agentConnected, bool hasSavedRun, bool hasPendingReview)
@@ -1664,7 +1871,7 @@ namespace TokenForge.Client
                     RunNativeDashboardTask(ApproveNativeReviewAsync, request.RawAction);
                     break;
                 case NativeDashboardAction.LevelUpCompanion:
-                    RunNativeDashboardTask(LevelUpNativeCompanionAsync, request.RawAction);
+                    RunNativeDashboardTask(() => LevelUpNativeCompanionAsync(request.Value), request.RawAction);
                     break;
                 case NativeDashboardAction.SafeSync:
                     nativeActionStatusKind = "error";
@@ -1677,11 +1884,29 @@ namespace TokenForge.Client
                 case NativeDashboardAction.ToggleCompanionVisible:
                     RunNativeDashboardTask(() => SetCompanionVisibleFromNativeAsync(request.BoolValue(!(approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings?.IsDesktopCompanionEnabled ?? true))), request.RawAction);
                     break;
+                case NativeDashboardAction.ShowCompanion:
+                    RunNativeDashboardTask(() => SetCompanionVisibleFromNativeAsync(true), request.RawAction);
+                    break;
+                case NativeDashboardAction.HideCompanion:
+                    RunNativeDashboardTask(() => SetCompanionVisibleFromNativeAsync(false), request.RawAction);
+                    break;
                 case NativeDashboardAction.SetWanderEnabled:
                     RunNativeDashboardTask(() => SetWanderEnabledFromNativeAsync(request.BoolValue(true)), request.RawAction);
                     break;
+                case NativeDashboardAction.EnableWander:
+                    RunNativeDashboardTask(() => SetWanderEnabledFromNativeAsync(true), request.RawAction);
+                    break;
+                case NativeDashboardAction.DisableWander:
+                    RunNativeDashboardTask(() => SetWanderEnabledFromNativeAsync(false), request.RawAction);
+                    break;
                 case NativeDashboardAction.SetClickReactionEnabled:
                     RunNativeDashboardTask(() => SetClickReactionEnabledFromNativeAsync(request.BoolValue(true)), request.RawAction);
+                    break;
+                case NativeDashboardAction.EnableClick:
+                    RunNativeDashboardTask(() => SetClickReactionEnabledFromNativeAsync(true), request.RawAction);
+                    break;
+                case NativeDashboardAction.DisableClick:
+                    RunNativeDashboardTask(() => SetClickReactionEnabledFromNativeAsync(false), request.RawAction);
                     break;
                 case NativeDashboardAction.ResetCompanionPosition:
                     RunNativeDashboardTask(ResetCompanionPositionFromNativeAsync, request.RawAction);
@@ -1777,6 +2002,7 @@ namespace TokenForge.Client
                 return;
             }
 
+            Debug.Log("INFO [NativeBridge] callback action=setActiveRepository repo=" + SafeNativeText(repositoryHash, "unknown"));
             var result = await approvedActivityAnalysis.SelectRepositoryCompanionProfileAsync(repositoryHash);
             nativeActionStatusKind = result.IsSuccess ? "success" : "error";
             nativeActionStatusText = result.IsSuccess ? "Active repository changed." : "Repository switch failed: " + SafeNativeText(result.ErrorMessage, result.ErrorCode);
@@ -2411,13 +2637,27 @@ namespace TokenForge.Client
             await RefreshAndPublishNativeDashboardAsync();
         }
 
-        private async Task LevelUpNativeCompanionAsync()
+        private async Task LevelUpNativeCompanionAsync(string repositoryHash = "")
         {
             if (approvedActivityAnalysis == null)
             {
                 return;
             }
 
+            if (!string.IsNullOrWhiteSpace(repositoryHash))
+            {
+                var select = await approvedActivityAnalysis.SelectRepositoryCompanionProfileAsync(repositoryHash);
+                if (!select.IsSuccess)
+                {
+                    nativeActionStatusKind = "warning";
+                    nativeActionStatusText = "Level Up unavailable: " + SafeNativeText(select.ErrorMessage, select.ErrorCode);
+                    Debug.Log("INFO [Action] evolveToken clicked repo=" + SafeNativeText(repositoryHash, "active") + " result=selectFailed");
+                    await RefreshAndPublishNativeDashboardAsync();
+                    return;
+                }
+            }
+
+            Debug.Log("INFO [Action] evolveToken clicked repo=" + SafeNativeText(repositoryHash, approvedActivityAnalysis.CharacterDashboard?.CurrentRepositoryHash ?? "active"));
             var result = await approvedActivityAnalysis.LevelUpSelectedCompanionAsync();
             if (result.IsSuccess)
             {
@@ -2582,6 +2822,35 @@ namespace TokenForge.Client
             value = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
             value = value.Replace('\n', ' ').Replace('\r', ' ');
             return value.Length <= 180 ? value : value.Substring(0, 180);
+        }
+
+        private static string FriendlyNativeSummary(string value, string fallback)
+        {
+            value = SafeNativeText(value, fallback);
+            if (!LooksLikeSampleRepositoryActivity(value) && value.IndexOf(" | ", StringComparison.Ordinal) < 0)
+            {
+                return value;
+            }
+
+            var agent = value.IndexOf("Codex", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        value.IndexOf("Claude", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        value.IndexOf("Cursor", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        value.IndexOf("Copilot", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        value.IndexOf("AI", StringComparison.OrdinalIgnoreCase) >= 0;
+            var hasXp = value.IndexOf("+0 XP", StringComparison.OrdinalIgnoreCase) < 0 &&
+                        value.IndexOf("XP", StringComparison.OrdinalIgnoreCase) >= 0;
+            var hasWarnings = value.IndexOf("warnings 0", StringComparison.OrdinalIgnoreCase) < 0 &&
+                              value.IndexOf("warning", StringComparison.OrdinalIgnoreCase) >= 0;
+
+            return (agent
+                    ? "AI-assisted activity was detected and summarized safely. "
+                    : "Recent Git changes were analyzed and summarized safely. ") +
+                   (hasXp
+                       ? "Growth XP was saved for this repository companion. "
+                       : "No additional XP was applied in this summary. ") +
+                   (hasWarnings
+                       ? "Some items need attention in Activity details."
+                       : "No sync issues detected.");
         }
 
         private static string NativeSafeErrorCategory(string errorCode, string sourceKind)

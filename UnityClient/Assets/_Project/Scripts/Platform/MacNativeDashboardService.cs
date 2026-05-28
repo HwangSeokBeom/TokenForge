@@ -367,6 +367,12 @@ namespace TokenForge.Client.Platform
                 case "disable_desktop_companion":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ToggleCompanionVisible, rawAction, value);
                     return true;
+                case "show_companion":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.ShowCompanion, rawAction, "true");
+                    return true;
+                case "hide_companion":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.HideCompanion, rawAction, "false");
+                    return true;
                 case "changeCompanionSkin":
                 case "change_companion_skin":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ChangeCompanionSkin, rawAction, value);
@@ -379,9 +385,21 @@ namespace TokenForge.Client.Platform
                 case "set_wander_enabled":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.SetWanderEnabled, rawAction, value);
                     return true;
+                case "enable_wander":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.EnableWander, rawAction, "true");
+                    return true;
+                case "disable_wander":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.DisableWander, rawAction, "false");
+                    return true;
                 case "setClickReactionEnabled":
                 case "set_click_reaction_enabled":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.SetClickReactionEnabled, rawAction, value);
+                    return true;
+                case "enable_click":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.EnableClick, rawAction, "true");
+                    return true;
+                case "disable_click":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.DisableClick, rawAction, "false");
                     return true;
                 case "resetCompanionPosition":
                 case "reset_companion_position":

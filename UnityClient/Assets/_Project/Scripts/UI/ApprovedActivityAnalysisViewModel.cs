@@ -74,6 +74,9 @@ namespace TokenForge.Client.UI
         public int XpRequiredForNextLevel { get; set; } = 250;
         public bool CanLevelUp { get; set; }
         public string RecentGrowthSource { get; set; } = "None";
+        public int RecentGitXp { get; set; }
+        public int RecentAiXp { get; set; }
+        public TokenUsageBucket EstimatedTokenActivity { get; set; } = TokenUsageBucket.Unknown;
         public string Skin { get; set; } = CompanionSkinCatalog.DefaultSkinId;
         public CompanionMotionState MotionState { get; set; } = CompanionMotionState.Idle(string.Empty);
         public bool ApprovedByUser { get; set; }
@@ -1644,9 +1647,8 @@ namespace TokenForge.Client.UI
             var repositoryHash = RepositoryCompanionProfileService.SafeRepositoryHashForSession(session);
             if (string.IsNullOrWhiteSpace(repositoryHash))
             {
-                var selectedProfile = RepositoryCompanionProfileService.GetSelectedProfile(saveData);
                 repositoryHash = string.Equals(sourceKind, "aiAgent", StringComparison.OrdinalIgnoreCase)
-                    ? selectedProfile?.RepositoryHash ?? string.Empty
+                    ? string.Empty
                     : saveData.SelectedRepositoryHash;
             }
 
@@ -2931,6 +2933,9 @@ namespace TokenForge.Client.UI
                         XpRequiredForNextLevel = companion.XpRequiredForNextLevel,
                         CanLevelUp = companion.CanLevelUp,
                         RecentGrowthSource = RecentGrowthSourceForRepository(saveData, profile.RepositoryHash),
+                        RecentGitXp = RecentXpForRepository(saveData, profile.RepositoryHash, gitOnly: true),
+                        RecentAiXp = RecentXpForRepository(saveData, profile.RepositoryHash, gitOnly: false),
+                        EstimatedTokenActivity = EstimatedTokenActivityForRepository(saveData, profile.RepositoryHash),
                         Skin = CompanionSkinCatalog.Normalize(profile.DesktopCompanionSettings?.VisualThemeId),
                         MotionState = motionState,
                         ApprovedByUser = string.Equals(profile.ConnectionSource, "userSelected", StringComparison.OrdinalIgnoreCase) && profile.ApprovedAtUtc != null,
@@ -2943,6 +2948,39 @@ namespace TokenForge.Client.UI
                 .Where(item => !string.IsNullOrWhiteSpace(item.RepositoryHash))
                 .Where(item => !string.Equals(item.SafeRepositoryAlias, "Local Repository", StringComparison.OrdinalIgnoreCase))
                 .ToList();
+        }
+
+        private static int RecentXpForRepository(SaveData saveData, string repositoryHash, bool gitOnly)
+        {
+            repositoryHash = repositoryHash ?? string.Empty;
+            var sessions = (saveData?.WorkSessionSummaries ?? new List<AgentWorkSession>())
+                .Where(session => session != null &&
+                                  string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), repositoryHash, StringComparison.Ordinal))
+                .OrderByDescending(session => session.EndedAt)
+                .Take(8)
+                .ToList();
+            var sessionIds = sessions
+                .Where(session => gitOnly
+                    ? string.Equals(session.SourceProvider, "GIT", StringComparison.OrdinalIgnoreCase) || session.GitChangeSummary != null
+                    : session.AgentActivitySummary != null || (!string.IsNullOrWhiteSpace(session.SourceProvider) && !string.Equals(session.SourceProvider, "GIT", StringComparison.OrdinalIgnoreCase)))
+                .Select(session => session.SessionId)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .ToHashSet(StringComparer.Ordinal);
+
+            return (saveData?.GrowthHistory ?? new List<CharacterGrowthResult>())
+                .Where(growth => growth != null && sessionIds.Contains(growth.SessionId))
+                .Sum(growth => Math.Max(0, growth.ExpGained));
+        }
+
+        private static TokenUsageBucket EstimatedTokenActivityForRepository(SaveData saveData, string repositoryHash)
+        {
+            repositoryHash = repositoryHash ?? string.Empty;
+            return (saveData?.WorkSessionSummaries ?? new List<AgentWorkSession>())
+                .Where(session => session != null &&
+                                  string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), repositoryHash, StringComparison.Ordinal))
+                .Select(session => session.TokenUsageBucket)
+                .OrderByDescending(bucket => (int)bucket)
+                .FirstOrDefault();
         }
 
         private static CompanionMotionState BuildMotionStateForRepository(SaveData saveData, string repositoryHash, CompanionState companion)

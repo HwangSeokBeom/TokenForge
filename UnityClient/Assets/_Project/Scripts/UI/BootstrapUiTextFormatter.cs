@@ -373,10 +373,23 @@ namespace TokenForge.Client.UI
                 session.SourceProvider == "CURSOR" ||
                 session.SourceProvider == "GITHUB_COPILOT")
             {
-                return $"{session.DayBucket} | {AgentSourceLabel(session.AgentProviderType)} | category {session.WorkType} | confidence {session.Confidence} | warnings {WarningCount(session)} | +{session.ExpGained} XP{TopStatSuffix(session)} | sessions {session.AgentSessionCountBucket} | interactions {session.AgentInteractionCountBucket}";
+                return $"{session.DayBucket} · {AgentSourceLabel(session.AgentProviderType)} activity saved · +{session.ExpGained} XP. AI-assisted work contributed to {FriendlyStat(session)} growth. {FriendlyWarningText(session)}";
             }
 
-            return $"{session.DayBucket} | {SourceLabel(session.SourceProvider)} | category {session.WorkType} | confidence {session.Confidence} | warnings {WarningCount(session)} | +{session.ExpGained} XP{TopStatSuffix(session)} | changes {session.GitChangeCountBucket} | lines +{session.GitAddedLineBucket} -{session.GitDeletedLineBucket}";
+            return $"{session.DayBucket} · {SourceLabel(session.SourceProvider)} analysis saved · +{session.ExpGained} XP. Recent Git changes increased {FriendlyStat(session)} growth. {FriendlyWarningText(session)}";
+        }
+
+        private static string FriendlyStat(RecentSafeSessionSummary session)
+        {
+            return string.IsNullOrWhiteSpace(session?.TopStatCategory) ? "companion" : session.TopStatCategory;
+        }
+
+        private static string FriendlyWarningText(RecentSafeSessionSummary session)
+        {
+            var count = WarningCount(session);
+            return count <= 0
+                ? "No sync issues detected."
+                : count + " attention item" + (count == 1 ? " needs" : "s need") + " review in details.";
         }
 
         public static string AuthStatus(ApprovedActivityAnalysisViewModel viewModel)
