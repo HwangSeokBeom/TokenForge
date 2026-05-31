@@ -42,6 +42,15 @@ namespace TokenForge.Client.Domain
         public string AnalysisTimeBucket { get; set; } = string.Empty;
         public bool HasUncommittedChanges { get; set; }
         public int AnalysisWindowDays { get; set; }
+        public string AnalysisMode { get; set; } = string.Empty;
+        public string FirstCommitAtUtc { get; set; } = string.Empty;
+        public int TotalCommitsAnalyzed { get; set; }
+        public int IncrementalCommitCount { get; set; }
+        public string LastAnalyzedCommit { get; set; } = string.Empty;
+        public string AnalyzedStartCommit { get; set; } = string.Empty;
+        public string AnalyzedEndCommit { get; set; } = string.Empty;
+        public string AnalysisRangeSummary { get; set; } = string.Empty;
+        public string AnalysisIdempotencyKey { get; set; } = string.Empty;
         public ConfidenceLevel ConfidenceLevel { get; set; } = ConfidenceLevel.Unknown;
         public string AnalyzerVersion { get; set; } = string.Empty;
         public string SafeSessionAlias { get; set; } = string.Empty;

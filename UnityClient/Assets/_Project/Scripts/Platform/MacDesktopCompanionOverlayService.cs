@@ -263,18 +263,27 @@ namespace TokenForge.Client.Platform
                     snapshot.desiredInitialX = overlay.desiredPositionX;
                     snapshot.desiredInitialY = overlay.desiredPositionY;
                     envelope.overlays.Add(snapshot);
-                    Debug.Log("INFO [FarmProjection][ITEM] repo=" + snapshot.repositoryId + " stage=" + ((CompanionStage)snapshot.stage) + " level=" + Math.Max(1, snapshot.level));
+                    Debug.Log("INFO [FarmProjection][ITEM] repo=" + snapshot.repositoryId + " stage=" + ((CompanionStage)snapshot.stage) + " level=" + Math.Max(1, snapshot.level) + " source=profile");
                 }
 
                 NativeSetFarmSnapshots(JsonUtility.ToJson(envelope));
+                if (envelope.overlays.Count == 0)
+                {
+                    NativeHideAllRepositoryCompanions("csharp.noConnectedRepositories");
+                    NativeSetCompanionVisibleWithSource(false, "csharp.noConnectedRepositories");
+                    Debug.Log("INFO [OverlayFarm][HIDE_ALL] reason=noConnectedRepositories");
+                    Debug.Log("INFO [FarmProjection][SKIP_PLACEHOLDER] reason=noRepository");
+                }
+
                 State = envelope.overlays.Count > 0 && farmState != null && farmState.enabled
                     ? CompanionDesktopOverlayState.Active
                     : CompanionDesktopOverlayState.Disabled;
                 StatusMessage = State == CompanionDesktopOverlayState.Active
                     ? "Native repository companion farm active."
                     : "Native repository companion farm hidden.";
-                Debug.Log("INFO [FarmProjection][BUILD] count=" + envelope.overlays.Count);
+                Debug.Log("INFO [FarmProjection][BUILD] connectedRepositories=" + envelope.overlays.Count + " snapshots=" + envelope.overlays.Count);
                 Debug.Log("INFO [OverlayFarm][SNAPSHOT_APPLY] count=" + envelope.overlays.Count + " source=csharp");
+                Debug.Log("INFO [OverlayFarm][VISIBLE_COUNT] count=" + (State == CompanionDesktopOverlayState.Active ? envelope.overlays.Count : 0));
             }
             catch (Exception exception)
             {

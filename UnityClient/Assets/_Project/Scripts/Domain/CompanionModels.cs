@@ -103,6 +103,16 @@ namespace TokenForge.Client.Domain
         Fallback
     }
 
+    public enum CompanionGrowthStat
+    {
+        Unknown,
+        Code,
+        Focus,
+        Debug,
+        Design,
+        Sync
+    }
+
     public enum CompanionTokenTrendBucket
     {
         Unknown,
@@ -142,7 +152,9 @@ namespace TokenForge.Client.Domain
             "calico",
             "black_cat",
             "retriever",
-            "runner"
+            "runner",
+            "midnight",
+            "aurora"
         };
 
         public static string Normalize(string skinId)
@@ -520,6 +532,171 @@ namespace TokenForge.Client.Domain
     }
 
     [Serializable]
+    public sealed class CompanionEvolutionBias
+    {
+        public CompanionGrowthStat DominantStat { get; set; } = CompanionGrowthStat.Unknown;
+        public CompanionGrowthStat SecondaryStat { get; set; } = CompanionGrowthStat.Unknown;
+        public string MainPath { get; set; } = "Unknown";
+        public string SecondaryTrait { get; set; } = "Unknown";
+        public string CurrentBias { get; set; } = "Unknown";
+        public string NextEvolutionPreview { get; set; } = "Repository Hatchling";
+        public string EggInfluenceText { get; set; } = "아직 부화 전이에요. 최근 Git 성장 성향이 미래 진화 방향에 영향을 줍니다.";
+    }
+
+    [Serializable]
+    public sealed class TokenShopState
+    {
+        public string CurrencyName { get; set; } = "Forge Coins";
+        public int CurrencyBalance { get; set; }
+        public int LifetimeTokenUsageScore { get; set; }
+        public bool TrackLocalAiTokenUsage { get; set; } = true;
+        public List<string> PurchasedItemIds { get; set; } = new List<string>();
+        public List<string> EquippedItemIds { get; set; } = new List<string>();
+        public List<TokenShopPurchaseHistoryEntry> PurchaseHistory { get; set; } = new List<TokenShopPurchaseHistoryEntry>();
+    }
+
+    public enum ShopTargetType
+    {
+        RepositoryCompanion,
+        AiAgent
+    }
+
+    public enum ZodiacCompanionType
+    {
+        Rat,
+        Ox,
+        Tiger,
+        Rabbit,
+        Dragon,
+        Snake,
+        Horse,
+        Goat,
+        Monkey,
+        Rooster,
+        Dog,
+        Pig
+    }
+
+    public enum ShopItemCategory
+    {
+        Featured,
+        Skins,
+        Accessories,
+        Effects,
+        Motions,
+        Themes,
+        Owned,
+        Badges,
+        TokenEffects
+    }
+
+    public enum ShopItemRarity
+    {
+        Common,
+        Uncommon,
+        Rare,
+        Epic,
+        Legendary
+    }
+
+    public enum ShopOwnershipState
+    {
+        Available,
+        Owned,
+        Equipped,
+        Locked,
+        InsufficientBalance,
+        NotCompatible
+    }
+
+    [Serializable]
+    public sealed class ShopCatalogItem
+    {
+        public string ItemId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public int Price { get; set; }
+        public bool OneTimePurchase { get; set; } = true;
+        public string PreviewEffect { get; set; } = "Cosmetic preview";
+        public string VisualThemeId { get; set; } = string.Empty;
+        public ShopTargetType TargetType { get; set; } = ShopTargetType.RepositoryCompanion;
+        public ShopItemCategory Category { get; set; } = ShopItemCategory.Skins;
+        public ShopItemRarity Rarity { get; set; } = ShopItemRarity.Common;
+        public bool Featured { get; set; }
+        public string ItemType { get; set; } = "Skin";
+        public string PreviewIcon { get; set; } = "TF";
+        public string Compatibility { get; set; } = "Repository Companion";
+        public List<string> CompatibleAgentIds { get; set; } = new List<string>();
+    }
+
+    [Serializable]
+    public sealed class TokenShopItemDefinition
+    {
+        public string ItemId { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public int Price { get; set; }
+        public bool OneTimePurchase { get; set; } = true;
+        public string PreviewEffect { get; set; } = "Cosmetic preview";
+        public string VisualThemeId { get; set; } = string.Empty;
+        public ShopTargetType TargetType { get; set; } = ShopTargetType.RepositoryCompanion;
+        public ShopItemCategory Category { get; set; } = ShopItemCategory.Skins;
+        public ShopItemRarity Rarity { get; set; } = ShopItemRarity.Common;
+        public bool Featured { get; set; }
+        public string ItemType { get; set; } = "Skin";
+        public string PreviewIcon { get; set; } = "TF";
+        public string PreviewType { get; set; } = "generic";
+        public string Compatibility { get; set; } = "Repository Companion";
+        public List<string> CompatibleAgentIds { get; set; } = new List<string>();
+        public string ZodiacTypeId { get; set; } = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class AiAgentShopState
+    {
+        public string AgentId { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public string ZodiacTypeId { get; set; } = string.Empty;
+        public TokenShopState TokenShop { get; set; } = new TokenShopState();
+    }
+
+    [Serializable]
+    public sealed class ZodiacCompanionDefinition
+    {
+        public string Id { get; set; } = string.Empty;
+        public string KoreanName { get; set; } = string.Empty;
+        public string EnglishName { get; set; } = string.Empty;
+        public string Personality { get; set; } = string.Empty;
+        public string BasePalette { get; set; } = string.Empty;
+        public string SilhouetteHint { get; set; } = string.Empty;
+        public string EvolutionStageMapping { get; set; } = "egg,hatchling,companion";
+    }
+
+    [Serializable]
+    public sealed class TokenShopPurchaseHistoryEntry
+    {
+        public string ItemId { get; set; } = string.Empty;
+        public string TargetType { get; set; } = string.Empty;
+        public string TargetId { get; set; } = string.Empty;
+        public int Price { get; set; }
+        public DateTimeOffset PurchasedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+    }
+
+    [Serializable]
+    public sealed class TokenShopPurchaseResult
+    {
+        public string ItemId { get; set; } = string.Empty;
+        public string ItemName { get; set; } = string.Empty;
+        public string CurrencyName { get; set; } = "Forge Coins";
+        public int BalanceBefore { get; set; }
+        public int BalanceAfter { get; set; }
+        public bool Purchased { get; set; }
+        public bool Owned { get; set; }
+        public bool Equipped { get; set; }
+        public string StatusText { get; set; } = string.Empty;
+    }
+
+    [Serializable]
     public sealed class CompanionState
     {
         public int SchemaVersion { get; set; } = 1;
@@ -533,6 +710,8 @@ namespace TokenForge.Client.Domain
         public bool CanLevelUp { get; set; }
         public int XpToNextStage { get; set; } = 250;
         public CompanionStatProfile Stats { get; set; } = CompanionStatProfile.Empty();
+        public CompanionStatProfile WeeklyStats { get; set; } = CompanionStatProfile.Empty();
+        public CompanionEvolutionBias EvolutionBias { get; set; } = new CompanionEvolutionBias();
         public CompanionGrowthProfile GrowthProfile { get; set; } = new CompanionGrowthProfile();
         public List<string> LastGrowthReasonIds { get; set; } = new List<string> { "no_approved_growth_yet" };
 
@@ -560,6 +739,7 @@ namespace TokenForge.Client.Domain
         public string CompanionId { get; set; } = Guid.NewGuid().ToString("N");
         public CompanionState CompanionState { get; set; } = CompanionState.CreateDefault();
         public DesktopCompanionSettings DesktopCompanionSettings { get; set; } = DesktopCompanionSettings.CreateDefault();
+        public TokenShopState TokenShop { get; set; } = new TokenShopState();
         public List<SourceProviderMixEntry> SourceProviderMix { get; set; } = new List<SourceProviderMixEntry>();
         public string LastApprovedActivityBucket { get; set; } = string.Empty;
         public DateTimeOffset? ArchivedAtUtc { get; set; }

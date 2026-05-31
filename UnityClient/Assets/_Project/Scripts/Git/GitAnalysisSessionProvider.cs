@@ -93,7 +93,10 @@ namespace TokenForge.Client.Git
 
             var confidence = ToProviderConfidence(summary.ConfidenceLevel);
             var endedAt = DateTimeOffset.UtcNow;
-            var startedAt = endedAt.AddDays(-Math.Max(1, summary.AnalysisWindowDays));
+            var startedAt = DateTimeOffset.TryParse(summary.FirstCommitAtUtc, out var firstCommitAt) &&
+                            string.Equals(summary.AnalysisMode, "full-baseline", StringComparison.OrdinalIgnoreCase)
+                ? firstCommitAt
+                : endedAt.AddDays(-Math.Max(1, summary.AnalysisWindowDays));
             var session = new AgentWorkSession
             {
                 AgentType = AgentType.GitOnly,
@@ -118,7 +121,9 @@ namespace TokenForge.Client.Git
                 UserReviewed = true
             };
 
-            session.DeduplicationKey = $"{summary.ProjectPathHash}:{summary.AnalysisTimeBucket}:{summary.ChangedFileCountBucket}:{summary.CommitCountBucket}";
+            session.DeduplicationKey = string.IsNullOrWhiteSpace(summary.AnalysisIdempotencyKey)
+                ? $"{summary.ProjectPathHash}:{summary.AnalysisTimeBucket}:{summary.ChangedFileCountBucket}:{summary.CommitCountBucket}"
+                : summary.AnalysisIdempotencyKey;
             return session;
         }
 

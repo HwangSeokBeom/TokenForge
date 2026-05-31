@@ -137,6 +137,12 @@ namespace TokenForge.Client.Platform
 
         public void SetCompanionFarmSnapshots(DesktopCompanionFarmState farmState)
         {
+            if ((farmState?.overlays?.Length ?? 0) == 0)
+            {
+                Hide();
+                Debug.Log("INFO [OverlayFarm][SNAPSHOT_APPLY] count=0 source=fallback");
+                Debug.Log("INFO [OverlayFarm][VISIBLE_COUNT] count=0");
+            }
         }
 
         public void ShowAllRepositoryCompanions(string source = "csharp.showAll")

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="3" result="Passed" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-05-30 17:55:19Z" end-time="2026-05-30 17:55:19Z" duration="0.107681">
+  <test-suite type="TestSuite" id="1527" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="447" result="Passed" start-time="2026-05-30 17:55:19Z" end-time="2026-05-30 17:55:19Z" duration="0.107681" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties />
+    <test-suite type="Assembly" id="2049" name="TokenForge.Client.Tests.dll" fullname="/Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/ScriptAssemblies/TokenForge.Client.Tests.dll" runstate="Runnable" testcasecount="447" result="Passed" start-time="2026-05-30 17:55:19Z" end-time="2026-05-30 17:55:19Z" duration="0.091435" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="17902" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+      </properties>
+      <test-suite type="TestSuite" id="2050" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="447" result="Passed" start-time="2026-05-30 17:55:19Z" end-time="2026-05-30 17:55:19Z" duration="0.084775" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="2051" name="Client" fullname="TokenForge.Client" runstate="Runnable" testcasecount="447" result="Passed" start-time="2026-05-30 17:55:19Z" end-time="2026-05-30 17:55:19Z" duration="0.076833" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="2052" name="Tests" fullname="TokenForge.Client.Tests" runstate="Runnable" testcasecount="447" result="Passed" start-time="2026-05-30 17:55:19Z" end-time="2026-05-30 17:55:19Z" duration="0.067396" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="2001" name="RepositoryCompanionProfileTests" fullname="TokenForge.Client.Tests.RepositoryCompanionProfileTests" classname="TokenForge.Client.Tests.RepositoryCompanionProfileTests" runstate="Runnable" testcasecount="26" result="Passed" start-time="2026-05-30 17:55:19Z" end-time="2026-05-30 17:55:19Z" duration="0.054435" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="2022" name="TokenShopOwnedOneTimeItemCannotBePurchasedTwiceOrGoNegative" fullname="TokenForge.Client.Tests.RepositoryCompanionProfileTests.TokenShopOwnedOneTimeItemCannotBePurchasedTwiceOrGoNegative" methodname="TokenShopOwnedOneTimeItemCannotBePurchasedTwiceOrGoNegative" classname="TokenForge.Client.Tests.RepositoryCompanionProfileTests" runstate="Runnable" seed="228641414" result="Passed" start-time="2026-05-30 17:55:19Z" end-time="2026-05-30 17:55:19Z" duration="0.031095" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [RepositoryIdentity][CANONICALIZE] rawPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeRepoTests/5726c08b4ba54625849a2acbfce45b9a/Repository canonicalPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeRepoTests/5726c08b4ba54625849a2acbfce45b9a/Repository repositoryId=508d17963d54ff7b06d9d50a8a9af948c6f4ea079064385de39230e0e51d7850
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [RepositoryIdentity][LOOKUP_BY_PATH] canonicalPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeRepoTests/5726c08b4ba54625849a2acbfce45b9a/Repository found=False
+INFO [RepositoryIdentity][LOOKUP_BY_LEGACY_KEY] legacyKey=19558e2a693a09c8a1be316fde9080ef9739b30de2837e626b2696638acdef53 found=False
+INFO [CompanionProfile][LOOKUP_LEGACY] repo=508d17963d54ff7b06d9d50a8a9af948c6f4ea079064385de39230e0e51d7850 found=False
+INFO [RepositoryIdentity][RESTORE] repositoryId=508d17963d54ff7b06d9d50a8a9af948c6f4ea079064385de39230e0e51d7850 found=False
+INFO [CompanionProfile][LOOKUP] repo=508d17963d54ff7b06d9d50a8a9af948c6f4ea079064385de39230e0e51d7850 found=False stage=none level=0 xp=0
+INFO [CompanionProfile][CREATE_NEW] repo=508d17963d54ff7b06d9d50a8a9af948c6f4ea079064385de39230e0e51d7850 reason=noExistingProfile stage=Egg level=1
+INFO [RepositoryStore][UPSERT_BEGIN] repo=508d17963d54ff7b06d9d50a8a9af948c6f4ea079064385de39230e0e51d7850
+INFO [RepositoryStore][CREATE_NEW] repo=508d17963d54ff7b06d9d50a8a9af948c6f4ea079064385de39230e0e51d7850
+INFO [RepositoryStore][SAVE_COMMIT] repo=508d17963d54ff7b06d9d50a8a9af948c6f4ea079064385de39230e0e51d7850 connected=true
+INFO [RepositoryStore][VERIFY_AFTER_SAVE] repo=508d17963d54ff7b06d9d50a8a9af948c6f4ea079064385de39230e0e51d7850 found=true connected=true
+INFO [RepositorySelection][SET_ACTIVE] repo=508d17963d54ff7b06d9d50a8a9af948c6f4ea079064385de39230e0e51d7850 source=addRepository
+INFO [CompanionProfile][SAVE] repo=508d17963d54ff7b06d9d50a8a9af948c6f4ea079064385de39230e0e51d7850 stage=Egg level=1 xp=0
+INFO [TokenShop][PURCHASE] repositoryId=508d17963d54ff7b06d9d50a8a9af948c6f4ea079064385de39230e0e51d7850 itemId=skin_white_cat price=3 balanceBefore=3 balanceAfter=0 result=success
+]]></output>
+              </test-case>
+              <test-case id="2020" name="TokenShopPurchasePersistsItemAndDebitsBalance" fullname="TokenForge.Client.Tests.RepositoryCompanionProfileTests.TokenShopPurchasePersistsItemAndDebitsBalance" methodname="TokenShopPurchasePersistsItemAndDebitsBalance" classname="TokenForge.Client.Tests.RepositoryCompanionProfileTests" runstate="Runnable" seed="954002269" result="Passed" start-time="2026-05-30 17:55:19Z" end-time="2026-05-30 17:55:19Z" duration="0.005208" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [RepositoryIdentity][CANONICALIZE] rawPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeRepoTests/d0ec81fb0686458aa3e8f5edbd004be8/Repository canonicalPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeRepoTests/d0ec81fb0686458aa3e8f5edbd004be8/Repository repositoryId=6b43c3e7aa6fcb1c905221c5477e1c4632331229ee168983f182ab689d9e807a
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [RepositoryIdentity][LOOKUP_BY_PATH] canonicalPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeRepoTests/d0ec81fb0686458aa3e8f5edbd004be8/Repository found=False
+INFO [RepositoryIdentity][LOOKUP_BY_LEGACY_KEY] legacyKey=61b5aa016447e8fc2f3d9f206cbc4fc404f081acb3d5416cf794e350519d84ee found=False
+INFO [CompanionProfile][LOOKUP_LEGACY] repo=6b43c3e7aa6fcb1c905221c5477e1c4632331229ee168983f182ab689d9e807a found=False
+INFO [RepositoryIdentity][RESTORE] repositoryId=6b43c3e7aa6fcb1c905221c5477e1c4632331229ee168983f182ab689d9e807a found=False
+INFO [CompanionProfile][LOOKUP] repo=6b43c3e7aa6fcb1c905221c5477e1c4632331229ee168983f182ab689d9e807a found=False stage=none level=0 xp=0
+INFO [CompanionProfile][CREATE_NEW] repo=6b43c3e7aa6fcb1c905221c5477e1c4632331229ee168983f182ab689d9e807a reason=noExistingProfile stage=Egg level=1
+INFO [RepositoryStore][UPSERT_BEGIN] repo=6b43c3e7aa6fcb1c905221c5477e1c4632331229ee168983f182ab689d9e807a
+INFO [RepositoryStore][CREATE_NEW] repo=6b43c3e7aa6fcb1c905221c5477e1c4632331229ee168983f182ab689d9e807a
+INFO [RepositoryStore][SAVE_COMMIT] repo=6b43c3e7aa6fcb1c905221c5477e1c4632331229ee168983f182ab689d9e807a connected=true
+INFO [RepositoryStore][VERIFY_AFTER_SAVE] repo=6b43c3e7aa6fcb1c905221c5477e1c4632331229ee168983f182ab689d9e807a found=true connected=true
+INFO [RepositorySelection][SET_ACTIVE] repo=6b43c3e7aa6fcb1c905221c5477e1c4632331229ee168983f182ab689d9e807a source=addRepository
+INFO [CompanionProfile][SAVE] repo=6b43c3e7aa6fcb1c905221c5477e1c4632331229ee168983f182ab689d9e807a stage=Egg level=1 xp=0
+INFO [TokenShop][PURCHASE] repositoryId=6b43c3e7aa6fcb1c905221c5477e1c4632331229ee168983f182ab689d9e807a itemId=skin_white_cat price=3 balanceBefore=6 balanceAfter=3 result=success
+]]></output>
+              </test-case>
+              <test-case id="2021" name="TokenShopPurchaseWithInsufficientTokensDoesNotChangeBalance" fullname="TokenForge.Client.Tests.RepositoryCompanionProfileTests.TokenShopPurchaseWithInsufficientTokensDoesNotChangeBalance" methodname="TokenShopPurchaseWithInsufficientTokensDoesNotChangeBalance" classname="TokenForge.Client.Tests.RepositoryCompanionProfileTests" runstate="Runnable" seed="1224403769" result="Passed" start-time="2026-05-30 17:55:19Z" end-time="2026-05-30 17:55:19Z" duration="0.007022" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [RepositoryIdentity][CANONICALIZE] rawPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeRepoTests/d6095b8e95044beba686fd9f121101e4/Repository canonicalPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeRepoTests/d6095b8e95044beba686fd9f121101e4/Repository repositoryId=de6e40958b68241b523564b0e9f57bc3d05dd4cc75c3af29e7cd6d08d171b533
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [RepositoryIdentity][LOOKUP_BY_PATH] canonicalPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeRepoTests/d6095b8e95044beba686fd9f121101e4/Repository found=False
+INFO [RepositoryIdentity][LOOKUP_BY_LEGACY_KEY] legacyKey=9dd006aa0df1df73b37f8db976eb534510602b12ba3cd9ccf0f5aef0dadce7e6 found=False
+INFO [CompanionProfile][LOOKUP_LEGACY] repo=de6e40958b68241b523564b0e9f57bc3d05dd4cc75c3af29e7cd6d08d171b533 found=False
+INFO [RepositoryIdentity][RESTORE] repositoryId=de6e40958b68241b523564b0e9f57bc3d05dd4cc75c3af29e7cd6d08d171b533 found=False
+INFO [CompanionProfile][LOOKUP] repo=de6e40958b68241b523564b0e9f57bc3d05dd4cc75c3af29e7cd6d08d171b533 found=False stage=none level=0 xp=0
+INFO [CompanionProfile][CREATE_NEW] repo=de6e40958b68241b523564b0e9f57bc3d05dd4cc75c3af29e7cd6d08d171b533 reason=noExistingProfile stage=Egg level=1
+INFO [RepositoryStore][UPSERT_BEGIN] repo=de6e40958b68241b523564b0e9f57bc3d05dd4cc75c3af29e7cd6d08d171b533
+INFO [RepositoryStore][CREATE_NEW] repo=de6e40958b68241b523564b0e9f57bc3d05dd4cc75c3af29e7cd6d08d171b533
+INFO [RepositoryStore][SAVE_COMMIT] repo=de6e40958b68241b523564b0e9f57bc3d05dd4cc75c3af29e7cd6d08d171b533 connected=true
+INFO [RepositoryStore][VERIFY_AFTER_SAVE] repo=de6e40958b68241b523564b0e9f57bc3d05dd4cc75c3af29e7cd6d08d171b533 found=true connected=true
+INFO [RepositorySelection][SET_ACTIVE] repo=de6e40958b68241b523564b0e9f57bc3d05dd4cc75c3af29e7cd6d08d171b533 source=addRepository
+INFO [CompanionProfile][SAVE] repo=de6e40958b68241b523564b0e9f57bc3d05dd4cc75c3af29e7cd6d08d171b533 stage=Egg level=1 xp=0
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

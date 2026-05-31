@@ -84,7 +84,7 @@ namespace TokenForge.Client.UI
                 overlayService.Create();
                 movementController = new CompanionDesktopMovementController(overlayService);
             }
-            ApplySettings(settings, companionState);
+            overlayService.HideAllRepositoryCompanions("csharp.initialize");
         }
 
         public void ApplyFarmSettings(
@@ -149,6 +149,23 @@ namespace TokenForge.Client.UI
                     };
                 })
                 .ToArray();
+            if (overlays.Length == 0)
+            {
+                Debug.Log("INFO [FarmProjection][SKIP_PLACEHOLDER] reason=noRepository");
+                Debug.Log("INFO [FarmProjection][BUILD] connectedRepositories=0 snapshots=0");
+                overlayService.SetCompanionFarmSnapshots(new DesktopCompanionFarmState
+                {
+                    enabled = false,
+                    overlays = new RepositoryCompanionOverlayState[0],
+                    visibleCount = 0,
+                    draggingRepositoryId = string.Empty,
+                    globalMotionEnabled = settings.MotionMode != CompanionDesktopMotionMode.Calm,
+                    globalClickThroughEnabled = settings.IsClickThroughEnabled
+                });
+                overlayService.HideAllRepositoryCompanions("csharp.noConnectedRepositories");
+                overlayService.Hide();
+                return;
+            }
 
             var farm = new DesktopCompanionFarmState
             {
@@ -160,6 +177,17 @@ namespace TokenForge.Client.UI
                 globalClickThroughEnabled = settings.IsClickThroughEnabled
             };
             overlayService.SetCompanionFarmSnapshots(farm);
+        }
+
+        public void HideLegacyOverlay(string source = "csharp.hideLegacy")
+        {
+            if (overlayService == null || !overlayService.IsAvailable)
+            {
+                return;
+            }
+
+            overlayService.Hide();
+            Debug.Log("INFO [OverlayFarm][HIDE_ALL] reason=noConnectedRepositories source=" + source);
         }
 
         public void ApplySettings(DesktopCompanionSettings desktopSettings, CompanionState state, CompanionMotionState motion = null, string repositoryId = "", int currentXp = 0)

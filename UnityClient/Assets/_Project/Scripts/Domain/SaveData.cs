@@ -37,6 +37,11 @@ namespace TokenForge.Client.Domain
         public string ProjectPathHash { get; set; } = string.Empty;
         public bool IsGitRepository { get; set; }
         public DateTimeOffset? LastAnalyzedAt { get; set; }
+        public string LastAnalyzedCommit { get; set; } = string.Empty;
+        public string FirstCommitAt { get; set; } = string.Empty;
+        public int TotalCommitCount { get; set; }
+        public string AnalyzedCommitRange { get; set; } = string.Empty;
+        public string LastAnalysisMode { get; set; } = string.Empty;
         public bool AnalysisEnabled { get; set; } = true;
     }
 
@@ -178,6 +183,7 @@ namespace TokenForge.Client.Domain
         public CharacterProfile CharacterProfile { get; set; } = new CharacterProfile();
         public CompanionState CompanionState { get; set; } = CompanionState.CreateDefault();
         public List<RepositoryCompanionProfile> RepositoryCompanionProfiles { get; set; } = new List<RepositoryCompanionProfile>();
+        public List<AiAgentShopState> AiAgentShopStates { get; set; } = new List<AiAgentShopState>();
         public string SelectedRepositoryHash { get; set; } = string.Empty;
         public DesktopCompanionSettings DesktopCompanionSettings { get; set; } = DesktopCompanionSettings.CreateDefault();
         public List<AgentWorkSession> WorkSessionSummaries { get; set; } = new List<AgentWorkSession>();

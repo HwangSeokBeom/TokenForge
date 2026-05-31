@@ -148,6 +148,7 @@ namespace TokenForge.Client.Tests
                 RepositoryRootPath = directory,
                 IncludeUncommittedChanges = false,
                 IncludeRecentCommits = true,
+                AnalysisMode = GitAnalysisMode.RecentTrend,
                 MaxCommitsToInspect = 1000,
                 AnalysisWindowDays = 90
             }, CancellationToken.None));
@@ -156,6 +157,53 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(CountBucket.Huge, result.Value.CommitCountBucket);
             Assert.AreEqual(GitRepositoryAnalysisInput.MaxAnalysisWindowDays, result.Value.AnalysisWindowDays);
             Assert.Contains("git_window_capped", result.Value.PrivacyWarnings);
+        }
+
+        [Test]
+        public void GitAggregateAnalyzer_UsesFullHistoryWhenNoBaselineExists()
+        {
+            var directory = CreateTempDirectory();
+            var runner = FakeRunner.WithSafeAggregateOutput();
+            var analyzer = new GitAggregateAnalyzer(runner);
+
+            var result = RunAsync(() => analyzer.AnalyzeAsync(new GitRepositoryAnalysisInput
+            {
+                RepositoryRootPath = directory,
+                IncludeUncommittedChanges = false,
+                IncludeRecentCommits = true
+            }, CancellationToken.None));
+
+            Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
+            Assert.AreEqual("full-baseline", result.Value.AnalysisMode);
+            Assert.AreEqual("2026-01-02T03:04:05Z", result.Value.FirstCommitAtUtc);
+            Assert.AreEqual(42, result.Value.TotalCommitsAnalyzed);
+            Assert.AreEqual("HEADSHA", result.Value.LastAnalyzedCommit);
+            Assert.IsTrue(runner.Commands.Contains("log --all --numstat --format=--TOKENFORGE-COMMIT--"));
+            Assert.IsFalse(runner.Commands.Any(command => command.Contains("--since=7.days.ago")));
+        }
+
+        [Test]
+        public void GitAggregateAnalyzer_UsesIncrementalRangeAfterBaseline()
+        {
+            var directory = CreateTempDirectory();
+            var runner = FakeRunner.WithSafeAggregateOutput();
+            var analyzer = new GitAggregateAnalyzer(runner);
+
+            var result = RunAsync(() => analyzer.AnalyzeAsync(new GitRepositoryAnalysisInput
+            {
+                RepositoryRootPath = directory,
+                AnalysisMode = GitAnalysisMode.Incremental,
+                LastAnalyzedCommit = "BASESHA",
+                IncludeUncommittedChanges = false,
+                IncludeRecentCommits = true
+            }, CancellationToken.None));
+
+            Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
+            Assert.AreEqual("incremental", result.Value.AnalysisMode);
+            Assert.AreEqual("BASESHA", result.Value.AnalyzedStartCommit);
+            Assert.AreEqual(3, result.Value.IncrementalCommitCount);
+            Assert.IsTrue(runner.Commands.Contains("log BASESHA..HEAD --numstat --format=--TOKENFORGE-COMMIT--"));
+            Assert.IsTrue(runner.Commands.Contains("rev-list --count BASESHA..HEAD"));
         }
 
         [Test]
@@ -431,9 +479,15 @@ namespace TokenForge.Client.Tests
                 return new Dictionary<string, GitCommandResult>
                 {
                     ["rev-parse --is-inside-work-tree"] = GitCommandResult.Success("true\n"),
+                    ["rev-parse HEAD"] = GitCommandResult.Success("HEADSHA\n"),
+                    ["log --all --reverse --format=%cI -n 1"] = GitCommandResult.Success("2026-01-02T03:04:05Z\n"),
+                    ["rev-list --all --count"] = GitCommandResult.Success("42\n"),
+                    ["rev-list --count BASESHA..HEAD"] = GitCommandResult.Success("3\n"),
                     ["status --porcelain"] = GitCommandResult.Success(status),
                     ["diff --numstat"] = GitCommandResult.Success(diff),
                     ["diff --cached --numstat"] = GitCommandResult.Success(cachedDiff),
+                    ["log --all --numstat --format=--TOKENFORGE-COMMIT--"] = GitCommandResult.Success(log),
+                    ["log BASESHA..HEAD --numstat --format=--TOKENFORGE-COMMIT--"] = GitCommandResult.Success(log),
                     ["log --since=7.days.ago --numstat --format=--TOKENFORGE-COMMIT-- -n 50"] = GitCommandResult.Success(log),
                     ["log --since=30.days.ago --numstat --format=--TOKENFORGE-COMMIT-- -n 200"] = GitCommandResult.Success(log)
                 };

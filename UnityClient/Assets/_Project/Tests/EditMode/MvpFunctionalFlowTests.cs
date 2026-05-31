@@ -378,6 +378,21 @@ namespace TokenForge.Client.Tests
                     return Task.FromResult(GitCommandResult.Success("true\n"));
                 }
 
+                if (arguments == "rev-parse HEAD")
+                {
+                    return Task.FromResult(GitCommandResult.Success("HEADSHA\n"));
+                }
+
+                if (arguments == "log --all --reverse --format=%cI -n 1")
+                {
+                    return Task.FromResult(GitCommandResult.Success("2026-01-02T03:04:05Z\n"));
+                }
+
+                if (arguments == "rev-list --all --count")
+                {
+                    return Task.FromResult(GitCommandResult.Success("42\n"));
+                }
+
                 if (arguments == "status --porcelain")
                 {
                     return Task.FromResult(GitCommandResult.Success(" M " + RawFilePath + "\n"));
@@ -389,6 +404,11 @@ namespace TokenForge.Client.Tests
                 }
 
                 if (arguments.StartsWith("log --since=", StringComparison.Ordinal))
+                {
+                    return Task.FromResult(GitCommandResult.Success("--TOKENFORGE-COMMIT--\n8\t2\t" + RawFilePath + "\n"));
+                }
+
+                if (arguments == "log --all --numstat --format=--TOKENFORGE-COMMIT--")
                 {
                     return Task.FromResult(GitCommandResult.Success("--TOKENFORGE-COMMIT--\n8\t2\t" + RawFilePath + "\n"));
                 }

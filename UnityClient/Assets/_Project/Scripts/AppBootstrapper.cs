@@ -93,6 +93,9 @@ namespace TokenForge.Client
         private string nativeCurrentAnalysisStep = string.Empty;
         private string nativeSelectedReviewId = string.Empty;
         private bool nativeReviewDetailVisible;
+        private string nativeShopTargetType = "aiAgent";
+        private string nativeShopSelectedAgentId = "codex";
+        private string nativeShopSelectedCategory = "featured";
         private string nativeActionStatusKind = "idle";
         private string nativeActionStatusText = "Ready";
         private string lastNativeDashboardStateJson = string.Empty;
@@ -186,7 +189,7 @@ namespace TokenForge.Client
                 Debug.Log("INFO [NativeDashboard] mode=macOSPlayer source=AppKit");
                 Debug.Log("INFO [BootstrapRoot] productUI=disabled reason=nativeShell");
                 EnsureNativeDashboardShell();
-                ApplyNativeShellState(showDashboardIfNeeded: false);
+                ApplyNativeShellState(showDashboardIfNeeded: true);
             }
             else if (bootstrapRoot != null)
             {
@@ -323,7 +326,7 @@ namespace TokenForge.Client
                     Debug.Log("INFO [Startup] State projection begin");
                 }
 
-                ApplyNativeShellState(showDashboardIfNeeded: false);
+                ApplyNativeShellState(showDashboardIfNeeded: startupScope);
                 if (startupScope)
                 {
                     Debug.Log("INFO [Startup] State projection end");
@@ -458,6 +461,17 @@ namespace TokenForge.Client
             nativeDashboardService?.ShowDashboardWindow(source);
         }
 
+        private void RequestInitialNativeDashboardOpen(string source)
+        {
+            if (!UseNativeMacDashboardShell || runtimeVerificationMode || nativeDashboardService == null || nativeDashboardShown)
+            {
+                return;
+            }
+
+            Debug.Log("INFO [LaunchDashboard][REQUEST] source=launch.initial appReady=false pending=true csharpSource=" + SafeNativeText(source, "startup"));
+            OpenNativeDashboardCanonical("launch.initial");
+        }
+
         private static string NormalizeDashboardOpenSource(string reason)
         {
             var safeReason = SafeNativeText(reason, "csharp.dashboard");
@@ -519,15 +533,27 @@ namespace TokenForge.Client
             EnsureNativeDashboardShell();
             var companionSettings = RepositoryCompanionProfileService.CloneDesktopCompanionSettings(
                 approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault());
+            var hasRepositoryOverlayFarm = (approvedActivityAnalysis?.RepositoryCompanions ?? new List<RepositoryCompanionDisplayItem>())
+                .Any(item => item != null &&
+                             !item.Archived &&
+                             item.ApprovedByUser &&
+                             !string.IsNullOrWhiteSpace(item.RepositoryHash) &&
+                             !string.Equals(item.RepositoryHash, RepositoryCompanionProfileService.DefaultLocalRepositoryHash, StringComparison.Ordinal));
             if (!nativeCompanionDesiredVisibleInitialized)
             {
-                nativeCompanionDesiredVisible = runtimeVerificationMode ? false : companionSettings.IsDesktopCompanionEnabled;
+                nativeCompanionDesiredVisible = runtimeVerificationMode || !hasRepositoryOverlayFarm ? false : companionSettings.IsDesktopCompanionEnabled;
                 nativeCompanionDesiredVisibleInitialized = true;
-                nativeCompanionLastProjectionSource = runtimeVerificationMode ? "verificationMode" : "initial_profile";
+                nativeCompanionLastProjectionSource = runtimeVerificationMode ? "verificationMode" : (hasRepositoryOverlayFarm ? "initial_profile" : "noRepository");
                 if (runtimeVerificationMode && companionSettings.IsDesktopCompanionEnabled)
                 {
                     Debug.Log("INFO [DashboardLifecycle][SUPPRESS_REOPEN] reason=verificationMode source=initialOverlayProjection");
                 }
+            }
+
+            if (!hasRepositoryOverlayFarm)
+            {
+                nativeCompanionDesiredVisible = false;
+                nativeCompanionLastProjectionSource = "noRepository";
             }
 
             if (nativeCompanionDesiredVisible && !companionSettings.IsDesktopCompanionEnabled)
@@ -537,12 +563,6 @@ namespace TokenForge.Client
 
             companionSettings.IsDesktopCompanionEnabled = nativeCompanionDesiredVisible;
             var dashboardSnapshot = approvedActivityAnalysis?.CharacterDashboard;
-            var hasRepositoryOverlayFarm = (approvedActivityAnalysis?.RepositoryCompanions ?? new List<RepositoryCompanionDisplayItem>())
-                .Any(item => item != null &&
-                             !item.Archived &&
-                             item.ApprovedByUser &&
-                             !string.IsNullOrWhiteSpace(item.RepositoryHash) &&
-                             !string.Equals(item.RepositoryHash, RepositoryCompanionProfileService.DefaultLocalRepositoryHash, StringComparison.Ordinal));
             if (nativeDesktopCompanionController != null && nativeDesktopCompanionController.IsAnyOverlayDragging())
             {
                 Debug.Log("INFO [CSharpProjection][SKIP_TO_NATIVE] repo=unknown reason=overlayDragInProgress");
@@ -552,18 +572,14 @@ namespace TokenForge.Client
             }
             else
             {
-                if (hasRepositoryOverlayFarm)
+                Debug.Log(hasRepositoryOverlayFarm
+                    ? "INFO [FarmProjection][LEGACY_ACTIVE_OVERLAY_SKIPPED] reason=repositoryKeyedFarmActive"
+                    : "INFO [DashboardPlaceholder][RENDER] reason=noRepository");
+                if (!hasRepositoryOverlayFarm)
                 {
-                    Debug.Log("INFO [FarmProjection][LEGACY_ACTIVE_OVERLAY_SKIPPED] reason=repositoryKeyedFarmActive");
-                }
-                else
-                {
-                    nativeDesktopCompanionController?.ApplySettings(
-                        companionSettings,
-                        dashboardSnapshot?.CompanionState ?? CompanionState.CreateDefault(),
-                        dashboardSnapshot?.MotionState,
-                        dashboardSnapshot?.CurrentRepositoryHash ?? string.Empty,
-                        Math.Max(0, dashboardSnapshot?.CurrentLevelExp ?? 0));
+                    Debug.Log("INFO [DashboardPlaceholder][NOT_PERSISTED]");
+                    Debug.Log("INFO [FarmProjection][SKIP_PLACEHOLDER] reason=noRepository");
+                    nativeDesktopCompanionController?.HideLegacyOverlay("csharp.dashboardPlaceholder");
                 }
             }
 
@@ -624,7 +640,7 @@ namespace TokenForge.Client
                 Debug.Log("INFO [DashboardState] projected changed=false");
             }
 
-            if (showDashboardIfNeeded && !nativeDashboardShown)
+            if (showDashboardIfNeeded && !runtimeVerificationMode && !nativeDashboardShown)
             {
                 nativeDashboardShown = true;
                 OpenNativeDashboardCanonical("startup");
@@ -636,6 +652,7 @@ namespace TokenForge.Client
             var dashboard = approvedActivityAnalysis?.CharacterDashboard ?? new CharacterDashboardSummary();
             var companion = dashboard.CompanionState ?? CompanionState.CreateDefault();
             var settings = dashboard.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault();
+            var projectionSaveData = approvedActivityAnalysis?.CurrentSaveData;
             var codexConnected = approvedActivityAnalysis != null
                 && approvedActivityAnalysis.Onboarding.AgentSources.Any(source => source.SourceType == ConnectedAgentSourceType.Codex && IsAgentReadyForNative(source) && NativeAgentFlowMatchesSource(source));
             var connectedRepositories = approvedActivityAnalysis == null
@@ -672,11 +689,24 @@ namespace TokenForge.Client
             state.debugStat = Math.Max(0, dashboard.Debug);
             state.designStat = Math.Max(0, dashboard.Design);
             state.syncStat = Math.Max(0, dashboard.Sync);
-            state.companionVisible = settings.IsDesktopCompanionEnabled;
+            state.weeklyCodeStat = Math.Max(0, dashboard.WeeklyCode);
+            state.weeklyFocusStat = Math.Max(0, dashboard.WeeklyFocus);
+            state.weeklyDebugStat = Math.Max(0, dashboard.WeeklyDebug);
+            state.weeklyDesignStat = Math.Max(0, dashboard.WeeklyDesign);
+            state.weeklySyncStat = Math.Max(0, dashboard.WeeklySync);
+            state.dominantGrowthPath = SafeNativeText(dashboard.DominantGrowthPath, "Unknown");
+            state.secondaryGrowthTrait = SafeNativeText(dashboard.SecondaryGrowthTrait, "Unknown");
+            state.currentEvolutionBias = SafeNativeText(dashboard.CurrentEvolutionBias, "Unknown");
+            state.nextEvolutionPreview = SafeNativeText(dashboard.NextEvolutionPreview, "Repository Hatchling");
+            state.eggInfluenceText = SafeNativeText(dashboard.EggInfluenceText, "Connect a repository to start shaping a companion.");
+            state.tokenCurrencyName = SafeNativeText(dashboard.TokenCurrencyName, "Forge Coins");
+            state.tokenCurrencyBalance = Math.Max(0, dashboard.TokenCurrencyBalance);
+            state.tokenUsageTrackingEnabled = dashboard.TokenUsageTrackingEnabled;
+            state.companionVisible = repositoryConnected && settings.IsDesktopCompanionEnabled;
             state.wanderEnabled = settings.MotionMode != CompanionDesktopMotionMode.Calm;
             state.clickThroughEnabled = settings.IsClickThroughEnabled;
             state.clickReactionEnabled = !settings.IsClickThroughEnabled;
-            state.desiredVisible = nativeCompanionDesiredVisibleInitialized ? nativeCompanionDesiredVisible : settings.IsDesktopCompanionEnabled;
+            state.desiredVisible = repositoryConnected && (nativeCompanionDesiredVisibleInitialized ? nativeCompanionDesiredVisible : settings.IsDesktopCompanionEnabled);
             state.actualVisible = nativeDesktopCompanionController != null && nativeDesktopCompanionController.OverlayState == CompanionDesktopOverlayState.Active;
             state.movementEnabled = state.wanderEnabled;
             state.dragEnabled = !state.clickThroughEnabled;
@@ -712,7 +742,7 @@ namespace TokenForge.Client
                 : "Earn " + Math.Max(0, dashboard.ExpForNextLevel - dashboard.CurrentLevelExp) + " more XP to level up.";
             state.companion.levelUpDisabledReason = companion.CanLevelUp ? string.Empty : state.companion.levelUpStatusText;
             state.companion.motion = ToNativeMotionState(dashboard.MotionState);
-            state.companion.mood = settings.IsDesktopCompanionEnabled ? state.companion.motion.mood : "hidden";
+            state.companion.mood = repositoryConnected && settings.IsDesktopCompanionEnabled ? state.companion.motion.mood : "hidden";
             state.companion.dashboardAnimationState = DashboardAnimationStateFor(dashboard.MotionState, companion.CanLevelUp);
             state.companion.skin = CompanionSkinCatalog.Normalize(settings.VisualThemeId);
             state.repository.connected = repositoryConnected;
@@ -728,12 +758,13 @@ namespace TokenForge.Client
             state.repository.hasValidSource = repositoryConnected;
             state.repository.canAnalyze = repositoryConnected && !nativeAnalysisInProgress;
             state.repository.analyzeDisabledReason = RepositoryAnalyzeDisabledReason(repositoryConnected, nativeAnalysisInProgress);
+            state.agentProviders = BuildNativeAgentProviderItems();
             state.codexAgent.connected = codexConnected;
             state.codexAgent.status = AgentCodexStatus();
             state.codexAgent.statusText = AgentCodexStatusText();
             state.repositories = BuildNativeRepositoryItems(dashboard);
             state.companionFarm = BuildNativeCompanionFarmState(state.repositories, settings);
-            state.agentProviders = BuildNativeAgentProviderItems();
+            state.tokenShop = BuildNativeTokenShopState(state.repositories.FirstOrDefault(item => item != null && item.selected), repositoryConnected, projectionSaveData, state.agentProviders);
             state.agents.connectedCount = state.agentProviders.Count(provider => provider.connected && provider.hasValidSource);
             state.agents.warningCount = state.agentProviders.Sum(provider => Math.Max(0, provider.warningCount));
             state.agents.lastProvider = state.agentProviders.FirstOrDefault(provider => provider.connected && provider.hasValidSource)?.displayName ?? "None";
@@ -788,6 +819,27 @@ namespace TokenForge.Client
                 state.repositorySafeError = NativeSafeErrorCategoryFromStatusText(nativeActionStatusText);
             }
             state.statusText = NativeStatusText(state);
+            if (!repositoryConnected)
+            {
+                state.companionVisible = false;
+                state.desiredVisible = false;
+                state.actualVisible = false;
+                state.hasActiveRepository = false;
+                state.activeRepositoryId = string.Empty;
+                state.companion = NativeCompanionState.CreateDefault();
+                state.companion.name = "TokenForge";
+                state.companion.stage = "None";
+                state.companion.level = 0;
+                state.companion.mood = "hidden";
+                state.companion.evolveActionVisible = false;
+                state.companion.evolveActionHiddenReason = "no companion selected";
+                state.companion.levelUpStatusText = "Connect a repository to enable companion growth.";
+                state.companion.levelUpDisabledReason = "Connect a repository to enable companion growth.";
+                state.companion.xpStatusText = "No repository connected";
+                state.companionFarm = BuildNativeCompanionFarmState(new NativeRepositoryListItem[0], settings);
+                state.tokenShop = BuildNativeTokenShopState(null, false, projectionSaveData, state.agentProviders);
+                Debug.Log("INFO [DashboardEmptyState] reason=no_connected_repository");
+            }
             EnforceNativeDashboardInvariants(state);
             Debug.Log("INFO [Projection] revision=" + state.stateRevision + " activeRepo=" + SafeNativeText(state.repository.id, "none") + " repoCount=" + (state.repositories?.Length ?? 0));
             return state;
@@ -826,6 +878,8 @@ namespace TokenForge.Client
                     stageIndex = (int)item.Stage,
                     level = Math.Max(1, item.Level),
                     currentXP = Math.Max(0, item.CurrentXp),
+                    lifetimeGrowthXP = Math.Max(0, item.LifetimeGrowthXp),
+                    weeklyGrowthXP = Math.Max(0, item.WeeklyGrowthXp),
                     requiredXP = Math.Max(1, item.XpRequiredForNextLevel),
                     canLevelUp = item.CanLevelUp,
                     canEvolve = item.CanLevelUp && !item.Archived,
@@ -836,12 +890,244 @@ namespace TokenForge.Client
                     recentGitXP = Math.Max(0, item.RecentGitXp),
                     recentAiXP = Math.Max(0, item.RecentAiXp),
                     estimatedTokenActivity = TokenActivityLabel(item.EstimatedTokenActivity),
+                    dominantStat = SafeNativeText(item.DominantStat, "Unknown"),
+                    secondaryStat = SafeNativeText(item.SecondaryStat, "Unknown"),
+                    evolutionPath = SafeNativeText(item.EvolutionPath, "Unknown"),
+                    nextEvolutionPreview = SafeNativeText(item.NextEvolutionPreview, "Repository Hatchling"),
+                    tokenCurrencyName = SafeNativeText(item.TokenCurrencyName, "Forge Coins"),
+                    tokenCurrencyBalance = Math.Max(0, item.TokenCurrencyBalance),
+                    purchasedTokenShopItemIds = (item.PurchasedTokenShopItemIds ?? new List<string>())
+                        .Where(id => !string.IsNullOrWhiteSpace(id))
+                        .ToArray(),
                     motionMood = SafeNativeText(item.MotionState?.Mood, "idle"),
                     motionReason = SafeNativeText(item.MotionState?.ReasonSummary, "No recent aggregate activity."),
                     canViewGrowth = true,
                     sourceBadge = item.ApprovedByUser ? "Approved by you" : "Approval missing"
                 })
                 .ToArray();
+        }
+
+        private NativeTokenShopState BuildNativeTokenShopState(NativeRepositoryListItem selectedRepository, bool hasActiveRepository, SaveData saveData, NativeAgentProviderState[] agentProviders)
+        {
+            saveData = RepositoryCompanionProfileService.Normalize(saveData);
+            agentProviders = agentProviders ?? new NativeAgentProviderState[0];
+            var targetType = string.Equals(nativeShopTargetType, "aiAgent", StringComparison.Ordinal) ? ShopTargetType.AiAgent : ShopTargetType.RepositoryCompanion;
+            var selectedAgentId = RepositoryCompanionProfileService.NormalizeAgentShopId(nativeShopSelectedAgentId);
+            if (targetType == ShopTargetType.AiAgent && string.IsNullOrWhiteSpace(selectedAgentId))
+            {
+                selectedAgentId = agentProviders.FirstOrDefault(provider => provider != null && !string.IsNullOrWhiteSpace(provider.id))?.id ?? "codex";
+                nativeShopSelectedAgentId = selectedAgentId;
+            }
+
+            var selectedAgent = agentProviders.FirstOrDefault(provider => provider != null && string.Equals(provider.id, selectedAgentId, StringComparison.Ordinal));
+            var agentConnected = selectedAgent != null && selectedAgent.connected && selectedAgent.hasValidSource;
+            var agentShop = RepositoryCompanionProfileService.GetAgentTokenShopState(saveData, selectedAgentId);
+            var selectedAgentState = (saveData.AiAgentShopStates ?? new List<AiAgentShopState>())
+                .FirstOrDefault(state => state != null && string.Equals(state.AgentId, selectedAgentId, StringComparison.Ordinal));
+            var selectedZodiac = RepositoryCompanionProfileService.NormalizeZodiacTypeId(selectedAgentState?.ZodiacTypeId, selectedAgentId);
+            var balance = targetType == ShopTargetType.AiAgent
+                ? Math.Max(0, agentShop.CurrencyBalance)
+                : hasActiveRepository ? Math.Max(0, selectedRepository?.tokenCurrencyBalance ?? 0) : 0;
+            var currencyName = targetType == ShopTargetType.AiAgent
+                ? RepositoryCompanionProfileService.AgentCurrencyName(selectedAgentId)
+                : SafeNativeText(selectedRepository?.tokenCurrencyName, "Repository Coins");
+            var purchased = targetType == ShopTargetType.AiAgent
+                ? (agentShop.PurchasedItemIds ?? new List<string>()).ToArray()
+                : selectedRepository?.purchasedTokenShopItemIds ?? new string[0];
+            var equipped = targetType == ShopTargetType.AiAgent
+                ? (agentShop.EquippedItemIds ?? new List<string>()).ToArray()
+                : (RepositoryCompanionProfileService.GetSelectedProfile(saveData)?.TokenShop?.EquippedItemIds ?? new List<string>()).ToArray();
+            var category = NormalizeShopCategory(nativeShopSelectedCategory);
+            nativeShopSelectedCategory = category;
+            var targetReady = targetType == ShopTargetType.RepositoryCompanion ? hasActiveRepository : (hasActiveRepository && agentConnected);
+            var targetLockedReason = targetType == ShopTargetType.RepositoryCompanion
+                ? "Connect an active repository first."
+                : agentConnected
+                    ? string.Empty
+                    : "Connect to unlock agent cosmetics.";
+            var items = RepositoryCompanionProfileService.GetTokenShopCatalog()
+                .Where(item => item.TargetType == targetType)
+                .Where(item => IsNativeShopCategoryVisible(item, category, purchased))
+                .Select(item =>
+                {
+                    var owned = purchased.Any(id => string.Equals(id, item.ItemId, StringComparison.Ordinal));
+                    var isEquipped = equipped.Any(id => string.Equals(id, item.ItemId, StringComparison.Ordinal));
+                    var affordable = balance >= Math.Max(0, item.Price);
+                    var compatible = targetType == ShopTargetType.RepositoryCompanion ||
+                                     (item.CompatibleAgentIds ?? new List<string>()).Count == 0 ||
+                                     item.CompatibleAgentIds.Any(id => string.Equals(RepositoryCompanionProfileService.NormalizeAgentShopId(id), selectedAgentId, StringComparison.Ordinal));
+                    if (compatible && targetType == ShopTargetType.AiAgent && !string.IsNullOrWhiteSpace(item.ZodiacTypeId))
+                    {
+                        compatible = string.Equals(item.ZodiacTypeId, selectedZodiac, StringComparison.Ordinal);
+                    }
+                    var insufficientReason = affordable ? string.Empty : "Need " + Math.Max(0, Math.Max(0, item.Price) - balance) + " more " + currencyName + ".";
+                    var stateLabel = !compatible
+                        ? "Not compatible"
+                        : targetReady
+                            ? isEquipped
+                                ? "Equipped"
+                                : owned
+                                    ? "Owned"
+                                    : affordable
+                                        ? "Buy"
+                                        : "Need " + Math.Max(0, Math.Max(0, item.Price) - balance) + " more coins"
+                            : targetType == ShopTargetType.AiAgent ? "Connect agent" : "Connect repository";
+                    return new NativeTokenShopItemState
+                    {
+                        itemId = item.ItemId,
+                        name = SafeNativeText(item.Name, "Shop Item"),
+                        description = SafeNativeText(item.Description, "Cosmetic companion item."),
+                        itemType = SafeNativeText(item.ItemType, item.Category.ToString()),
+                        category = RepositoryCompanionProfileService.CategoryId(item.Category),
+                        targetCompatibility = SafeNativeText(item.Compatibility, targetType == ShopTargetType.AiAgent ? "AI Agents" : "Repository Companion"),
+                        rarity = item.Rarity.ToString(),
+                        previewIcon = SafeNativeText(item.PreviewIcon, "TF"),
+                        previewType = SafeNativeText(item.PreviewType, item.PreviewIcon),
+                        zodiacType = SafeNativeText(item.ZodiacTypeId, string.Empty),
+                        price = Math.Max(0, item.Price),
+                        owned = owned,
+                        equipped = isEquipped,
+                        locked = !targetReady,
+                        available = targetReady && compatible && !owned && affordable,
+                        canEquip = targetReady && compatible && owned && !isEquipped,
+                        stateLabel = stateLabel,
+                        buttonTitle = !compatible
+                            ? "Not compatible"
+                            : !targetReady
+                                ? (targetType == ShopTargetType.AiAgent ? "Connect agent" : "Unavailable")
+                                : isEquipped
+                                    ? "Equipped"
+                                    : owned
+                                        ? "Equip"
+                                        : affordable
+                                            ? "Buy"
+                                            : "Need Coins",
+                        disabledReason = !compatible
+                            ? string.IsNullOrWhiteSpace(item.ZodiacTypeId) ? "Not compatible with this target." : "Only for " + RepositoryCompanionProfileService.ZodiacDisplayName(item.ZodiacTypeId) + " companions."
+                            : !targetReady
+                                ? targetLockedReason
+                                : isEquipped
+                                    ? "Equipped."
+                                    : owned
+                                        ? string.Empty
+                                        : affordable
+                                            ? string.Empty
+                                            : insufficientReason,
+                        insufficientCoinReason = insufficientReason,
+                        lockedAgentReason = targetType == ShopTargetType.AiAgent && !agentConnected ? targetLockedReason : string.Empty,
+                        previewEffect = SafeNativeText(item.PreviewEffect, "Preview cosmetic")
+                    };
+                })
+                .ToArray();
+            var agents = agentProviders
+                .Where(provider => provider != null && !string.IsNullOrWhiteSpace(provider.id))
+                .Select(provider =>
+                {
+                    var providerShop = RepositoryCompanionProfileService.GetAgentTokenShopState(saveData, provider.id);
+                    var providerState = (saveData.AiAgentShopStates ?? new List<AiAgentShopState>())
+                        .FirstOrDefault(state => state != null && string.Equals(state.AgentId, provider.id, StringComparison.Ordinal));
+                    var providerZodiac = RepositoryCompanionProfileService.NormalizeZodiacTypeId(providerState?.ZodiacTypeId, provider.id);
+                    return new NativeTokenShopAgentState
+                    {
+                        id = provider.id,
+                        displayName = SafeNativeText(provider.displayName, "AI Agent"),
+                        connected = provider.connected && provider.hasValidSource,
+                        selected = string.Equals(provider.id, selectedAgentId, StringComparison.Ordinal),
+                        statusText = provider.connected && provider.hasValidSource
+                            ? "Connected · " + Math.Max(0, providerShop.LifetimeTokenUsageScore) + " usage score · " + Math.Max(0, providerShop.CurrencyBalance) + " " + RepositoryCompanionProfileService.AgentCurrencyName(provider.id)
+                            : "Locked · No token usage yet",
+                        lockedReason = provider.connected && provider.hasValidSource ? string.Empty : "Connect to unlock agent cosmetics.",
+                        actionTitle = provider.connected && provider.hasValidSource ? "Selected" : "Connect agent",
+                        tokenUsageTotal = Math.Max(0, providerShop.LifetimeTokenUsageScore),
+                        tokenUsageRecent = 0,
+                        spendableCoins = Math.Max(0, providerShop.CurrencyBalance),
+                        currencyName = RepositoryCompanionProfileService.AgentCurrencyName(provider.id),
+                        zodiacType = providerZodiac,
+                        zodiacLabel = RepositoryCompanionProfileService.ZodiacDisplayName(providerZodiac)
+                    };
+                })
+                .ToArray();
+            return new NativeTokenShopState
+            {
+                currencyName = currencyName,
+                balance = balance,
+                hasActiveRepository = hasActiveRepository,
+                statusText = hasActiveRepository
+                    ? targetType == ShopTargetType.AiAgent
+                        ? agentConnected
+                            ? "Spend coins earned by each AI agent's token usage. " + RepositoryCompanionProfileService.AgentDisplayName(selectedAgentId) + " shop uses " + currencyName + " only."
+                            : "Connect this AI agent to earn and spend its own token usage coins. No token usage yet."
+                        : "Shopping for repository mascot. Repository mascot cosmetics use repository-earned coins."
+                    : "Connect a repository to use the Token Shop.",
+                lastTransactionStatus = string.Equals(nativeActionStatusKind, "shop", StringComparison.Ordinal)
+                    ? SafeNativeText(nativeActionStatusText, string.Empty)
+                    : string.Empty,
+                targetType = RepositoryCompanionProfileService.TargetTypeId(targetType),
+                selectedAgentId = targetType == ShopTargetType.AiAgent ? selectedAgentId : string.Empty,
+                selectedCategory = category,
+                categoryIds = new[] { "featured", "zodiac", "skins", "accessories", "effects", "motions", "themes", "exclusive", "badges", "owned" },
+                agents = agents,
+                ownedItemIds = string.Join(",", purchased),
+                equippedItemIds = string.Join(",", equipped),
+                items = items
+            };
+        }
+
+        private static string NormalizeShopCategory(string category)
+        {
+            category = string.IsNullOrWhiteSpace(category) ? "featured" : category.Trim();
+            switch (category)
+            {
+                case "skins":
+                case "accessories":
+                case "effects":
+                case "motions":
+                case "themes":
+                case "zodiac":
+                case "exclusive":
+                case "badges":
+                case "owned":
+                    return category;
+                default:
+                    return "featured";
+            }
+        }
+
+        private static bool IsNativeShopCategoryVisible(TokenShopItemDefinition item, string category, string[] purchased)
+        {
+            if (item == null)
+            {
+                return false;
+            }
+
+            if (string.Equals(category, "owned", StringComparison.Ordinal))
+            {
+                return (purchased ?? new string[0]).Any(id => string.Equals(id, item.ItemId, StringComparison.Ordinal));
+            }
+
+            if (string.Equals(category, "zodiac", StringComparison.Ordinal))
+            {
+                return !string.IsNullOrWhiteSpace(item.ZodiacTypeId);
+            }
+
+            if (string.Equals(category, "exclusive", StringComparison.Ordinal))
+            {
+                return (item.CompatibleAgentIds ?? new List<string>()).Count == 1 || !string.IsNullOrWhiteSpace(item.ZodiacTypeId);
+            }
+
+            if (string.Equals(category, "featured", StringComparison.Ordinal))
+            {
+                return item.Featured;
+            }
+
+            var itemCategory = RepositoryCompanionProfileService.CategoryId(item.Category);
+            if (string.Equals(category, "effects", StringComparison.Ordinal) &&
+                string.Equals(itemCategory, "tokenEffects", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return string.Equals(itemCategory, category, StringComparison.Ordinal);
         }
 
         private static DesktopCompanionFarmState BuildNativeCompanionFarmState(NativeRepositoryListItem[] repositories, DesktopCompanionSettings settings)
@@ -879,11 +1165,17 @@ namespace TokenForge.Client
                     }
                 })
                 .ToArray();
+            if (overlays.Length == 0)
+            {
+                Debug.Log("INFO [FarmProjection][SKIP_PLACEHOLDER] reason=noRepository");
+                Debug.Log("INFO [FarmProjection][BUILD] connectedRepositories=0 snapshots=0");
+            }
+
             return new DesktopCompanionFarmState
             {
-                enabled = settings.IsDesktopCompanionEnabled,
+                enabled = settings.IsDesktopCompanionEnabled && overlays.Length > 0,
                 overlays = overlays,
-                visibleCount = overlays.Length,
+                visibleCount = settings.IsDesktopCompanionEnabled ? overlays.Count(item => item.desiredVisible) : 0,
                 globalMotionEnabled = settings.MotionMode != CompanionDesktopMotionMode.Calm,
                 globalClickThroughEnabled = settings.IsClickThroughEnabled
             };
@@ -2086,6 +2378,55 @@ namespace TokenForge.Client
                     nativeSelectedNavItem = "activity";
                     RunNativeDashboardTask(ReviewNativeActivityAsync, request.RawAction);
                     break;
+                case NativeDashboardAction.TokenShop:
+                    nativeSelectedNavItem = "tokenShop";
+                    nativeActionStatusKind = "idle";
+                    nativeActionStatusText = "Token Shop opened. Spend coins earned by each AI agent's token usage.";
+                    RunNativeDashboardTask(RefreshAndPublishNativeDashboardAsync, request.RawAction);
+                    OpenNativeDashboardCanonical(request.RawAction);
+                    break;
+                case NativeDashboardAction.PurchaseTokenShopItem:
+                    nativeSelectedNavItem = "tokenShop";
+                    RunNativeDashboardTask(() => PurchaseTokenShopItemFromNativeAsync(request.Value), request.RawAction);
+                    break;
+                case NativeDashboardAction.SelectShopRepositoryTarget:
+                    nativeSelectedNavItem = "tokenShop";
+                    nativeShopTargetType = "repositoryCompanion";
+                    nativeActionStatusKind = "shop";
+                    nativeActionStatusText = "Shopping for repository mascot.";
+                    RunNativeDashboardTask(RefreshAndPublishNativeDashboardAsync, request.RawAction);
+                    break;
+                case NativeDashboardAction.SelectShopAgentTarget:
+                    nativeSelectedNavItem = "tokenShop";
+                    nativeShopTargetType = "aiAgent";
+                    nativeShopSelectedAgentId = RepositoryCompanionProfileService.NormalizeAgentShopId(request.Value);
+                    if (string.IsNullOrWhiteSpace(nativeShopSelectedAgentId) || string.Equals(nativeShopSelectedAgentId, "agents", StringComparison.OrdinalIgnoreCase))
+                    {
+                        nativeShopSelectedAgentId = "codex";
+                    }
+                    nativeActionStatusKind = "shop";
+                    nativeActionStatusText = RepositoryCompanionProfileService.AgentDisplayName(nativeShopSelectedAgentId) + " shop uses " + RepositoryCompanionProfileService.AgentCurrencyName(nativeShopSelectedAgentId) + " only.";
+                    RunNativeDashboardTask(RefreshAndPublishNativeDashboardAsync, request.RawAction);
+                    break;
+                case NativeDashboardAction.SelectShopCategory:
+                    nativeSelectedNavItem = "tokenShop";
+                    nativeShopSelectedCategory = NormalizeShopCategory(request.Value);
+                    RunNativeDashboardTask(RefreshAndPublishNativeDashboardAsync, request.RawAction);
+                    break;
+                case NativeDashboardAction.EquipTokenShopItem:
+                    nativeSelectedNavItem = "tokenShop";
+                    RunNativeDashboardTask(() => EquipTokenShopItemFromNativeAsync(request.Value), request.RawAction);
+                    break;
+                case NativeDashboardAction.PreviewTokenShopItem:
+                    nativeSelectedNavItem = "tokenShop";
+                    nativeActionStatusKind = "shop";
+                    nativeActionStatusText = string.IsNullOrWhiteSpace(request.Value) ? "Previewing zodiac cosmetics." : "Previewing " + SafeNativeText(request.Value, "shop item") + ".";
+                    RunNativeDashboardTask(RefreshAndPublishNativeDashboardAsync, request.RawAction);
+                    break;
+                case NativeDashboardAction.OpenAgentConnect:
+                    nativeSelectedNavItem = "aiAgents";
+                    RunNativeDashboardTask(() => ConnectAgentFromNativeAsync(request.Value), request.RawAction);
+                    break;
                 case NativeDashboardAction.ViewReviewDetails:
                     nativeSelectedNavItem = "activity";
                     RunNativeDashboardTask(() => ViewNativeReviewDetailsAsync(request.Value), request.RawAction);
@@ -2938,6 +3279,83 @@ namespace TokenForge.Client
             await RefreshAndPublishNativeDashboardAsync();
         }
 
+        private async Task PurchaseTokenShopItemFromNativeAsync(string itemId)
+        {
+            if (approvedActivityAnalysis == null)
+            {
+                return;
+            }
+
+            Debug.Log("INFO [TokenShop][ACTION] purchase itemId=" + SafeNativeText(itemId, "none"));
+            var targetType = string.Equals(nativeShopTargetType, "aiAgent", StringComparison.Ordinal) ? ShopTargetType.AiAgent : ShopTargetType.RepositoryCompanion;
+            var targetId = targetType == ShopTargetType.AiAgent ? RepositoryCompanionProfileService.NormalizeAgentShopId(nativeShopSelectedAgentId) : string.Empty;
+            var result = await approvedActivityAnalysis.PurchaseTokenShopItemAsync(itemId, targetType, targetId, IsNativeShopAgentConnected(targetId));
+            if (result.IsSuccess)
+            {
+                nativeActionStatusKind = "shop";
+                nativeActionStatusText = SafeNativeText(result.Value?.StatusText, "Purchase saved.") +
+                                         " Balance: " + Math.Max(0, result.Value?.BalanceAfter ?? 0) + " " +
+                                         SafeNativeText(result.Value?.CurrencyName, "Forge Coins") + ".";
+                nativeDesktopCompanionController?.ApplySettings(
+                    approvedActivityAnalysis.CharacterDashboard?.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault(),
+                    approvedActivityAnalysis.CharacterDashboard?.CompanionState ?? CompanionState.CreateDefault());
+                Debug.Log("INFO [TokenShop][PURCHASE] itemId=" + SafeNativeText(itemId, "none") + " result=success balance=" + Math.Max(0, result.Value?.BalanceAfter ?? 0));
+            }
+            else
+            {
+                nativeActionStatusKind = "shop";
+                nativeActionStatusText = "Purchase unavailable: " + SafeNativeText(result.ErrorMessage, result.ErrorCode);
+                Debug.LogWarning("WARN [TokenShop][PURCHASE] itemId=" + SafeNativeText(itemId, "none") + " result=blocked reason=" + result.ErrorCode);
+            }
+
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task EquipTokenShopItemFromNativeAsync(string itemId)
+        {
+            if (approvedActivityAnalysis == null)
+            {
+                return;
+            }
+
+            var targetType = string.Equals(nativeShopTargetType, "aiAgent", StringComparison.Ordinal) ? ShopTargetType.AiAgent : ShopTargetType.RepositoryCompanion;
+            var targetId = targetType == ShopTargetType.AiAgent ? RepositoryCompanionProfileService.NormalizeAgentShopId(nativeShopSelectedAgentId) : string.Empty;
+            var result = await approvedActivityAnalysis.EquipTokenShopItemAsync(itemId, targetType, targetId, IsNativeShopAgentConnected(targetId));
+            nativeActionStatusKind = "shop";
+            if (result.IsSuccess)
+            {
+                nativeActionStatusText = SafeNativeText(result.Value?.StatusText, "Item equipped.");
+                nativeDesktopCompanionController?.ApplySettings(
+                    approvedActivityAnalysis.CharacterDashboard?.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault(),
+                    approvedActivityAnalysis.CharacterDashboard?.CompanionState ?? CompanionState.CreateDefault());
+                Debug.Log("INFO [TokenShop][EQUIP] itemId=" + SafeNativeText(itemId, "none") + " result=success");
+            }
+            else
+            {
+                nativeActionStatusText = "Equip unavailable: " + SafeNativeText(result.ErrorMessage, result.ErrorCode);
+                Debug.LogWarning("WARN [TokenShop][EQUIP] itemId=" + SafeNativeText(itemId, "none") + " result=blocked reason=" + result.ErrorCode);
+            }
+
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private bool IsNativeShopAgentConnected(string agentId)
+        {
+            agentId = RepositoryCompanionProfileService.NormalizeAgentShopId(agentId);
+            if (approvedActivityAnalysis == null || string.IsNullOrWhiteSpace(agentId))
+            {
+                return false;
+            }
+
+            return approvedActivityAnalysis.Onboarding.AgentSources.Any(source =>
+            {
+                var providerId = NativeProviderId(ProviderTypeForNative(source.SourceType));
+                return string.Equals(providerId, agentId, StringComparison.Ordinal) &&
+                       IsAgentReadyForNative(source) &&
+                       NativeAgentFlowMatchesSource(source);
+            });
+        }
+
         private async Task ReviewNativeActivityAsync()
         {
             if (approvedActivityAnalysis == null)
@@ -3014,9 +3432,15 @@ namespace TokenForge.Client
             var showWithoutRepoWarning = visible && !ActiveRepositoryReadyForNative();
             if (showWithoutRepoWarning)
             {
+                nativeCompanionDesiredVisible = false;
+                nativeCompanionDesiredVisibleInitialized = true;
                 nativeActionStatusKind = "warning";
-                nativeActionStatusText = "Companion shown with no active repository. Add a repository to customize growth.";
-                Debug.LogWarning("WARN [OverlayTrace:" + SafeNativeText(traceId, "none") + "] show_requested repoId=none source=button result=using_default_companion");
+                nativeActionStatusText = "Connect a repository to enable desktop companion.";
+                Debug.LogWarning("WARN [OverlayTrace:" + SafeNativeText(traceId, "none") + "] show_requested repoId=none source=button result=blocked_no_repository");
+                nativeDesktopCompanionController?.HideLegacyOverlay(nativeCompanionLastProjectionSource);
+                nativeDashboardService?.SetCompanionVisible(false, nativeCompanionLastProjectionSource);
+                await RefreshAndPublishNativeDashboardAsync();
+                return;
             }
 
             if (approvedActivityAnalysis != null)
@@ -4156,7 +4580,7 @@ namespace TokenForge.Client
         {
             if (UseNativeMacDashboardShell)
             {
-                ApplyNativeShellState(showDashboardIfNeeded: false);
+                ApplyNativeShellState(showDashboardIfNeeded: true);
                 IsVisibleUiValidated = nativeDashboardService != null && nativeDashboardService.IsAvailable;
                 IsRenderedFrameSmokeSkippedForBatchMode = true;
                 IsBootstrapComplete = IsVisibleUiValidated;

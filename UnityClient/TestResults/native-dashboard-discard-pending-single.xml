@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="1" result="Passed" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-05-30 17:46:21Z" end-time="2026-05-30 17:46:22Z" duration="0.4283768">
+  <test-suite type="TestSuite" id="1527" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="447" result="Passed" start-time="2026-05-30 17:46:21Z" end-time="2026-05-30 17:46:22Z" duration="0.428377" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties />
+    <test-suite type="Assembly" id="2049" name="TokenForge.Client.Tests.dll" fullname="/Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/ScriptAssemblies/TokenForge.Client.Tests.dll" runstate="Runnable" testcasecount="447" result="Passed" start-time="2026-05-30 17:46:21Z" end-time="2026-05-30 17:46:22Z" duration="0.421012" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="5431" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+      </properties>
+      <test-suite type="TestSuite" id="2050" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="447" result="Passed" start-time="2026-05-30 17:46:21Z" end-time="2026-05-30 17:46:22Z" duration="0.420064" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="2051" name="Client" fullname="TokenForge.Client" runstate="Runnable" testcasecount="447" result="Passed" start-time="2026-05-30 17:46:21Z" end-time="2026-05-30 17:46:22Z" duration="0.416862" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="2052" name="Tests" fullname="TokenForge.Client.Tests" runstate="Runnable" testcasecount="447" result="Passed" start-time="2026-05-30 17:46:21Z" end-time="2026-05-30 17:46:22Z" duration="0.416002" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1674" name="NativeDashboardBridgeTests" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" testcasecount="35" result="Passed" start-time="2026-05-30 17:46:21Z" end-time="2026-05-30 17:46:22Z" duration="0.408476" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1688" name="DiscardPendingNativeReviewDoesNotApplyXpOrStats" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.DiscardPendingNativeReviewDoesNotApplyXpOrStats" methodname="DiscardPendingNativeReviewDoesNotApplyXpOrStats" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="107702009" result="Passed" start-time="2026-05-30 17:46:21Z" end-time="2026-05-30 17:46:22Z" duration="0.400223" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                </properties>
+                <output><![CDATA[PHASE discard pending review save start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE discard pending review save complete
+PHASE discard pending review action start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [DashboardEmptyState] reason=no_connected_repository
+INFO [RepositoryProjection] connectedCount=0 activeRepositoryId= visibleCompanionCount=0 previewOnlyCount=0
+INFO [RepositoryProjection][CONSISTENT] dashboard=False repositoriesTab=0 sidebar=0
+PHASE discard pending review action complete
+PHASE discard pending review reload start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE discard pending review reload complete
+PHASE discard pending review assertions start
+PHASE discard pending review assertions complete
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

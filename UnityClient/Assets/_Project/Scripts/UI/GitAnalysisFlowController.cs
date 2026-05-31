@@ -166,7 +166,14 @@ namespace TokenForge.Client.UI
             UserMessage = "Analyzing repository aggregate activity.";
             logger?.Info("Git analysis flow analysis started");
 
-            var input = Settings.ToInput(selectedRepositoryRootPath);
+            var saveDataBeforeAnalysis = await repository.LoadAsync(cancellationToken);
+            RepositoryCompanionProfileService.Normalize(saveDataBeforeAnalysis);
+            var selectedRepositoryHash = RepositoryCompanionProfileService.HashRepositoryPath(selectedRepositoryRootPath);
+            var connection = FindConnectedProject(saveDataBeforeAnalysis, selectedRepositoryHash);
+            var analysisMode = connection == null || string.IsNullOrWhiteSpace(connection.LastAnalyzedCommit)
+                ? GitAnalysisMode.FullBaseline
+                : GitAnalysisMode.Incremental;
+            var input = Settings.ToInput(selectedRepositoryRootPath, analysisMode, connection?.LastAnalyzedCommit ?? string.Empty);
             var analysisResult = await Task.Run(() => analyzer.AnalyzeAsync(input, cancellationToken), cancellationToken);
             if (!analysisResult.IsSuccess)
             {
@@ -182,7 +189,7 @@ namespace TokenForge.Client.UI
                 return Result<GitAnalysisReviewModel>.Failure(failure.ErrorCode, failure.ErrorMessage);
             }
 
-            var saveData = await repository.LoadAsync(cancellationToken);
+            var saveData = saveDataBeforeAnalysis;
             var growthResult = growthCalculator.Calculate(
                 session,
                 saveData.CharacterProfile,
@@ -241,6 +248,15 @@ namespace TokenForge.Client.UI
 
             RepositoryCompanionProfileService.Normalize(saveData);
             saveData.SelectedRepositoryHash = selectedRepositoryHash;
+            if (!string.IsNullOrWhiteSpace(pendingSession.DeduplicationKey) &&
+                saveData.WorkSessionSummaries.Any(session => string.Equals(session.DeduplicationKey, pendingSession.DeduplicationKey, StringComparison.Ordinal)))
+            {
+                pendingSession = null;
+                State = GitAnalysisFlowState.Saved;
+                UserMessage = "Analysis range was already saved.";
+                return Result<SaveData>.Success(saveData);
+            }
+
             var growthResult = growthCalculator.Calculate(
                 pendingSession,
                 saveData.CharacterProfile,
@@ -261,6 +277,7 @@ namespace TokenForge.Client.UI
                 .Where(growth => repositorySessionIds.Contains(growth.SessionId))
                 .ToList();
             RepositoryCompanionProfileService.ApplyApprovedGrowth(saveData, pendingSession, repositorySessions, repositoryGrowth);
+            ApplyRepositoryAnalysisCheckpoint(saveData, selectedRepositoryHash, pendingSession.GitChangeSummary);
             saveData.DailyProgress.ExpGainedToday += growthResult.ExpGained;
             saveData.DailyProgress.SessionsConfirmedToday += 1;
 
@@ -345,6 +362,32 @@ namespace TokenForge.Client.UI
             return saveResult.IsSuccess
                 ? profileResult
                 : Result<RepositoryCompanionProfile>.Failure(saveResult.ErrorCode, saveResult.ErrorMessage);
+        }
+
+        private static ConnectedProject FindConnectedProject(SaveData saveData, string repositoryHash)
+        {
+            return (saveData?.ConnectedProjects ?? new System.Collections.Generic.List<ConnectedProject>())
+                .FirstOrDefault(project => project != null &&
+                                           !project.IsArchived &&
+                                           (string.Equals(project.Id, repositoryHash, StringComparison.Ordinal) ||
+                                            string.Equals(project.PathHash, repositoryHash, StringComparison.Ordinal) ||
+                                            string.Equals(project.ProjectPathHash, repositoryHash, StringComparison.Ordinal)));
+        }
+
+        private static void ApplyRepositoryAnalysisCheckpoint(SaveData saveData, string repositoryHash, GitChangeSummary summary)
+        {
+            var connection = FindConnectedProject(saveData, repositoryHash);
+            if (connection == null || summary == null)
+            {
+                return;
+            }
+
+            connection.LastAnalyzedAt = DateTimeOffset.UtcNow;
+            connection.LastAnalyzedCommit = summary.LastAnalyzedCommit ?? string.Empty;
+            connection.FirstCommitAt = summary.FirstCommitAtUtc ?? string.Empty;
+            connection.TotalCommitCount = Math.Max(0, summary.TotalCommitsAnalyzed);
+            connection.AnalyzedCommitRange = (summary.AnalyzedStartCommit ?? string.Empty) + ".." + (summary.AnalyzedEndCommit ?? string.Empty);
+            connection.LastAnalysisMode = summary.AnalysisMode ?? string.Empty;
         }
 
         private async Task<Result> SelectLocalOnlyApprovedRepositoryPathInternalAsync(string repositoryRootPath, CancellationToken cancellationToken)

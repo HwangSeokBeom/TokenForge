@@ -15,9 +15,16 @@ namespace TokenForge.Client.UI
 
         public GitRepositoryAnalysisInput ToInput(string repositoryRootPath)
         {
+            return ToInput(repositoryRootPath, GitAnalysisMode.Auto, string.Empty);
+        }
+
+        public GitRepositoryAnalysisInput ToInput(string repositoryRootPath, GitAnalysisMode analysisMode, string lastAnalyzedCommit)
+        {
             return new GitRepositoryAnalysisInput
             {
                 RepositoryRootPath = repositoryRootPath ?? string.Empty,
+                AnalysisMode = analysisMode,
+                LastAnalyzedCommit = lastAnalyzedCommit ?? string.Empty,
                 AnalysisWindowDays = AnalysisWindowDays,
                 IncludeUncommittedChanges = IncludeUncommittedChanges,
                 IncludeRecentCommits = IncludeRecentCommits,
@@ -38,6 +45,12 @@ namespace TokenForge.Client.UI
         public string SessionAlias { get; set; } = string.Empty;
         public string AnalysisTimeBucket { get; set; } = string.Empty;
         public int AnalysisWindowDays { get; set; }
+        public string AnalysisMode { get; set; } = string.Empty;
+        public string FirstCommitAtUtc { get; set; } = string.Empty;
+        public int TotalCommitsAnalyzed { get; set; }
+        public int IncrementalCommitCount { get; set; }
+        public string LastAnalyzedCommit { get; set; } = string.Empty;
+        public string AnalysisRangeSummary { get; set; } = string.Empty;
         public CountBucket ChangedFilesBucket { get; set; } = CountBucket.Unknown;
         public LineChangeBucket AddedLinesBucket { get; set; } = LineChangeBucket.Unknown;
         public LineChangeBucket DeletedLinesBucket { get; set; } = LineChangeBucket.Unknown;
@@ -59,6 +72,12 @@ namespace TokenForge.Client.UI
                 SessionAlias = string.IsNullOrWhiteSpace(summary.SafeSessionAlias) ? "Git aggregate session" : summary.SafeSessionAlias,
                 AnalysisTimeBucket = summary.AnalysisTimeBucket,
                 AnalysisWindowDays = summary.AnalysisWindowDays,
+                AnalysisMode = summary.AnalysisMode,
+                FirstCommitAtUtc = summary.FirstCommitAtUtc,
+                TotalCommitsAnalyzed = summary.TotalCommitsAnalyzed,
+                IncrementalCommitCount = summary.IncrementalCommitCount,
+                LastAnalyzedCommit = summary.LastAnalyzedCommit,
+                AnalysisRangeSummary = summary.AnalysisRangeSummary,
                 ChangedFilesBucket = summary.ChangedFileCountBucket,
                 AddedLinesBucket = summary.AddedLineBucket,
                 DeletedLinesBucket = summary.DeletedLineBucket,

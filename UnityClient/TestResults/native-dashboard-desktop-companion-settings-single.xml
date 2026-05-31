@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="1" result="Passed" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-05-30 17:49:53Z" end-time="2026-05-30 17:49:54Z" duration="0.8183566">
+  <test-suite type="TestSuite" id="1527" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="447" result="Passed" start-time="2026-05-30 17:49:53Z" end-time="2026-05-30 17:49:54Z" duration="0.818357" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties />
+    <test-suite type="Assembly" id="2049" name="TokenForge.Client.Tests.dll" fullname="/Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/ScriptAssemblies/TokenForge.Client.Tests.dll" runstate="Runnable" testcasecount="447" result="Passed" start-time="2026-05-30 17:49:53Z" end-time="2026-05-30 17:49:54Z" duration="0.795479" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="10926" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+      </properties>
+      <test-suite type="TestSuite" id="2050" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="447" result="Passed" start-time="2026-05-30 17:49:53Z" end-time="2026-05-30 17:49:54Z" duration="0.789030" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="2051" name="Client" fullname="TokenForge.Client" runstate="Runnable" testcasecount="447" result="Passed" start-time="2026-05-30 17:49:53Z" end-time="2026-05-30 17:49:54Z" duration="0.783106" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="2052" name="Tests" fullname="TokenForge.Client.Tests" runstate="Runnable" testcasecount="447" result="Passed" start-time="2026-05-30 17:49:53Z" end-time="2026-05-30 17:49:54Z" duration="0.776294" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1674" name="NativeDashboardBridgeTests" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" testcasecount="35" result="Passed" start-time="2026-05-30 17:49:53Z" end-time="2026-05-30 17:49:54Z" duration="0.750551" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1680" name="NativeDesktopCompanionSettingsPersistAndRestore" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDesktopCompanionSettingsPersistAndRestore" methodname="NativeDesktopCompanionSettingsPersistAndRestore" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1474775077" result="Passed" start-time="2026-05-30 17:49:53Z" end-time="2026-05-30 17:49:54Z" duration="0.722754" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                </properties>
+                <output><![CDATA[PHASE desktop companion settings enable start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [DashboardEmptyState] reason=no_connected_repository
+INFO [RepositoryProjection] connectedCount=0 activeRepositoryId= visibleCompanionCount=0 previewOnlyCount=0
+INFO [RepositoryProjection][CONSISTENT] dashboard=False repositoriesTab=0 sidebar=0
+PHASE desktop companion settings enable complete
+PHASE desktop companion settings update start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [DashboardEmptyState] reason=no_connected_repository
+INFO [RepositoryProjection] connectedCount=0 activeRepositoryId= visibleCompanionCount=0 previewOnlyCount=0
+INFO [RepositoryProjection][CONSISTENT] dashboard=False repositoriesTab=0 sidebar=0
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [DashboardEmptyState] reason=no_connected_repository
+INFO [RepositoryProjection] connectedCount=0 activeRepositoryId= visibleCompanionCount=0 previewOnlyCount=0
+INFO [RepositoryProjection][CONSISTENT] dashboard=False repositoriesTab=0 sidebar=0
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [DashboardEmptyState] reason=no_connected_repository
+INFO [RepositoryProjection] connectedCount=0 activeRepositoryId= visibleCompanionCount=0 previewOnlyCount=0
+INFO [RepositoryProjection][CONSISTENT] dashboard=False repositoriesTab=0 sidebar=0
+PHASE desktop companion settings update complete
+PHASE desktop companion settings reload start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE desktop companion settings reload complete
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE desktop companion settings assertions start
+PHASE desktop companion settings assertions complete
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

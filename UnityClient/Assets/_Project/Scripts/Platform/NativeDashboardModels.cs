@@ -46,6 +46,14 @@ namespace TokenForge.Client.Platform
         DiscardReview,
         ViewReviewDetails,
         ReviewActivity,
+        TokenShop,
+        PurchaseTokenShopItem,
+        SelectShopRepositoryTarget,
+        SelectShopAgentTarget,
+        SelectShopCategory,
+        EquipTokenShopItem,
+        PreviewTokenShopItem,
+        OpenAgentConnect,
         ToggleCompanionVisible,
         ShowCompanion,
         HideCompanion,
@@ -133,6 +141,19 @@ namespace TokenForge.Client.Platform
         public int debugStat;
         public int designStat;
         public int syncStat;
+        public int weeklyCodeStat;
+        public int weeklyFocusStat;
+        public int weeklyDebugStat;
+        public int weeklyDesignStat;
+        public int weeklySyncStat;
+        public string dominantGrowthPath = "Unknown";
+        public string secondaryGrowthTrait = "Unknown";
+        public string currentEvolutionBias = "Unknown";
+        public string nextEvolutionPreview = "Repository Hatchling";
+        public string eggInfluenceText = "Connect a repository to start shaping a companion.";
+        public string tokenCurrencyName = "Forge Coins";
+        public int tokenCurrencyBalance;
+        public bool tokenUsageTrackingEnabled = true;
         public bool companionVisible = true;
         public bool wanderEnabled = true;
         public bool desiredVisible = true;
@@ -156,6 +177,7 @@ namespace TokenForge.Client.Platform
         public DesktopCompanionFarmState companionFarm = DesktopCompanionFarmState.CreateDefault();
         public NativeAgentProviderState[] agentProviders = new NativeAgentProviderState[0];
         public NativeProviderUsagePercentage[] providerUsagePercentages = new NativeProviderUsagePercentage[0];
+        public NativeTokenShopState tokenShop = NativeTokenShopState.CreateDefault();
         public NativeActivityState activity = NativeActivityState.CreateDefault();
         public NativeReviewState review = NativeReviewState.CreateDefault();
         public string statusText = "Repo: None · AI Agents: 0 connected";
@@ -336,6 +358,8 @@ namespace TokenForge.Client.Platform
         public int stageIndex;
         public int level = 1;
         public int currentXP;
+        public int lifetimeGrowthXP;
+        public int weeklyGrowthXP;
         public int requiredXP = 250;
         public bool canLevelUp;
         public string xpStatusText = "0 XP · 250 XP required";
@@ -343,6 +367,13 @@ namespace TokenForge.Client.Platform
         public int recentGitXP;
         public int recentAiXP;
         public string estimatedTokenActivity = "Unknown";
+        public string dominantStat = "Unknown";
+        public string secondaryStat = "Unknown";
+        public string evolutionPath = "Unknown";
+        public string nextEvolutionPreview = "Repository Hatchling";
+        public string tokenCurrencyName = "Forge Coins";
+        public int tokenCurrencyBalance;
+        public string[] purchasedTokenShopItemIds = new string[0];
         public string motionMood = "idle";
         public string motionReason = "No recent aggregate activity.";
         public bool canViewGrowth = true;
@@ -417,6 +448,74 @@ namespace TokenForge.Client.Platform
         public string label = string.Empty;
         public int percentage;
         public bool hasSavedApprovedActivity;
+    }
+
+    [Serializable]
+    public sealed class NativeTokenShopState
+    {
+        public string currencyName = "Forge Coins";
+        public int balance;
+        public bool hasActiveRepository;
+        public string statusText = "Connect a repository to use the Token Shop.";
+        public string lastTransactionStatus = string.Empty;
+        public string targetType = "repositoryCompanion";
+        public string selectedAgentId = string.Empty;
+        public string selectedCategory = "featured";
+        public string[] categoryIds = new[] { "featured", "skins", "accessories", "effects", "motions", "themes", "owned" };
+        public NativeTokenShopAgentState[] agents = new NativeTokenShopAgentState[0];
+        public string ownedItemIds = string.Empty;
+        public string equippedItemIds = string.Empty;
+        public NativeTokenShopItemState[] items = new NativeTokenShopItemState[0];
+
+        public static NativeTokenShopState CreateDefault()
+        {
+            return new NativeTokenShopState();
+        }
+    }
+
+    [Serializable]
+    public sealed class NativeTokenShopItemState
+    {
+        public string itemId = string.Empty;
+        public string name = string.Empty;
+        public string description = string.Empty;
+        public string itemType = string.Empty;
+        public string category = "featured";
+        public string targetCompatibility = "Repository Companion";
+        public string rarity = "Common";
+        public string previewIcon = "TF";
+        public string previewType = "generic";
+        public string zodiacType = string.Empty;
+        public int price;
+        public bool owned;
+        public bool equipped;
+        public bool locked;
+        public bool available;
+        public bool canEquip;
+        public string stateLabel = "Buy";
+        public string buttonTitle = "Buy";
+        public string disabledReason = string.Empty;
+        public string insufficientCoinReason = string.Empty;
+        public string lockedAgentReason = string.Empty;
+        public string previewEffect = "Preview cosmetic";
+    }
+
+    [Serializable]
+    public sealed class NativeTokenShopAgentState
+    {
+        public string id = string.Empty;
+        public string displayName = string.Empty;
+        public bool connected;
+        public bool selected;
+        public string statusText = "Not connected";
+        public string lockedReason = "Connect to unlock agent cosmetics.";
+        public string actionTitle = "Connect agent";
+        public int tokenUsageTotal;
+        public int tokenUsageRecent;
+        public int spendableCoins;
+        public string currencyName = "Agent Coins";
+        public string zodiacType = string.Empty;
+        public string zodiacLabel = string.Empty;
     }
 
     [Serializable]

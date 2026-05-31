@@ -340,6 +340,12 @@ namespace TokenForge.Client.Tests
                 {
                     case "rev-parse --is-inside-work-tree":
                         return Task.FromResult(GitCommandResult.Success("true\n"));
+                    case "rev-parse HEAD":
+                        return Task.FromResult(GitCommandResult.Success("HEADSHA\n"));
+                    case "log --all --reverse --format=%cI -n 1":
+                        return Task.FromResult(GitCommandResult.Success("2026-01-02T03:04:05Z\n"));
+                    case "rev-list --all --count":
+                        return Task.FromResult(GitCommandResult.Success("42\n"));
                     case "status --porcelain":
                         return Task.FromResult(GitCommandResult.Success(" M src/SafeAggregate.cs\n"));
                     case "diff --numstat":
@@ -348,6 +354,7 @@ namespace TokenForge.Client.Tests
                         return Task.FromResult(GitCommandResult.Success(string.Empty));
                     case "log --since=7.days.ago --numstat --format=--TOKENFORGE-COMMIT-- -n 200":
                     case "log --since=7.days.ago --numstat --format=--TOKENFORGE-COMMIT-- -n 50":
+                    case "log --all --numstat --format=--TOKENFORGE-COMMIT--":
                         return Task.FromResult(GitCommandResult.Success("--TOKENFORGE-COMMIT--\n1\t0\tREADME.md\n"));
                     default:
                         return Task.FromResult(GitCommandResult.Success(string.Empty));

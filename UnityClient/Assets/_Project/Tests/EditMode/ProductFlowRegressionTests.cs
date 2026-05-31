@@ -95,8 +95,10 @@ namespace TokenForge.Client.Tests
             var result = RunAsync(() => analyzer.AnalyzeAsync(new GitRepositoryAnalysisInput { RepositoryRootPath = repositoryPath }));
 
             Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
-            Assert.That(runner.Arguments, Has.Some.Contains("log --since="));
-            Assert.That(runner.Arguments.First(item => item.StartsWith("log ", StringComparison.Ordinal)), Does.Contain("--format=format:--TOKENFORGE-COMMIT--"));
+            Assert.That(runner.Arguments, Has.Some.Contains("log --all --numstat"));
+            var numstatLog = runner.Arguments.First(item => item.Contains("--numstat"));
+            Assert.That(numstatLog, Does.Contain("--format=--TOKENFORGE-COMMIT--"));
+            Assert.That(numstatLog, Does.Not.Contain("--format=format:"));
         }
 
         [Test]
@@ -322,6 +324,42 @@ namespace TokenForge.Client.Tests
             Assert.IsFalse(source.Selected);
         }
 
+        [Test]
+        public void AddRepositoryPersistsAcrossDashboardNavigationAndRelaunchRestore()
+        {
+            var saveRepository = new SaveDataRepository(Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName()));
+            var approvedRepository = new ApprovedLocationSettingsRepository(Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName()));
+            var fixture = CreateViewModelFixture(new SafeGitRunner(), string.Empty, saveRepository, approvedRepository);
+
+            var add = RunAsync(() => fixture.ViewModel.SelectLocalGitRepositoryForOnboardingAsync());
+            RunAsync(() => fixture.ViewModel.RefreshDashboardAsync());
+            var afterHomeNavigation = RunAsync(() => saveRepository.LoadAsync());
+            var activeRepository = afterHomeNavigation.SelectedRepositoryHash;
+            var reloaded = CreateViewModelFixture(new SafeGitRunner(), string.Empty, saveRepository, approvedRepository);
+            RunAsync(() => reloaded.ViewModel.RefreshDashboardAsync());
+            var afterRelaunch = RunAsync(() => saveRepository.LoadAsync());
+
+            Assert.IsTrue(add.IsSuccess, add.ErrorMessage);
+            Assert.IsNotEmpty(activeRepository);
+            Assert.AreEqual(activeRepository, afterRelaunch.SelectedRepositoryHash);
+            Assert.AreEqual(1, afterRelaunch.ConnectedProjects.Count(project => !project.IsArchived));
+            Assert.IsTrue(afterRelaunch.ConnectedProjects.Single(project => !project.IsArchived).IsActive);
+            Assert.AreEqual(1, reloaded.ViewModel.RepositoryCompanions.Count);
+            Assert.AreEqual(activeRepository, reloaded.ViewModel.CharacterDashboard.CurrentRepositoryHash);
+        }
+
+        [Test]
+        public void NativeDashboardSourceRepairsCollapsedFramesAndSuppressesNoRepositoryCompanion()
+        {
+            var nativeSource = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("TokenForgeNormalizeDashboardFrame", nativeSource);
+            StringAssert.Contains("[DashboardLifecycle][FRAME_RESTORE]", nativeSource);
+            StringAssert.Contains("splitAlignment=height", nativeSource);
+            StringAssert.Contains("placeholderCompanion=false", nativeSource);
+            StringAssert.Contains("No repository connected", nativeSource);
+        }
+
         private static ViewModelFixture CreateViewModelFixture(IGitCommandRunner gitRunner, string agentLogPath = "")
         {
             return CreateViewModelFixture(
@@ -479,6 +517,21 @@ namespace TokenForge.Client.Tests
         {
             public Task<GitCommandResult> RunAsync(string workingDirectory, string arguments, CancellationToken cancellationToken)
             {
+                if (arguments == "rev-parse HEAD")
+                {
+                    return Task.FromResult(GitCommandResult.Success("HEADSHA\n"));
+                }
+
+                if (arguments == "log --all --reverse --format=%cI -n 1")
+                {
+                    return Task.FromResult(GitCommandResult.Success("2026-01-02T03:04:05Z\n"));
+                }
+
+                if (arguments == "rev-list --all --count")
+                {
+                    return Task.FromResult(GitCommandResult.Success("42\n"));
+                }
+
                 if (arguments.Contains("rev-parse"))
                 {
                     return Task.FromResult(GitCommandResult.Success("true\n"));

@@ -1,0 +1,323 @@
+Unity Editor version:    2022.3.0f1 (fb119bb0b476)
+Branch:                  2022.3/release
+Build type:              Release
+Batch mode:              YES
+macOS version:           Version 26.4.1 (Build 25E253)
+Darwin version:          25.4.0
+Architecture:            arm64
+Running under Rosetta:   NO
+Available memory:        32768 MB
+[Licensing::Module] Trying to connect to existing licensing client channel...
+[Licensing::IpcConnector] Successfully connected to the License Client on channel: "LicenseClient-hwangseokbeom"
+[Licensing::Client] Error: Code 10 while verifying Licensing Client signature (process Id: 51296, path: "/Applications/Unity Hub.app/Contents/Frameworks/UnityLicensingClient_V1.app/Contents/MacOS/Unity.Licensing.Client")
+[Licensing::Module] Error: LicensingClient has failed validation; ignoring
+[Licensing::Client] Handshaking with LicensingClient:
+  Version:                 1.17.4+4293ba1
+  Session Id:              b3aac3632e244c77bc77ff9637f38eb6
+  Correlation Id:          5a39efb0d17f7d3d10545a35ceb55329
+  External correlation Id: 6638950143246759540
+  Machine Id:              HEnWbdlB7L6ADbvpGVb6q27L3zk=
+[Licensing::Module] Successfully connected to LicensingClient on channel: "LicenseClient-hwangseokbeom" (connect: 0.00s, validation: 0.01s, handshake: 0.18s)
+[Licensing::IpcConnector] Successfully connected to the License Notification on channel: "LicenseClient-hwangseokbeom-notifications"
+[Licensing::Module] Error: Access token is unavailable; failed to update
+[Licensing::Client] Successfully updated license
+[Licensing::Client] Successfully resolved entitlements
+[Licensing::Module] Serial number assigned to: "14569752319254-UnityPersXXXX"
+Pro License: NO
+Launching external process: /Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/Resources/PackageManager/Server/UnityPackageManager
+
+COMMAND LINE ARGUMENTS:
+/Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/MacOS/Unity
+-batchmode
+-nographics
+-projectPath
+/Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient
+-logFile
+/Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/TestResults/unity-license-preflight.log
+Successfully changed project path to: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient
+/Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient
+[UnityMemory] Configuration Parameters - Can be set up in boot.config
+    "memorysetup-bucket-allocator-granularity=16"
+    "memorysetup-bucket-allocator-bucket-count=8"
+    "memorysetup-bucket-allocator-block-size=33554432"
+    "memorysetup-bucket-allocator-block-count=8"
+    "memorysetup-main-allocator-block-size=16777216"
+    "memorysetup-thread-allocator-block-size=16777216"
+    "memorysetup-gfx-main-allocator-block-size=16777216"
+    "memorysetup-gfx-thread-allocator-block-size=16777216"
+    "memorysetup-cache-allocator-block-size=4194304"
+    "memorysetup-typetree-allocator-block-size=2097152"
+    "memorysetup-profiler-bucket-allocator-granularity=16"
+    "memorysetup-profiler-bucket-allocator-bucket-count=8"
+    "memorysetup-profiler-bucket-allocator-block-size=33554432"
+    "memorysetup-profiler-bucket-allocator-block-count=8"
+    "memorysetup-profiler-allocator-block-size=16777216"
+    "memorysetup-profiler-editor-allocator-block-size=1048576"
+    "memorysetup-temp-allocator-size-main=16777216"
+    "memorysetup-job-temp-allocator-block-size=2097152"
+    "memorysetup-job-temp-allocator-block-size-background=1048576"
+    "memorysetup-job-temp-allocator-reduction-small-platforms=262144"
+    "memorysetup-allocator-temp-initial-block-size-main=262144"
+    "memorysetup-allocator-temp-initial-block-size-worker=262144"
+    "memorysetup-temp-allocator-size-background-worker=32768"
+    "memorysetup-temp-allocator-size-job-worker=262144"
+    "memorysetup-temp-allocator-size-preload-manager=33554432"
+    "memorysetup-temp-allocator-size-nav-mesh-worker=65536"
+    "memorysetup-temp-allocator-size-audio-worker=65536"
+    "memorysetup-temp-allocator-size-cloud-worker=32768"
+    "memorysetup-temp-allocator-size-gi-baking-worker=262144"
+    "memorysetup-temp-allocator-size-gfx=262144"
+Player connection [8423528640] Host "[IP] 192.168.0.36 [Port] 55496 [Flags] 2 [Guid] 2019545165 [EditorId] 2019545165 [Version] 1048832 [Id] OSXEditor(0,MacBook-Air.local) [Debug] 1 [PackageName] OSXEditor [ProjectName] Editor" joined multi-casting on [225.0.0.222:54997]...
+
+Player connection [8423528640] Host "[IP] 192.168.0.36 [Port] 55496 [Flags] 2 [Guid] 2019545165 [EditorId] 2019545165 [Version] 1048832 [Id] OSXEditor(0,MacBook-Air.local) [Debug] 1 [PackageName] OSXEditor [ProjectName] Editor" joined alternative multi-casting on [225.0.0.222:34997]...
+
+[Package Manager] UpmClient::Connect -- Connected to IPC stream "Upm-51537" after 0.9 seconds.
+[Licensing::Client] Successfully resolved entitlements
+[Package Manager] Restoring resolved packages state from cache
+[Licensing::Client] Successfully resolved entitlement details
+[Package Manager] Registered 8 packages:
+  Packages from [https://packages.unity.com]:
+    com.unity.nuget.newtonsoft-json@3.2.2 (location: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/PackageCache/com.unity.nuget.newtonsoft-json@3.2.2)
+    com.unity.test-framework@1.1.33 (location: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/PackageCache/com.unity.test-framework@1.1.33)
+    com.unity.ext.nunit@1.0.6 (location: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/PackageCache/com.unity.ext.nunit@1.0.6)
+  Built-in packages:
+    com.unity.2d.sprite@1.0.0 (location: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/PackageCache/com.unity.2d.sprite@1.0.0)
+    com.unity.ugui@1.0.0 (location: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/PackageCache/com.unity.ugui@1.0.0)
+    com.unity.modules.ui@1.0.0 (location: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/PackageCache/com.unity.modules.ui@1.0.0)
+    com.unity.modules.imgui@1.0.0 (location: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/PackageCache/com.unity.modules.imgui@1.0.0)
+    com.unity.modules.jsonserialize@1.0.0 (location: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/PackageCache/com.unity.modules.jsonserialize@1.0.0)
+[Subsystems] No new subsystems found in resolved package list.
+Package Manager log level set to [2]
+[Package Manager] Done registering packages in 0.04 seconds
+Refreshing native plugins compatible for Editor in 4.48 ms, found 0 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Initialize engine version: 2022.3.0f1 (fb119bb0b476)
+[Subsystems] Discovering subsystems at path /Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/Resources/UnitySubsystems
+[Subsystems] Discovering subsystems at path /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Assets
+Forcing GfxDevice: Null
+GfxDevice: creating device client; threaded=0; jobified=0
+NullGfxDevice:
+    Version:  NULL 1.0 [1.0]
+    Renderer: Null Device
+    Vendor:   Unity Technologies
+[Licensing::Client] Successfully resolved entitlements
+Initialize mono
+Mono path[0] = '/Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/Managed'
+Mono path[1] = '/Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/MonoBleedingEdge/lib/mono/unityjit-macos'
+Mono config path = '/Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/MonoBleedingEdge/etc'
+Using monoOptions --debugger-agent=transport=dt_socket,embedding=1,server=y,suspend=n,address=127.0.0.1:56537
+Using cacheserver namespaces - metadata:defaultmetadata, artifacts:defaultartifacts
+Using cacheserver namespaces - metadata:defaultmetadata, artifacts:defaultartifacts
+ImportWorker Server TCP listen port: 0
+Begin MonoManager ReloadAssembly
+Registering precompiled unity dll's ...
+Register platform support module: /Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/PlaybackEngines/MacStandaloneSupport/UnityEditor.OSXStandalone.Extensions.dll
+Registered in 0.002480 seconds.
+- Loaded All Assemblies, in  0.479 seconds
+Native extension for OSXStandalone target not found
+Mono: successfully reloaded assembly
+- Finished resetting the current domain, in  0.320 seconds
+Domain Reload Profiling: 799ms
+	BeginReloadAssembly (144ms)
+		ExecutionOrderSort (0ms)
+		DisableScriptedObjects (0ms)
+		BackupInstance (0ms)
+		ReleaseScriptingObjects (0ms)
+		CreateAndSetChildDomain (1ms)
+	RebuildCommonClasses (62ms)
+	RebuildNativeTypeToScriptingClass (14ms)
+	initialDomainReloadingComplete (73ms)
+	LoadAllAssembliesAndSetupDomain (186ms)
+		LoadAssemblies (144ms)
+		RebuildTransferFunctionScriptingTraits (0ms)
+		AnalyzeDomain (181ms)
+			TypeCache.Refresh (180ms)
+				TypeCache.ScanAssembly (162ms)
+			ScanForSourceGeneratedMonoScriptInfo (1ms)
+			ResolveRequiredComponents (1ms)
+	FinalizeReload (320ms)
+		ReleaseScriptCaches (0ms)
+		RebuildScriptCaches (0ms)
+		SetupLoadedEditorAssemblies (244ms)
+			LogAssemblyErrors (0ms)
+			InitializePlatformSupportModulesInManaged (9ms)
+			SetLoadedEditorAssemblies (9ms)
+			RefreshPlugins (0ms)
+			BeforeProcessingInitializeOnLoad (3ms)
+			ProcessInitializeOnLoadAttributes (169ms)
+			ProcessInitializeOnLoadMethodAttributes (54ms)
+			AfterProcessingInitializeOnLoad (0ms)
+			EditorAssembliesLoaded (0ms)
+		ExecutionOrderSort2 (0ms)
+		AwakeInstancesAfterBackupRestoration (0ms)
+[Licensing::Client] Successfully resolved entitlements
+Application.AssetDatabase Initial Refresh Start
+[ScriptCompilation] Requested script compilation because: Assetdatabase observed changes in script compilation related files
+[40m[32minfo[39m[22m[49m: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://unix:/tmp/ilpp.sock-dd0fd45ef2116bd62e4f241409d44cbb
+[40m[32minfo[39m[22m[49m: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+[40m[32minfo[39m[22m[49m: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Production
+[40m[32minfo[39m[22m[49m: Microsoft.Hosting.Lifetime[0]
+      Content root path: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/
+[40m[32minfo[39m[22m[49m: Microsoft.AspNetCore.Hosting.Diagnostics[1]
+      Request starting HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/Ping application/grpc -
+[40m[32minfo[39m[22m[49m: Microsoft.AspNetCore.Routing.EndpointMiddleware[0]
+      Executing endpoint 'gRPC - /UnityILPP.PostProcessing/Ping'
+[40m[32minfo[39m[22m[49m: Microsoft.AspNetCore.Routing.EndpointMiddleware[1]
+      Executed endpoint 'gRPC - /UnityILPP.PostProcessing/Ping'
+[40m[32minfo[39m[22m[49m: Microsoft.AspNetCore.Hosting.Diagnostics[2]
+      Request finished HTTP/2 POST http://ilpp/UnityILPP.PostProcessing/Ping application/grpc - - 200 - application/grpc 56.4785ms
+Starting: /Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/bee_backend --dont-print-to-structured-log --ipc --defer-dag-verification --dagfile="Library/Bee/200b0aE.dag" --continue-on-failure --profile="Library/Bee/backend1.traceevents" ScriptAssemblies
+WorkingDir: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient
+DisplayProgressbar: Compiling Scripts
+ExitCode: 4 Duration: 0s65ms
+Rebuilding DAG because FileSignature timestamp changed: Library/Bee/200b0aE-inputdata.json
+*** Tundra requires additional run (0.04 seconds), 0 items updated, 124 evaluated
+Starting: /Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/Tools/netcorerun/netcorerun "/Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/Tools/BuildPipeline/ScriptCompilationBuildProgram.exe" "Library/Bee/200b0aE.dag.json" "Library/Bee/200b0aE-inputdata.json" "Library/Bee/buildprogram0.traceevents"
+WorkingDir: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient
+ExitCode: 0 Duration: 0s652ms
+Starting: /Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/bee_backend --dont-print-to-structured-log --ipc --defer-dag-verification --dagfile="Library/Bee/200b0aE.dag" --continue-on-failure --dagfilejson="Library/Bee/200b0aE.dag.json" --profile="Library/Bee/backend2.traceevents" ScriptAssemblies
+WorkingDir: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient
+ExitCode: 0 Duration: 5s60ms
+Finished compiling graph: 166 nodes, 1142 flattened edges (1046 ToBuild, 18 ToUse), maximum node priority 87
+[151/163    3s] Csc Library/Bee/artifacts/200b0aE.dag/TokenForge.Client.dll (+2 others)
+Assets/_Project/Scripts/Platform/RepositoryPicker.cs(240,57): warning CS1998: This async method lacks 'await' operators and will run synchronously. Consider using the 'await' operator to await non-blocking API calls, or 'await Task.Run(...)' to do CPU-bound work on a background thread.
+[152/163    0s] CopyFiles Library/ScriptAssemblies/TokenForge.Client.pdb
+[153/163    0s] CopyFiles Library/ScriptAssemblies/TokenForge.Client.dll
+[154/163    0s] Csc Library/Bee/artifacts/200b0aE.dag/TokenForge.Client.PlayModeTests.dll (+2 others)
+[155/163    0s] CopyFiles Library/ScriptAssemblies/TokenForge.Client.PlayModeTests.pdb
+[156/163    0s] CopyFiles Library/ScriptAssemblies/TokenForge.Client.PlayModeTests.dll
+[157/163    0s] Csc Library/Bee/artifacts/200b0aE.dag/TokenForge.Client.Editor.dll (+2 others)
+[158/163    0s] CopyFiles Library/ScriptAssemblies/TokenForge.Client.Editor.dll
+[159/163    0s] CopyFiles Library/ScriptAssemblies/TokenForge.Client.Editor.pdb
+[160/163    0s] Csc Library/Bee/artifacts/200b0aE.dag/TokenForge.Client.Tests.dll (+2 others)
+[161/163    0s] CopyFiles Library/ScriptAssemblies/TokenForge.Client.Tests.pdb
+[162/163    0s] CopyFiles Library/ScriptAssemblies/TokenForge.Client.Tests.dll
+*** Tundra build success (5.04 seconds), 12 items updated, 163 evaluated
+Assets/_Project/Scripts/Platform/RepositoryPicker.cs(240,57): warning CS1998: This async method lacks 'await' operators and will run synchronously. Consider using the 'await' operator to await non-blocking API calls, or 'await Task.Run(...)' to do CPU-bound work on a background thread.
+Total cache size 4163128
+Total cache size after purge 4163128
+AssetDatabase: script compilation time: 6.526054s
+Begin MonoManager ReloadAssembly
+Symbol file LoadedFromMemory is not a mono symbol file
+- Loaded All Assemblies, in  0.356 seconds
+Refreshing native plugins compatible for Editor in 0.76 ms, found 0 plugins.
+Refreshing native plugins compatible for Editor in 0.28 ms, found 0 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Start importing Assets/Plugins/macOS/libDesktopCompanionOverlay.dylib using Guid(81f3c93da0ad48d58707402ec230ecb9) Importer(-1,00000000000000000000000000000000)  -> (artifact id: '35040d506c4100661630eb20f85f9453') in 0.012490 seconds
+Start importing Assets/Plugins/macOS/DesktopCompanionOverlay.mm using Guid(f8f0d5e17d0e43028a2b9dd0f9c8d8b3) Importer(-1,00000000000000000000000000000000)  -> (artifact id: '677905cff6c47903884d312a6555b33d') in 0.000799 seconds
+Start importing Assets/_Project/Scripts/AppBootstrapper.cs using Guid(40fd08340a6bf45d4ab79245091e047c) Importer(-1,00000000000000000000000000000000)  -> (artifact id: '5f0ff4739a9a874a0c9e3c934dd12ea9') in 0.000976 seconds
+Start importing Assets/_Project/Tests/EditMode/NativeDashboardBridgeTests.cs using Guid(b1fad3f12fc140ecb84885c5616612c3) Importer(-1,00000000000000000000000000000000)  -> (artifact id: '9c4e4a5201c143e4fe03c23a1ee45820') in 0.000735 seconds
+Start importing Assets/_Project/Scripts/Platform/MacNativeDashboardService.cs using Guid(a356dbdfaf8c4960b85081f877e85926) Importer(-1,00000000000000000000000000000000)  -> (artifact id: 'c9158c2c26318afff6594e0ab1e027d4') in 0.000655 seconds
+Start importing Assets/_Project/Scripts/Domain/CompanionModels.cs using Guid(84e1db7709ec4b27b817fe20aa6d5709) Importer(-1,00000000000000000000000000000000)  -> (artifact id: 'bd3bac24d45b8690d6dd75d0b669088a') in 0.000863 seconds
+Start importing Assets/_Project/Tests/EditMode/RepositoryCompanionProfileTests.cs using Guid(08961d66a2e8454da7d9355cbdb48cec) Importer(-1,00000000000000000000000000000000)  -> (artifact id: 'f4aa76e2b40ab0b74c6a3e9eb3c16f1e') in 0.000665 seconds
+Start importing Assets/_Project/Scripts/Platform/MacApplicationLifecycleService.cs using Guid(2c6fd9cfb3c846b3b4e6780b3f4f4f32) Importer(-1,00000000000000000000000000000000)  -> (artifact id: '9fc5fe020bf631b565ec93e44dcf631d') in 0.000634 seconds
+Start importing Assets/_Project/Scripts/Domain/RepositoryCompanionProfileService.cs using Guid(aed12ffeb221450baa475def82803cf9) Importer(-1,00000000000000000000000000000000)  -> (artifact id: '01078998ef947b32aa1d82dc2d5f7af7') in 0.000597 seconds
+Start importing Assets/_Project/Scripts/Platform/NativeDashboardModels.cs using Guid(7f3a5b0a6c3a41a08d9d358a08c11625) Importer(-1,00000000000000000000000000000000)  -> (artifact id: '5c2c41bf4b11e331ab36e2834273121d') in 0.000593 seconds
+Refreshing native plugins compatible for Editor in 0.39 ms, found 0 plugins.
+Native extension for OSXStandalone target not found
+Mono: successfully reloaded assembly
+- Finished resetting the current domain, in  0.205 seconds
+Domain Reload Profiling: 561ms
+	BeginReloadAssembly (106ms)
+		ExecutionOrderSort (0ms)
+		DisableScriptedObjects (3ms)
+		BackupInstance (0ms)
+		ReleaseScriptingObjects (0ms)
+		CreateAndSetChildDomain (16ms)
+	RebuildCommonClasses (26ms)
+	RebuildNativeTypeToScriptingClass (9ms)
+	initialDomainReloadingComplete (17ms)
+	LoadAllAssembliesAndSetupDomain (197ms)
+		LoadAssemblies (129ms)
+		RebuildTransferFunctionScriptingTraits (0ms)
+		AnalyzeDomain (121ms)
+			TypeCache.Refresh (117ms)
+				TypeCache.ScanAssembly (112ms)
+			ScanForSourceGeneratedMonoScriptInfo (2ms)
+			ResolveRequiredComponents (1ms)
+	FinalizeReload (205ms)
+		ReleaseScriptCaches (0ms)
+		RebuildScriptCaches (0ms)
+		SetupLoadedEditorAssemblies (123ms)
+			LogAssemblyErrors (0ms)
+			InitializePlatformSupportModulesInManaged (2ms)
+			SetLoadedEditorAssemblies (2ms)
+			RefreshPlugins (0ms)
+			BeforeProcessingInitializeOnLoad (22ms)
+			ProcessInitializeOnLoadAttributes (86ms)
+			ProcessInitializeOnLoadMethodAttributes (11ms)
+			AfterProcessingInitializeOnLoad (1ms)
+			EditorAssembliesLoaded (0ms)
+		ExecutionOrderSort2 (0ms)
+		AwakeInstancesAfterBackupRestoration (3ms)
+Refreshing native plugins compatible for Editor in 0.48 ms, found 0 plugins.
+Preloading 0 native plugins for Editor in 0.00 ms.
+Asset Pipeline Refresh (id=f4f8dc114fde04d2db6a66cccce44717): Total: 7.494 seconds - Initiated by InitialRefreshV2(ForceSynchronousImport)
+	Summary:
+		Imports: total=10 (actual=10, local cache=0, cache server=0)
+		Asset DB Process Time: managed=2 ms, native=349 ms
+		Asset DB Callback time: managed=32 ms, native=6 ms
+		Scripting: domain reloads=1, domain reload time=569 ms, compile time=6526 ms, other=7 ms
+		Project Asset Count: scripts=966, non-scripts=71
+		Asset File Changes: new=0, changed=10, moved=0, deleted=0
+		Scan Filter Count: 1
+	InvokeBeforeRefreshCallbacks: 0.540ms
+	ApplyChangesToAssetFolders: 0.018ms
+	Scan: 56.949ms
+	OnSourceAssetsModified: 2.305ms
+	GetAllGuidsForCategorization: 0.070ms
+	CategorizeAssets: 13.958ms
+	ImportOutOfDateAssets: 241.367ms (-6318.259ms without children)
+		ImportManagerImport: 31.039ms (6.864ms without children)
+			ImportInProcess: 24.170ms
+			UpdateCategorizedAssets: 0.005ms
+		CompileScripts: 6526.117ms
+		ReloadNativeAssets: 0.000ms
+		UnloadImportedAssets: 1.803ms
+		ReloadImportedAssets: 0.001ms
+		EnsureUptoDateAssetsAreRegisteredWithGuidPM: 0.272ms
+		InitializingProgressBar: 0.000ms
+		PostProcessAllAssetNotificationsAddChangedAssets: 0.000ms
+		OnDemandSchedulerStart: 0.395ms
+	PostProcessAllAssets: 32.286ms
+	Hotreload: 3.910ms
+	GatherAllCurrentPrimaryArtifactRevisions: 0.000ms
+	UnloadStreamsBegin: 0.179ms
+	PersistCurrentRevisions: 0.148ms
+	UnloadStreamsEnd: 0.003ms
+	GenerateScriptTypeHashes: 1.145ms
+	Untracked: 7142.478ms
+Application.AssetDatabase Initial Refresh End
+Scanning for USB devices : 0.044ms
+Initializing Unity extensions:
+[Licensing::Client] Successfully resolved entitlements
+[MODES] ModeService[none].Initialize
+[MODES] ModeService[none].LoadModes
+[MODES] Loading mode Default (0) for mode-current-id-TokenForge
+ProgressiveSceneManager::Cancel()
+Unloading 3 Unused Serialized files (Serialized files now loaded: 0)
+Unloading 27 unused Assets / (372.3 KB). Loaded Objects now: 1294.
+Memory consumption went from 84.6 MB to 84.3 MB.
+Total: 2.947041 ms (FindLiveObjects: 0.060375 ms CreateObjectMapping: 0.019334 ms MarkObjects: 2.720750 ms  DeleteObjects: 0.145875 ms)
+
+[Project] Loading completed in 10.772 seconds
+	Project init time: 				9.783 seconds
+		Template init time: 		0.000 seconds
+		Package Manager init time: 		0.860 seconds
+		Asset Database init time: 		0.185 seconds
+		Global illumination init time: 	0.002 seconds
+		Assemblies load time: 			0.804 seconds
+		Unity extensions init time: 	0.001 seconds
+		Asset Database refresh time: 	0.000 seconds
+	Scene opening time: 			0.078 seconds
+##utp:{"type":"ProjectInfo","version":2,"phase":"Immediate","time":1780243441859,"processId":51537,"projectLoad":10.771826583000001,"projectInit":9.782822167,"templateInit":0.0,"packageManagerInit":0.860192291,"assetDatabaseInit":0.185285292,"globalIlluminationInit":0.002380417,"assembliesLoad":0.80438275,"unityExtensionsInit":0.000808042,"assetDatabaseRefresh":0.0,"sceneOpening":0.078142875}
+##utp:{"type":"EditorInfo","version":2,"phase":"Immediate","time":1780243441859,"processId":51537,"editorVersion":"2022.3.0f1 (fb119bb0b476)","branch":"2022.3/release","buildType":"Release","platform":"OSX"}
+[UnityConnectServicesConfig] config is NOT valid, switching to default
+Created GICache directory at /Users/hwangseokbeom/Library/Caches/com.unity3d.UnityEditor/GiCache. Took: 0.005s, timestamps: [10.780 - 10.786]
+gi::BakeBackendSwitch: switching bake backend from 3 to 2.
+GfxDevice renderer is null. Unity cannot update the Ambient Probe and Reflection Probes that the SkyManager generates. Run the Editor without the -nographics argument or generate lighting for your scene.
+[40m[32minfo[39m[22m[49m: Microsoft.Hosting.Lifetime[0]
+      Application is shutting down...

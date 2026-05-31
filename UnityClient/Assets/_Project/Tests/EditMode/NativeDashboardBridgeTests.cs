@@ -1,9 +1,12 @@
 using NUnit.Framework;
 using System;
+using System.Collections;
 using System.IO;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using TokenForge.Client.Agents;
+using TokenForge.Client.Common;
 using TokenForge.Client.Domain;
 using TokenForge.Client.Git;
 using TokenForge.Client.Persistence;
@@ -11,11 +14,39 @@ using TokenForge.Client.Platform;
 using TokenForge.Client.Privacy;
 using TokenForge.Client.UI;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace TokenForge.Client.Tests
 {
     public sealed class NativeDashboardBridgeTests
     {
+        [SetUp]
+        public void SetUp()
+        {
+            ResetNativeDashboardBridgeStaticState();
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            ResetNativeDashboardBridgeStaticState();
+        }
+
+        [Test]
+        public void NativeDashboardBridgeNUnitDiscoverySmoke()
+        {
+            Debug.Log("PHASE NUnit discovery smoke");
+            Assert.Pass();
+        }
+
+        [UnityTest]
+        public IEnumerator NativeDashboardBridgeUnityTestDiscoverySmoke()
+        {
+            Debug.Log("PHASE UnityTest discovery smoke");
+            yield return null;
+            Assert.Pass();
+        }
+
         [Test]
         public void TryParseAction_MapsPrimaryNativeActions()
         {
@@ -97,6 +128,37 @@ namespace TokenForge.Client.Tests
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("review.saveGrowth", out var canonicalSaveGrowth));
             Assert.AreEqual(NativeDashboardAction.SaveGrowth, canonicalSaveGrowth.Action);
 
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("tokenShop", out var tokenShop));
+            Assert.AreEqual(NativeDashboardAction.TokenShop, tokenShop.Action);
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("shop.purchase:skin_white_cat", out var shopPurchase));
+            Assert.AreEqual(NativeDashboardAction.PurchaseTokenShopItem, shopPurchase.Action);
+            Assert.AreEqual("skin_white_cat", shopPurchase.Value);
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("shop.target:repository", out var shopRepositoryTarget));
+            Assert.AreEqual(NativeDashboardAction.SelectShopRepositoryTarget, shopRepositoryTarget.Action);
+            Assert.AreEqual("repository", shopRepositoryTarget.Value);
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("shop.target.agent:codex", out var shopAgentTarget));
+            Assert.AreEqual(NativeDashboardAction.SelectShopAgentTarget, shopAgentTarget.Action);
+            Assert.AreEqual("codex", shopAgentTarget.Value);
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("shop.mode:agents", out var shopAgentMode));
+            Assert.AreEqual(NativeDashboardAction.SelectShopAgentTarget, shopAgentMode.Action);
+            Assert.AreEqual("agents", shopAgentMode.Value);
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("shop.category:effects", out var shopCategory));
+            Assert.AreEqual(NativeDashboardAction.SelectShopCategory, shopCategory.Action);
+            Assert.AreEqual("effects", shopCategory.Value);
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("shop.equip:skin_white_cat", out var shopEquip));
+            Assert.AreEqual(NativeDashboardAction.EquipTokenShopItem, shopEquip.Action);
+            Assert.AreEqual("skin_white_cat", shopEquip.Value);
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("shop.preview:zodiac_dragon", out var shopPreview));
+            Assert.AreEqual(NativeDashboardAction.PreviewTokenShopItem, shopPreview.Action);
+            Assert.AreEqual("zodiac_dragon", shopPreview.Value);
+
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("changeCompanionSkin:orange_cat", out var skin));
             Assert.AreEqual(NativeDashboardAction.ChangeCompanionSkin, skin.Action);
             Assert.AreEqual("orange_cat", skin.Value);
@@ -164,25 +226,58 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(NativeDashboardAction.EnableClickThrough, desktopClickThrough.Action);
         }
 
-        [Test]
-        public void NativeDesktopCompanionSettingsPersistAndRestore()
+        [UnityTest]
+        public IEnumerator NativeDesktopCompanionSettingsPersistAndRestore()
         {
             var directory = Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName());
             var saveRepository = new SaveDataRepository(directory);
             var viewModel = CreateNativeReviewViewModel(saveRepository);
 
-            Assert.IsTrue(viewModel.SetDesktopCompanionEnabledAsync(false).GetAwaiter().GetResult().IsSuccess);
-            Assert.IsTrue(viewModel.SetDesktopCompanionMotionModeAsync(CompanionDesktopMotionMode.Calm).GetAwaiter().GetResult().IsSuccess);
-            Assert.IsTrue(viewModel.SetDesktopCompanionClickThroughAsync(true).GetAwaiter().GetResult().IsSuccess);
-            Assert.IsTrue(viewModel.SetDesktopCompanionVisualThemeAsync("black_cat").GetAwaiter().GetResult().IsSuccess);
+            Result<DesktopCompanionSettings> enableResult = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => viewModel.SetDesktopCompanionEnabledAsync(false, cancellationToken),
+                "desktop companion settings enable",
+                10f,
+                result => enableResult = result);
+            Assert.IsTrue(enableResult.IsSuccess);
 
-            var restored = new SaveDataRepository(directory).LoadAsync().GetAwaiter().GetResult();
+            Result<DesktopCompanionSettings> updateResult = null;
+            yield return RunTaskWithTimeout(
+                async cancellationToken =>
+                {
+                    var motionResult = await viewModel.SetDesktopCompanionMotionModeAsync(CompanionDesktopMotionMode.Calm, cancellationToken);
+                    if (!motionResult.IsSuccess)
+                    {
+                        return motionResult;
+                    }
+
+                    var clickThroughResult = await viewModel.SetDesktopCompanionClickThroughAsync(true, cancellationToken);
+                    if (!clickThroughResult.IsSuccess)
+                    {
+                        return clickThroughResult;
+                    }
+
+                    return await viewModel.SetDesktopCompanionVisualThemeAsync("black_cat", cancellationToken);
+                },
+                "desktop companion settings update",
+                10f,
+                result => updateResult = result);
+            Assert.IsTrue(updateResult.IsSuccess);
+
+            SaveData restored = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => new SaveDataRepository(directory).LoadAsync(cancellationToken),
+                "desktop companion settings reload",
+                10f,
+                result => restored = result);
             var settings = RepositoryCompanionProfileService.GetSelectedDesktopCompanionSettings(restored);
 
+            Debug.Log("PHASE desktop companion settings assertions start");
             Assert.IsFalse(settings.IsDesktopCompanionEnabled);
             Assert.AreEqual(CompanionDesktopMotionMode.Calm, settings.MotionMode);
             Assert.IsTrue(settings.IsClickThroughEnabled);
             Assert.AreEqual("black_cat", settings.VisualThemeId);
+            Debug.Log("PHASE desktop companion settings assertions complete");
         }
 
         [Test]
@@ -209,6 +304,14 @@ namespace TokenForge.Client.Tests
         public void NativeDashboardState_DefaultSerializesMvpFields()
         {
             var state = NativeDashboardState.CreateDefault();
+            // JsonUtility only emits collection item fields when an item exists; keep runtime defaults empty.
+            state.repositories = new[] { new NativeRepositoryListItem() };
+            state.agentProviders = new[] { new NativeAgentProviderState() };
+            state.tokenShop.targetType = "aiAgent";
+            state.tokenShop.selectedAgentId = "codex";
+            state.tokenShop.selectedCategory = "skins";
+            state.tokenShop.agents = new[] { new NativeTokenShopAgentState { id = "codex", lockedReason = "Connect to unlock agent cosmetics." } };
+            state.tokenShop.items = new[] { new NativeTokenShopItemState { itemId = "agent_skin_codex_terminal", itemType = "Skin", category = "skins", rarity = "Common", targetCompatibility = "Codex", stateLabel = "Connect agent", insufficientCoinReason = "Need 1 more Forge Coins.", lockedAgentReason = "Connect to unlock agent cosmetics." } };
             var json = state.ToJson();
 
             StringAssert.Contains("appTitle", json);
@@ -224,7 +327,16 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("recentGitXP", json);
             StringAssert.Contains("recentAiXP", json);
             StringAssert.Contains("estimatedTokenActivity", json);
+            StringAssert.Contains("tokenCurrencyBalance", json);
+            StringAssert.Contains("dominantGrowthPath", json);
+            StringAssert.Contains("nextEvolutionPreview", json);
             StringAssert.Contains("repositoryAttributionSummary", json);
+            StringAssert.Contains("selectedAgentId", json);
+            StringAssert.Contains("selectedCategory", json);
+            StringAssert.Contains("ownedItemIds", json);
+            StringAssert.Contains("equippedItemIds", json);
+            StringAssert.Contains("insufficientCoinReason", json);
+            StringAssert.Contains("lockedAgentReason", json);
             StringAssert.Contains("AI Agents: 0 connected", json);
             Assert.IsFalse(json.Contains("Cdx 0%"));
         }
@@ -327,8 +439,8 @@ namespace TokenForge.Client.Tests
             return Task.Run(operation).GetAwaiter().GetResult();
         }
 
-        [Test]
-        public void ApprovePendingNativeReviewAppliesXpAndStats()
+        [UnityTest]
+        public IEnumerator ApprovePendingNativeReviewAppliesXpAndStats()
         {
             var directory = Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName());
             var saveRepository = new SaveDataRepository(directory);
@@ -357,22 +469,42 @@ namespace TokenForge.Client.Tests
                     StatDeltas = new CharacterStats { Logic = 3, Debug = 2 }
                 }
             };
-            saveRepository.SaveAsync(saveData).GetAwaiter().GetResult();
+
+            Result initialSave = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => saveRepository.SaveAsync(saveData, cancellationToken),
+                "approve pending review save",
+                10f,
+                result => initialSave = result);
+            Assert.IsTrue(initialSave.IsSuccess);
             var viewModel = CreateNativeReviewViewModel(saveRepository);
 
-            var result = viewModel.ApprovePendingNativeReviewAsync().GetAwaiter().GetResult();
-            var loaded = saveRepository.LoadAsync().GetAwaiter().GetResult();
+            Result result = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => viewModel.ApprovePendingNativeReviewAsync(cancellationToken),
+                "approve pending review action",
+                10f,
+                approveResult => result = approveResult);
 
+            SaveData loaded = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => saveRepository.LoadAsync(cancellationToken),
+                "approve pending review reload",
+                10f,
+                loadResult => loaded = loadResult);
+
+            Debug.Log("PHASE approve pending review assertions start");
             Assert.IsTrue(result.IsSuccess);
             Assert.AreEqual(120, loaded.CharacterProfile.TotalExp);
             Assert.AreEqual(3, loaded.CharacterProfile.Stats.Logic);
             Assert.AreEqual(2, loaded.CharacterProfile.Stats.Debug);
             Assert.IsNull(loaded.PendingNativeActivityReview);
             Assert.AreEqual(1, loaded.WorkSessionSummaries.Count);
+            Debug.Log("PHASE approve pending review assertions complete");
         }
 
-        [Test]
-        public void DiscardPendingNativeReviewDoesNotApplyXpOrStats()
+        [UnityTest]
+        public IEnumerator DiscardPendingNativeReviewDoesNotApplyXpOrStats()
         {
             var directory = Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName());
             var saveRepository = new SaveDataRepository(directory);
@@ -385,17 +517,37 @@ namespace TokenForge.Client.Tests
                 SafeSession = new AgentWorkSession { SessionId = "discard-session" },
                 GrowthResult = new CharacterGrowthResult { SessionId = "discard-session", ExpGained = 200, StatDeltas = new CharacterStats { Logic = 5 } }
             };
-            saveRepository.SaveAsync(saveData).GetAwaiter().GetResult();
+
+            Result initialSave = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => saveRepository.SaveAsync(saveData, cancellationToken),
+                "discard pending review save",
+                10f,
+                saveResult => initialSave = saveResult);
+            Assert.IsTrue(initialSave.IsSuccess);
             var viewModel = CreateNativeReviewViewModel(saveRepository);
 
-            var result = viewModel.DiscardPendingNativeReviewAsync().GetAwaiter().GetResult();
-            var loaded = saveRepository.LoadAsync().GetAwaiter().GetResult();
+            Result result = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => viewModel.DiscardPendingNativeReviewAsync(cancellationToken),
+                "discard pending review action",
+                10f,
+                discardResult => result = discardResult);
 
+            SaveData loaded = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => saveRepository.LoadAsync(cancellationToken),
+                "discard pending review reload",
+                10f,
+                loadResult => loaded = loadResult);
+
+            Debug.Log("PHASE discard pending review assertions start");
             Assert.IsTrue(result.IsSuccess);
             Assert.AreEqual(0, loaded.CharacterProfile.TotalExp);
             Assert.AreEqual(0, loaded.CharacterProfile.Stats.Logic);
             Assert.IsNull(loaded.PendingNativeActivityReview);
             Assert.AreEqual(0, loaded.WorkSessionSummaries.Count);
+            Debug.Log("PHASE discard pending review assertions complete");
         }
 
         [Test]
@@ -452,8 +604,8 @@ namespace TokenForge.Client.Tests
             Assert.IsFalse(json.Contains("warnings 2"));
         }
 
-        [Test]
-        public void ApprovePendingNativeReviewIsIdempotentByReviewId()
+        [UnityTest]
+        public IEnumerator ApprovePendingNativeReviewIsIdempotentByReviewId()
         {
             var directory = Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName());
             var saveRepository = new SaveDataRepository(directory);
@@ -484,26 +636,67 @@ namespace TokenForge.Client.Tests
             var saveData = SaveData.CreateDefault();
             saveData.SelectedRepositoryHash = "repo-hash";
             saveData.PendingNativeActivityReview = pending;
-            saveRepository.SaveAsync(saveData).GetAwaiter().GetResult();
+
+            Result initialSave = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => saveRepository.SaveAsync(saveData, cancellationToken),
+                "idempotent pending review save",
+                10f,
+                result => initialSave = result);
+            Assert.IsTrue(initialSave.IsSuccess);
             var viewModel = CreateNativeReviewViewModel(saveRepository);
 
-            var first = viewModel.ApprovePendingNativeReviewAsync().GetAwaiter().GetResult();
-            var afterFirst = saveRepository.LoadAsync().GetAwaiter().GetResult();
-            afterFirst.PendingNativeActivityReview = pending;
-            saveRepository.SaveAsync(afterFirst).GetAwaiter().GetResult();
-            var second = viewModel.ApprovePendingNativeReviewAsync().GetAwaiter().GetResult();
-            var loaded = saveRepository.LoadAsync().GetAwaiter().GetResult();
+            Result first = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => viewModel.ApprovePendingNativeReviewAsync(cancellationToken),
+                "idempotent pending review first approve",
+                10f,
+                result => first = result);
 
+            SaveData afterFirst = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => saveRepository.LoadAsync(cancellationToken),
+                "idempotent pending review restore load",
+                10f,
+                result => afterFirst = result);
+            afterFirst.PendingNativeActivityReview = pending;
+
+            Result restorePendingReview = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => saveRepository.SaveAsync(afterFirst, cancellationToken),
+                "idempotent pending review restore save",
+                10f,
+                result => restorePendingReview = result);
+            Assert.IsTrue(restorePendingReview.IsSuccess);
+
+            Result second = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => viewModel.ApprovePendingNativeReviewAsync(cancellationToken),
+                "idempotent pending review second approve",
+                10f,
+                result => second = result);
+
+            SaveData loaded = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => saveRepository.LoadAsync(cancellationToken),
+                "idempotent pending review reload",
+                10f,
+                result => loaded = result);
+
+            Debug.Log("PHASE idempotent pending review assertions start");
             Assert.IsTrue(first.IsSuccess);
             Assert.IsTrue(second.IsSuccess);
             Assert.AreEqual(90, loaded.CharacterProfile.TotalExp);
             Assert.AreEqual(1, loaded.WorkSessionSummaries.Count);
             Assert.That(loaded.AppliedNativeReviewIds, Does.Contain("review-idempotent"));
+            Debug.Log("PHASE idempotent pending review assertions complete");
         }
 
-        [Test]
-        public void ApproveCombinedNativeReviewAppliesGitAndAgentSessionsOnce()
+        [UnityTest]
+        public IEnumerator ApproveCombinedNativeReviewAppliesGitAndAgentSessionsOnce()
         {
+            ResetNativeDashboardBridgeStaticState();
+            Debug.Log("PHASE combined native review start");
             var directory = Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName());
             var saveRepository = new SaveDataRepository(directory);
             var gitSession = new AgentWorkSession
@@ -540,21 +733,112 @@ namespace TokenForge.Client.Tests
                     new CharacterGrowthResult { SessionId = "combined-agent", ExpGained = 60, StatDeltas = new CharacterStats { Debug = 1 } }
                 }
             };
-            saveRepository.SaveAsync(saveData).GetAwaiter().GetResult();
+
+            Result initialSave = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => saveRepository.SaveAsync(saveData, cancellationToken),
+                "seed save",
+                10f,
+                result => initialSave = result);
+            Assert.IsTrue(initialSave.IsSuccess);
             var viewModel = CreateNativeReviewViewModel(saveRepository);
 
-            var first = viewModel.ApprovePendingNativeReviewAsync().GetAwaiter().GetResult();
-            var afterFirst = saveRepository.LoadAsync().GetAwaiter().GetResult();
-            afterFirst.PendingNativeActivityReview = saveData.PendingNativeActivityReview;
-            saveRepository.SaveAsync(afterFirst).GetAwaiter().GetResult();
-            var second = viewModel.ApprovePendingNativeReviewAsync().GetAwaiter().GetResult();
-            var loaded = saveRepository.LoadAsync().GetAwaiter().GetResult();
+            Result first = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => viewModel.ApprovePendingNativeReviewAsync(cancellationToken),
+                "approve combined review first",
+                10f,
+                result => first = result);
 
+            SaveData afterFirst = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => saveRepository.LoadAsync(cancellationToken),
+                "load",
+                10f,
+                result => afterFirst = result);
+            afterFirst.PendingNativeActivityReview = saveData.PendingNativeActivityReview;
+
+            Result restorePendingReview = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => saveRepository.SaveAsync(afterFirst, cancellationToken),
+                "restore pending review save",
+                10f,
+                result => restorePendingReview = result);
+            Assert.IsTrue(restorePendingReview.IsSuccess);
+
+            Result second = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => viewModel.ApprovePendingNativeReviewAsync(cancellationToken),
+                "approve combined review second",
+                10f,
+                result => second = result);
+
+            SaveData loaded = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => saveRepository.LoadAsync(cancellationToken),
+                "reload",
+                10f,
+                result => loaded = result);
+
+            Debug.Log("PHASE assertions start");
             Assert.IsTrue(first.IsSuccess);
             Assert.IsTrue(second.IsSuccess);
             Assert.AreEqual(100, loaded.CharacterProfile.TotalExp);
             Assert.AreEqual(2, loaded.WorkSessionSummaries.Count);
             Assert.That(loaded.AppliedNativeReviewIds, Does.Contain("combined-review"));
+            Debug.Log("PHASE assertions complete");
+            ResetNativeDashboardBridgeStaticState();
+        }
+
+        private static IEnumerator RunTaskWithTimeout<T>(
+            Func<CancellationToken, Task<T>> operation,
+            string phase,
+            float timeoutSeconds,
+            Action<T> onCompleted)
+        {
+            using (var cancellation = new CancellationTokenSource())
+            {
+                Debug.Log("PHASE " + phase + " start");
+                Task<T> operationTask = null;
+                try
+                {
+                    operationTask = operation(cancellation.Token);
+                }
+                catch (Exception exception)
+                {
+                    Assert.Fail("PHASE " + phase + " failed to start: " + exception);
+                }
+
+                if (operationTask == null)
+                {
+                    Assert.Fail("PHASE " + phase + " did not return a task.");
+                }
+
+                var startedAt = Time.realtimeSinceStartup;
+                while (!operationTask.IsCompleted)
+                {
+                    if (Time.realtimeSinceStartup - startedAt > timeoutSeconds)
+                    {
+                        cancellation.Cancel();
+                        Assert.Fail("PHASE " + phase + " timed out after " + timeoutSeconds + "s.");
+                    }
+
+                    yield return null;
+                }
+
+                if (operationTask.IsCanceled)
+                {
+                    Assert.Fail("PHASE " + phase + " was canceled.");
+                }
+
+                if (operationTask.IsFaulted)
+                {
+                    Assert.Fail("PHASE " + phase + " failed: " + operationTask.Exception.Flatten());
+                }
+
+                onCompleted(operationTask.Result);
+                Debug.Log("PHASE " + phase + " complete");
+            }
         }
 
         [Test]
@@ -687,6 +971,10 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("[DesktopOverlay] show requested visibleSetting=true", source);
             StringAssert.Contains("[AppLifecycle] shouldTerminateAfterLastWindowClosed=false", source);
             StringAssert.Contains("[AppLifecycle] lastWindowClosed keepRunning=true", source);
+            StringAssert.Contains("[DashboardLifecycle][CLOSE_REQUEST] shouldTerminate=false", source);
+            StringAssert.Contains("[OverlayLifecycle][KEEP_ALIVE_AFTER_DASHBOARD_CLOSE]", source);
+            StringAssert.Contains("[AppLifecycle][QUIT_REQUESTED] source=menu", source);
+            StringAssert.Contains("[AppLifecycle][UNEXPECTED_TERMINATE_ATTEMPT]", source);
             StringAssert.Contains("[DesktopOverlay] movementTimer started interval=", source);
             StringAssert.Contains("[DesktopOverlay] tick oldOrigin=", source);
             StringAssert.Contains("[DesktopOverlay] tick oldFrame=", source);
@@ -704,10 +992,10 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("TokenForgeDesktopOverlayCompanionView", source);
             StringAssert.Contains("TokenForgeIsDesktopOverlayPanelContentView", source);
             StringAssert.Contains("TokenForge.DesktopCompanion", source);
-            StringAssert.Contains("[OverlayDrag][BEGIN] generation=", source);
+            StringAssert.Contains("[OverlayDrag][BEGIN] repo=%@ generation=", source);
             StringAssert.Contains("[DashboardAvatarView][NO_DRAG] reason=previewRole", source);
-            StringAssert.Contains("[OverlayDrag][MOVE] generation=", source);
-            StringAssert.Contains("[OverlayDrag][END] generation=", source);
+            StringAssert.Contains("[OverlayDrag][MOVE] repo=%@ generation=", source);
+            StringAssert.Contains("[OverlayDrag][END] repo=%@ generation=", source);
             StringAssert.Contains("[OverlayDrag][COORDS]", source);
             StringAssert.Contains("[OverlayDrag][POSITION_ERROR]", source);
             StringAssert.Contains("[OverlayDrag][SUPPRESS_PROJECTION] reason=dragInProgress", source);
@@ -767,9 +1055,9 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("[DockReopen][ENTER] hasVisibleWindows=", source);
             StringAssert.Contains("[DockReopen][CLASSIFY] dashboardVisible=", source);
             StringAssert.Contains("[DockReopen][ACTION] openOrFocusDashboard source=dock.reopen", source);
-            StringAssert.Contains("[WindowsDump][AFTER_DOCK_REOPEN]", source);
-            StringAssert.Contains("[WindowsDump][AFTER_MENUBAR_OPEN]", source);
-            StringAssert.Contains("[WindowsDump][AFTER_DASHBOARD_CLOSE]", source);
+            StringAssert.Contains("TokenForgeDumpWindowClassifications(@\"AFTER_DOCK_REOPEN\")", source);
+            StringAssert.Contains("TokenForgeDumpWindowClassifications(@\"AFTER_MENUBAR_OPEN\")", source);
+            StringAssert.Contains("TokenForgeDumpWindowClassifications(@\"AFTER_DASHBOARD_CLOSE\")", source);
             StringAssert.Contains("hideDashboardFromSource:@\"dashboardX\"", source);
             StringAssert.Contains("blank TokenForge window detected; orderOut without dashboard reopen", source);
         }
@@ -946,6 +1234,27 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void NativeTokenShopRendererContainsTargetCategoriesAndStateLabels()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("shop-target-repository", source);
+            StringAssert.Contains("shop-target-ai-agents", source);
+            StringAssert.Contains("shop.category:", source);
+            StringAssert.Contains("shop.equip:", source);
+            StringAssert.Contains("TokenForgeShopPreviewView", source);
+            StringAssert.Contains("drawZodiacMascot", source);
+            StringAssert.Contains("drawCatInRect", source);
+            StringAssert.Contains("zodiac", source);
+            StringAssert.Contains("exclusive", source);
+            StringAssert.Contains("owned/equipped labels=true", source);
+            StringAssert.Contains("locked/insufficient states=true", source);
+            StringAssert.Contains("Connect to unlock agent cosmetics", source);
+            StringAssert.Contains("Need Coins", source);
+            StringAssert.Contains("Equipped", source);
+        }
+
+        [Test]
         public void NativeProjectionDoesNotInventAiRepositoryAttribution()
         {
             var source = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/AppBootstrapper.cs"));
@@ -999,6 +1308,13 @@ namespace TokenForge.Client.Tests
             typeof(TokenForge.Client.AppBootstrapper)
                 .GetMethod("EnforceNativeDashboardInvariants", BindingFlags.NonPublic | BindingFlags.Static)
                 .Invoke(null, new object[] { state });
+        }
+
+        private static void ResetNativeDashboardBridgeStaticState()
+        {
+            typeof(MacNativeDashboardService)
+                .GetField("GlobalActionRequested", BindingFlags.NonPublic | BindingFlags.Static)
+                ?.SetValue(null, null);
         }
 
         private sealed class TestRepositoryPicker : IRepositoryPicker

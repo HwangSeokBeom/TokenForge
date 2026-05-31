@@ -178,6 +178,7 @@ namespace TokenForge.Client.Platform
         {
             if (!IsAvailable)
             {
+                Debug.Log("INFO [AppLifecycle][QUIT_REQUESTED] source=managed_fallback");
                 Application.Quit();
                 return;
             }
@@ -189,6 +190,7 @@ namespace TokenForge.Client.Platform
             catch (Exception exception)
             {
                 Debug.LogWarning("WARN " + LogPrefix + " native quit failed: " + exception.GetType().Name);
+                Debug.Log("INFO [AppLifecycle][QUIT_REQUESTED] source=managed_native_failure_fallback");
                 Application.Quit();
             }
         }

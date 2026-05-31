@@ -370,6 +370,41 @@ namespace TokenForge.Client.Platform
                 case "review_activity":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ReviewActivity, rawAction, value);
                     return true;
+                case "tokenShop":
+                case "token_shop":
+                case "shop.open":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.TokenShop, rawAction, value);
+                    return true;
+                case "purchaseTokenShopItem":
+                case "purchase_token_shop_item":
+                case "shop.purchase":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.PurchaseTokenShopItem, rawAction, value);
+                    return true;
+                case "shop.target":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.SelectShopRepositoryTarget, rawAction, value);
+                    return true;
+                case "shop.mode":
+                    parsed = new NativeDashboardActionRequest(
+                        string.Equals(value, "repository", StringComparison.OrdinalIgnoreCase) ? NativeDashboardAction.SelectShopRepositoryTarget : NativeDashboardAction.SelectShopAgentTarget,
+                        rawAction,
+                        value);
+                    return true;
+                case "shop.target.agent":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.SelectShopAgentTarget, rawAction, value);
+                    return true;
+                case "shop.category":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.SelectShopCategory, rawAction, value);
+                    return true;
+                case "shop.equip":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.EquipTokenShopItem, rawAction, value);
+                    return true;
+                case "shop.preview":
+                case "shop.zodiac":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.PreviewTokenShopItem, rawAction, value);
+                    return true;
+                case "shop.openAgentConnect":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.OpenAgentConnect, rawAction, value);
+                    return true;
                 case "levelUp":
                 case "level_up":
                 case "evolveToken":

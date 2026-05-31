@@ -1,0 +1,348 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="36" result="Passed" total="36" passed="36" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-05-31 16:12:04Z" end-time="2026-05-31 16:12:06Z" duration="2.8829454">
+  <test-suite type="TestSuite" id="1536" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="456" result="Passed" start-time="2026-05-31 16:12:04Z" end-time="2026-05-31 16:12:06Z" duration="2.882945" total="36" passed="36" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties />
+    <test-suite type="Assembly" id="2067" name="TokenForge.Client.Tests.dll" fullname="/Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/ScriptAssemblies/TokenForge.Client.Tests.dll" runstate="Runnable" testcasecount="456" result="Passed" start-time="2026-05-31 16:12:04Z" end-time="2026-05-31 16:12:06Z" duration="2.874597" total="36" passed="36" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="60779" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+      </properties>
+      <test-suite type="TestSuite" id="2068" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="456" result="Passed" start-time="2026-05-31 16:12:04Z" end-time="2026-05-31 16:12:06Z" duration="2.871916" total="36" passed="36" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="2069" name="Client" fullname="TokenForge.Client" runstate="Runnable" testcasecount="456" result="Passed" start-time="2026-05-31 16:12:04Z" end-time="2026-05-31 16:12:06Z" duration="2.870917" total="36" passed="36" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="2070" name="Tests" fullname="TokenForge.Client.Tests" runstate="Runnable" testcasecount="456" result="Passed" start-time="2026-05-31 16:12:04Z" end-time="2026-05-31 16:12:06Z" duration="2.868661" total="36" passed="36" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1683" name="NativeDashboardBridgeTests" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" testcasecount="36" result="Passed" start-time="2026-05-31 16:12:04Z" end-time="2026-05-31 16:12:06Z" duration="2.859878" total="36" passed="36" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1719" name="AppBootstrapperDefinesNativeOnlyUiModeAndStaleUnityDashboardRemoval" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.AppBootstrapperDefinesNativeOnlyUiModeAndStaleUnityDashboardRemoval" methodname="AppBootstrapperDefinesNativeOnlyUiModeAndStaleUnityDashboardRemoval" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1605476011" result="Passed" start-time="2026-05-31 16:12:04Z" end-time="2026-05-31 16:12:04Z" duration="0.008974" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1702" name="ApproveCombinedNativeReviewAppliesGitAndAgentSessionsOnce" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.ApproveCombinedNativeReviewAppliesGitAndAgentSessionsOnce" methodname="ApproveCombinedNativeReviewAppliesGitAndAgentSessionsOnce" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="205409500" result="Passed" start-time="2026-05-31 16:12:04Z" end-time="2026-05-31 16:12:04Z" duration="0.531477" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                </properties>
+                <output><![CDATA[PHASE combined native review start
+PHASE seed save start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE seed save complete
+PHASE approve combined review first start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [DashboardEmptyState] reason=no_connected_repository
+INFO [RepositoryProjection] connectedCount=0 activeRepositoryId= visibleCompanionCount=0 previewOnlyCount=0
+INFO [RepositoryProjection][CONSISTENT] dashboard=False repositoriesTab=0 sidebar=0
+PHASE approve combined review first complete
+PHASE load start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE load complete
+PHASE restore pending review save start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE restore pending review save complete
+PHASE approve combined review second start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE approve combined review second complete
+PHASE reload start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE reload complete
+PHASE assertions start
+PHASE assertions complete
+]]></output>
+              </test-case>
+              <test-case id="1696" name="ApprovePendingNativeReviewAppliesXpAndStats" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.ApprovePendingNativeReviewAppliesXpAndStats" methodname="ApprovePendingNativeReviewAppliesXpAndStats" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1417376978" result="Passed" start-time="2026-05-31 16:12:04Z" end-time="2026-05-31 16:12:04Z" duration="0.247048" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                </properties>
+                <output><![CDATA[PHASE approve pending review save start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE approve pending review save complete
+PHASE approve pending review action start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [DashboardEmptyState] reason=no_connected_repository
+INFO [RepositoryProjection] connectedCount=0 activeRepositoryId= visibleCompanionCount=0 previewOnlyCount=0
+INFO [RepositoryProjection][CONSISTENT] dashboard=False repositoriesTab=0 sidebar=0
+PHASE approve pending review action complete
+PHASE approve pending review reload start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE approve pending review reload complete
+PHASE approve pending review assertions start
+PHASE approve pending review assertions complete
+]]></output>
+              </test-case>
+              <test-case id="1701" name="ApprovePendingNativeReviewIsIdempotentByReviewId" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.ApprovePendingNativeReviewIsIdempotentByReviewId" methodname="ApprovePendingNativeReviewIsIdempotentByReviewId" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="293138236" result="Passed" start-time="2026-05-31 16:12:04Z" end-time="2026-05-31 16:12:05Z" duration="0.450940" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                </properties>
+                <output><![CDATA[PHASE idempotent pending review save start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE idempotent pending review save complete
+PHASE idempotent pending review first approve start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [DashboardEmptyState] reason=no_connected_repository
+INFO [RepositoryProjection] connectedCount=0 activeRepositoryId= visibleCompanionCount=0 previewOnlyCount=0
+INFO [RepositoryProjection][CONSISTENT] dashboard=False repositoriesTab=0 sidebar=0
+PHASE idempotent pending review first approve complete
+PHASE idempotent pending review restore load start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE idempotent pending review restore load complete
+PHASE idempotent pending review restore save start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE idempotent pending review restore save complete
+PHASE idempotent pending review second approve start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE idempotent pending review second approve complete
+PHASE idempotent pending review reload start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE idempotent pending review reload complete
+PHASE idempotent pending review assertions start
+PHASE idempotent pending review assertions complete
+]]></output>
+              </test-case>
+              <test-case id="1704" name="DesktopCompanionOverlayDefinesLightCardTextHelpers" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.DesktopCompanionOverlayDefinesLightCardTextHelpers" methodname="DesktopCompanionOverlayDefinesLightCardTextHelpers" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="923660943" result="Passed" start-time="2026-05-31 16:12:05Z" end-time="2026-05-31 16:12:05Z" duration="0.116805" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1697" name="DiscardPendingNativeReviewDoesNotApplyXpOrStats" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.DiscardPendingNativeReviewDoesNotApplyXpOrStats" methodname="DiscardPendingNativeReviewDoesNotApplyXpOrStats" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="243863829" result="Passed" start-time="2026-05-31 16:12:05Z" end-time="2026-05-31 16:12:05Z" duration="0.304667" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                </properties>
+                <output><![CDATA[PHASE discard pending review save start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE discard pending review save complete
+PHASE discard pending review action start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [DashboardEmptyState] reason=no_connected_repository
+INFO [RepositoryProjection] connectedCount=0 activeRepositoryId= visibleCompanionCount=0 previewOnlyCount=0
+INFO [RepositoryProjection][CONSISTENT] dashboard=False repositoriesTab=0 sidebar=0
+PHASE discard pending review action complete
+PHASE discard pending review reload start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE discard pending review reload complete
+PHASE discard pending review assertions start
+PHASE discard pending review assertions complete
+]]></output>
+              </test-case>
+              <test-case id="1695" name="GitRepositoryValidatorRejectsPlainFolder" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.GitRepositoryValidatorRejectsPlainFolder" methodname="GitRepositoryValidatorRejectsPlainFolder" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1598371267" result="Passed" start-time="2026-05-31 16:12:05Z" end-time="2026-05-31 16:12:05Z" duration="0.124696" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [Repository] validate begin
+INFO [Repository] git command begin command=git rev-parse --show-toplevel
+INFO [Repository] git command end exitCode=128
+WARN [Repository] git command failed exitCode=128 category=NotAGitRepository
+WARN [Repository] validate failed reason=NotAGitRepository
+]]></output>
+              </test-case>
+              <test-case id="1713" name="NativeCompanionBridgeExportsRuntimeEntryPoints" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeCompanionBridgeExportsRuntimeEntryPoints" methodname="NativeCompanionBridgeExportsRuntimeEntryPoints" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="900956659" result="Passed" start-time="2026-05-31 16:12:05Z" end-time="2026-05-31 16:12:05Z" duration="0.121146" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1714" name="NativeCompanionLifecycleUsesMainThreadStrongPanelAndCommonTimers" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeCompanionLifecycleUsesMainThreadStrongPanelAndCommonTimers" methodname="NativeCompanionLifecycleUsesMainThreadStrongPanelAndCommonTimers" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="507721239" result="Passed" start-time="2026-05-31 16:12:05Z" end-time="2026-05-31 16:12:05Z" duration="0.013306" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1715" name="NativeDashboardAvoidsRawEnumTextOnMainCards" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDashboardAvoidsRawEnumTextOnMainCards" methodname="NativeDashboardAvoidsRawEnumTextOnMainCards" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1118253193" result="Passed" start-time="2026-05-31 16:12:05Z" end-time="2026-05-31 16:12:06Z" duration="0.008435" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1684" name="NativeDashboardBridgeNUnitDiscoverySmoke" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDashboardBridgeNUnitDiscoverySmoke" methodname="NativeDashboardBridgeNUnitDiscoverySmoke" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1182807774" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.002289" asserts="0">
+                <properties />
+                <reason>
+                  <message><![CDATA[]]></message>
+                </reason>
+                <output><![CDATA[PHASE NUnit discovery smoke
+]]></output>
+              </test-case>
+              <test-case id="1685" name="NativeDashboardBridgeUnityTestDiscoverySmoke" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDashboardBridgeUnityTestDiscoverySmoke" methodname="NativeDashboardBridgeUnityTestDiscoverySmoke" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1470963753" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.001043" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                </properties>
+                <reason>
+                  <message><![CDATA[]]></message>
+                </reason>
+                <output><![CDATA[PHASE UnityTest discovery smoke
+]]></output>
+              </test-case>
+              <test-case id="1706" name="NativeDashboardHeroDefinesAvatarBoundsAndAnimationLogs" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDashboardHeroDefinesAvatarBoundsAndAnimationLogs" methodname="NativeDashboardHeroDefinesAvatarBoundsAndAnimationLogs" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1046967992" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.015058" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1699" name="NativeDashboardInvariantClearsActionsWhenNoPendingReview" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDashboardInvariantClearsActionsWhenNoPendingReview" methodname="NativeDashboardInvariantClearsActionsWhenNoPendingReview" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1092732718" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.002688" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1709" name="NativeDashboardLifecycleUsesSingleCanonicalWindow" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDashboardLifecycleUsesSingleCanonicalWindow" methodname="NativeDashboardLifecycleUsesSingleCanonicalWindow" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="703397377" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.075990" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1705" name="NativeDashboardRendererUsesCleanGridRuntimePath" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDashboardRendererUsesCleanGridRuntimePath" methodname="NativeDashboardRendererUsesCleanGridRuntimePath" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="391046405" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.042010" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1700" name="NativeDashboardState_DefaultDoesNotContainSampleProductionActivity" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDashboardState_DefaultDoesNotContainSampleProductionActivity" methodname="NativeDashboardState_DefaultDoesNotContainSampleProductionActivity" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1282669810" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.001308" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1692" name="NativeDashboardState_DefaultSerializesMvpFields" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDashboardState_DefaultSerializesMvpFields" methodname="NativeDashboardState_DefaultSerializesMvpFields" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="652086445" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.002529" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1703" name="NativeDashboardState_ModelsMultiRepositoryAndMultiAgentState" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDashboardState_ModelsMultiRepositoryAndMultiAgentState" methodname="NativeDashboardState_ModelsMultiRepositoryAndMultiAgentState" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="667676518" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.000636" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1693" name="NativeDashboardState_ProjectsRuntimeVisibleEvolveAndAgentUsageFields" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDashboardState_ProjectsRuntimeVisibleEvolveAndAgentUsageFields" methodname="NativeDashboardState_ProjectsRuntimeVisibleEvolveAndAgentUsageFields" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="2095675440" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.000821" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1694" name="NativeDashboardState_ReviewDetailsProjectionIsExplicit" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDashboardState_ReviewDetailsProjectionIsExplicit" methodname="NativeDashboardState_ReviewDetailsProjectionIsExplicit" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="351802188" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.000381" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1690" name="NativeDesktopCompanionSettingsNormalizeLegacySkinIds" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDesktopCompanionSettingsNormalizeLegacySkinIds" methodname="NativeDesktopCompanionSettingsNormalizeLegacySkinIds" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1760116301" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.000167" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1689" name="NativeDesktopCompanionSettingsPersistAndRestore" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDesktopCompanionSettingsPersistAndRestore" methodname="NativeDesktopCompanionSettingsPersistAndRestore" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1056136372" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.406017" asserts="0">
+                <properties>
+                  <property name="_JOINTYPE" value="UnityCombinatorial" />
+                </properties>
+                <output><![CDATA[PHASE desktop companion settings enable start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [DashboardEmptyState] reason=no_connected_repository
+INFO [RepositoryProjection] connectedCount=0 activeRepositoryId= visibleCompanionCount=0 previewOnlyCount=0
+INFO [RepositoryProjection][CONSISTENT] dashboard=False repositoriesTab=0 sidebar=0
+PHASE desktop companion settings enable complete
+PHASE desktop companion settings update start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [DashboardEmptyState] reason=no_connected_repository
+INFO [RepositoryProjection] connectedCount=0 activeRepositoryId= visibleCompanionCount=0 previewOnlyCount=0
+INFO [RepositoryProjection][CONSISTENT] dashboard=False repositoriesTab=0 sidebar=0
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [DashboardEmptyState] reason=no_connected_repository
+INFO [RepositoryProjection] connectedCount=0 activeRepositoryId= visibleCompanionCount=0 previewOnlyCount=0
+INFO [RepositoryProjection][CONSISTENT] dashboard=False repositoriesTab=0 sidebar=0
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [DashboardEmptyState] reason=no_connected_repository
+INFO [RepositoryProjection] connectedCount=0 activeRepositoryId= visibleCompanionCount=0 previewOnlyCount=0
+INFO [RepositoryProjection][CONSISTENT] dashboard=False repositoriesTab=0 sidebar=0
+PHASE desktop companion settings update complete
+PHASE desktop companion settings reload start
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE desktop companion settings reload complete
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+PHASE desktop companion settings assertions start
+PHASE desktop companion settings assertions complete
+]]></output>
+              </test-case>
+              <test-case id="1708" name="NativeDesktopOverlayDragIsGatedToPanelContentOnly" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDesktopOverlayDragIsGatedToPanelContentOnly" methodname="NativeDesktopOverlayDragIsGatedToPanelContentOnly" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1766694435" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.028404" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1707" name="NativeDesktopOverlayIsIndependentAndKeepsRunningAfterWindowClose" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDesktopOverlayIsIndependentAndKeepsRunningAfterWindowClose" methodname="NativeDesktopOverlayIsIndependentAndKeepsRunningAfterWindowClose" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="388300988" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.055580" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1712" name="NativeMenuBarCompanionAnimatesImageFrames" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeMenuBarCompanionAnimatesImageFrames" methodname="NativeMenuBarCompanionAnimatesImageFrames" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1291145172" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.035794" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1711" name="NativeMotionCardProvidesImmediateRuntimeActions" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeMotionCardProvidesImmediateRuntimeActions" methodname="NativeMotionCardProvidesImmediateRuntimeActions" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="522540701" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.077725" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1718" name="NativeProjectionDoesNotInventAiRepositoryAttribution" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeProjectionDoesNotInventAiRepositoryAttribution" methodname="NativeProjectionDoesNotInventAiRepositoryAttribution" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="185123935" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.010388" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1710" name="NativeRuntimeVerificationSuppressesCrashReopenAndReportLoops" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeRuntimeVerificationSuppressesCrashReopenAndReportLoops" methodname="NativeRuntimeVerificationSuppressesCrashReopenAndReportLoops" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="862478189" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.041249" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1716" name="NativeSidebarCompanionSwitcherIsInRuntimeRenderer" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeSidebarCompanionSwitcherIsInRuntimeRenderer" methodname="NativeSidebarCompanionSwitcherIsInRuntimeRenderer" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="738448873" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.054240" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1717" name="NativeTokenShopRendererContainsTargetCategoriesAndStateLabels" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeTokenShopRendererContainsTargetCategoriesAndStateLabels" methodname="NativeTokenShopRendererContainsTargetCategoriesAndStateLabels" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="447111920" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.056541" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1698" name="RunRepositoryAnalysisWithoutSelectionReturnsVisibleSafeFailure" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.RunRepositoryAnalysisWithoutSelectionReturnsVisibleSafeFailure" methodname="RunRepositoryAnalysisWithoutSelectionReturnsVisibleSafeFailure" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1374150332" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.002430" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1688" name="TryParseAction_MapsCanonicalCompanionRuntimeActions" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.TryParseAction_MapsCanonicalCompanionRuntimeActions" methodname="TryParseAction_MapsCanonicalCompanionRuntimeActions" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1145099789" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.003635" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1686" name="TryParseAction_MapsPrimaryNativeActions" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.TryParseAction_MapsPrimaryNativeActions" methodname="TryParseAction_MapsPrimaryNativeActions" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1533112782" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.001021" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1687" name="TryParseAction_PreservesTogglePayload" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.TryParseAction_PreservesTogglePayload" methodname="TryParseAction_PreservesTogglePayload" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="1972861728" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.000137" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1691" name="TryParseAction_RejectsUnknownActionWithoutThrowing" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.TryParseAction_RejectsUnknownActionWithoutThrowing" methodname="TryParseAction_RejectsUnknownActionWithoutThrowing" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="316336727" result="Passed" start-time="2026-05-31 16:12:06Z" end-time="2026-05-31 16:12:06Z" duration="0.000101" asserts="0">
+                <properties />
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

@@ -411,6 +411,66 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void EmptyFarmProjectionDoesNotShowDashboardPlaceholderOverlay()
+        {
+            var overlay = new FakeOverlayService();
+            var lifecycle = new FakeLifecycleService();
+            var controllerObject = new GameObject("Desktop Companion Controller");
+            var controller = controllerObject.AddComponent<DesktopCompanionOverlayController>();
+            controller.Initialize(overlay, lifecycle);
+            var settings = DesktopCompanionSettings.CreateDefault();
+            settings.IsDesktopCompanionEnabled = true;
+
+            controller.ApplyFarmSettings(Enumerable.Empty<RepositoryCompanionDisplayItem>(), settings, true, 9);
+
+            Assert.IsNotNull(overlay.LastFarmState);
+            Assert.AreEqual(0, overlay.LastFarmState.overlays.Length);
+            Assert.AreEqual(0, overlay.LastFarmState.visibleCount);
+            Assert.IsFalse(overlay.LastFarmState.enabled);
+            Assert.AreEqual(CompanionDesktopOverlayState.Disabled, overlay.State);
+            Assert.GreaterOrEqual(overlay.HideCount, 1);
+            UnityEngine.Object.DestroyImmediate(controllerObject);
+        }
+
+        [Test]
+        public void FarmProjectionSkipsDefaultAndUnapprovedPlaceholderProfiles()
+        {
+            var overlay = new FakeOverlayService();
+            var lifecycle = new FakeLifecycleService();
+            var controllerObject = new GameObject("Desktop Companion Controller");
+            var controller = controllerObject.AddComponent<DesktopCompanionOverlayController>();
+            controller.Initialize(overlay, lifecycle);
+            var settings = DesktopCompanionSettings.CreateDefault();
+            settings.IsDesktopCompanionEnabled = true;
+
+            controller.ApplyFarmSettings(new[]
+            {
+                new RepositoryCompanionDisplayItem
+                {
+                    RepositoryHash = RepositoryCompanionProfileService.DefaultLocalRepositoryHash,
+                    SafeRepositoryAlias = "Repository",
+                    ApprovedByUser = true,
+                    Archived = false,
+                    DesktopCompanionEnabled = true
+                },
+                new RepositoryCompanionDisplayItem
+                {
+                    RepositoryHash = "repo-unapproved",
+                    SafeRepositoryAlias = "Repository",
+                    ApprovedByUser = false,
+                    Archived = false,
+                    DesktopCompanionEnabled = true
+                }
+            }, settings, true, 10);
+
+            Assert.IsNotNull(overlay.LastFarmState);
+            Assert.AreEqual(0, overlay.LastFarmState.overlays.Length);
+            Assert.AreEqual(0, overlay.LastFarmState.visibleCount);
+            Assert.AreEqual(CompanionDesktopOverlayState.Disabled, overlay.State);
+            UnityEngine.Object.DestroyImmediate(controllerObject);
+        }
+
+        [Test]
         public void FarmProjectionMarksOnlyMatchingRepositoryAsDragging()
         {
             var overlay = new FakeOverlayService { AnyOverlayDragging = true, DraggingRepositoryId = "repo-a" };

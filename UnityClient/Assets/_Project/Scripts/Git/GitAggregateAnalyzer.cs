@@ -56,8 +56,15 @@ namespace TokenForge.Client.Git
             var aggregate = new AggregateState
             {
                 ProjectPathHash = privacySanitizer.HashString(canonicalRootPath),
-                AnalysisWindowDays = input.ClampedAnalysisWindowDays()
+                AnalysisWindowDays = input.ClampedAnalysisWindowDays(),
+                AnalysisMode = input.ResolveAnalysisMode()
             };
+
+            var metadataResult = await HydrateRangeMetadataAsync(canonicalRootPath, input, aggregate, cancellationToken);
+            if (!metadataResult.IsSuccess)
+            {
+                return Failure(metadataResult, "range_metadata");
+            }
 
             if (input.IncludeUncommittedChanges)
             {
@@ -78,11 +85,10 @@ namespace TokenForge.Client.Git
             if (input.IncludeRecentCommits)
             {
                 var maxCommits = input.ClampedMaxCommitsToInspect();
-                var windowDays = input.ClampedAnalysisWindowDays();
-                var logArguments = $"log --since={windowDays}.days.ago --numstat --format=format:{CommitBoundary} -n {maxCommits}";
+                var logArguments = BuildLogArguments(input, aggregate, maxCommits);
                 var logResult = await RunRequiredAsync(canonicalRootPath, logArguments, cancellationToken);
                 if (!logResult.IsSuccess) return Failure(logResult, "log");
-                ParseLogNumstat(logResult.Output, aggregate, maxCommits);
+                ParseLogNumstat(logResult.Output, aggregate, aggregate.AnalysisMode == GitAnalysisMode.RecentTrend ? maxCommits : int.MaxValue);
             }
 
             var summary = aggregate.ToSummary();
@@ -95,6 +101,105 @@ namespace TokenForge.Client.Git
 
             logger?.Info($"Git analysis completed changed_file_bucket={summary.ChangedFileCountBucket} added_line_bucket={summary.AddedLineBucket} warning_count={summary.PrivacyWarnings.Count}");
             return Result<GitChangeSummary>.Success(summary);
+        }
+
+        private async Task<GitCommandResult> HydrateRangeMetadataAsync(
+            string canonicalRootPath,
+            GitRepositoryAnalysisInput input,
+            AggregateState aggregate,
+            CancellationToken cancellationToken)
+        {
+            var headResult = await RunRequiredAsync(canonicalRootPath, "rev-parse HEAD", cancellationToken);
+            if (!headResult.IsSuccess)
+            {
+                return headResult;
+            }
+
+            aggregate.AnalyzedEndCommit = SafeCommit(headResult.Output);
+            aggregate.LastAnalyzedCommit = aggregate.AnalyzedEndCommit;
+
+            var firstCommitResult = await RunRequiredAsync(canonicalRootPath, "log --all --reverse --format=%cI -n 1", cancellationToken);
+            if (!firstCommitResult.IsSuccess)
+            {
+                return firstCommitResult;
+            }
+
+            aggregate.FirstCommitAtUtc = SafeSingleLine(firstCommitResult.Output);
+
+            var countResult = await RunRequiredAsync(canonicalRootPath, "rev-list --all --count", cancellationToken);
+            if (!countResult.IsSuccess)
+            {
+                return countResult;
+            }
+
+            aggregate.TotalCommitsAnalyzed = ParseNonNegative(SafeSingleLine(countResult.Output));
+            if (aggregate.AnalysisMode == GitAnalysisMode.Incremental)
+            {
+                aggregate.AnalyzedStartCommit = SafeCommit(input.LastAnalyzedCommit);
+                var incrementalCount = await RunRequiredAsync(canonicalRootPath, "rev-list --count " + aggregate.AnalyzedStartCommit + "..HEAD", cancellationToken);
+                if (!incrementalCount.IsSuccess)
+                {
+                    return incrementalCount;
+                }
+
+                aggregate.IncrementalCommitCount = ParseNonNegative(SafeSingleLine(incrementalCount.Output));
+                aggregate.AnalysisRangeSummary = "Incremental changes since last analysis";
+            }
+            else if (aggregate.AnalysisMode == GitAnalysisMode.RecentTrend)
+            {
+                aggregate.AnalysisRangeSummary = "Recent " + aggregate.AnalysisWindowDays + " days trend";
+            }
+            else
+            {
+                aggregate.AnalyzedStartCommit = "FIRST_COMMIT";
+                aggregate.IncrementalCommitCount = aggregate.TotalCommitsAnalyzed;
+                aggregate.AnalysisRangeSummary = "Full history analyzed";
+            }
+
+            aggregate.AnalysisIdempotencyKey = aggregate.ProjectPathHash + ":" +
+                                              aggregate.AnalysisMode.ToString().ToLowerInvariant() + ":" +
+                                              aggregate.AnalyzedStartCommit + ":" +
+                                              aggregate.AnalyzedEndCommit;
+            logger?.Info("INFO [AnalysisPipeline] mode=" + aggregate.AnalysisMode +
+                         " total_commits=" + aggregate.TotalCommitsAnalyzed +
+                         " incremental_commits=" + aggregate.IncrementalCommitCount);
+            return GitCommandResult.Success(string.Empty);
+        }
+
+        private static string BuildLogArguments(GitRepositoryAnalysisInput input, AggregateState aggregate, int maxCommits)
+        {
+            if (aggregate.AnalysisMode == GitAnalysisMode.FullBaseline)
+            {
+                return $"log --all --numstat --format={CommitBoundary}";
+            }
+
+            if (aggregate.AnalysisMode == GitAnalysisMode.Incremental)
+            {
+                return $"log {aggregate.AnalyzedStartCommit}..HEAD --numstat --format={CommitBoundary}";
+            }
+
+            var windowDays = input.ClampedAnalysisWindowDays();
+            return $"log --since={windowDays}.days.ago --numstat --format={CommitBoundary} -n {maxCommits}";
+        }
+
+        private static string SafeCommit(string raw)
+        {
+            var value = SafeSingleLine(raw);
+            if (value.Length > 64)
+            {
+                value = value.Substring(0, 64);
+            }
+
+            return value.All(character => char.IsLetterOrDigit(character) || character == '_' || character == '-' || character == '.')
+                ? value
+                : string.Empty;
+        }
+
+        private static string SafeSingleLine(string raw)
+        {
+            return (raw ?? string.Empty)
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault()?.Trim() ?? string.Empty;
         }
 
         public async Task<GitCommandResult> ValidateRepositoryRootAsync(string repositoryRootPath, CancellationToken cancellationToken = default)
@@ -274,7 +379,16 @@ namespace TokenForge.Client.Git
         private sealed class AggregateState
         {
             public string ProjectPathHash { get; set; } = string.Empty;
+            public GitAnalysisMode AnalysisMode { get; set; } = GitAnalysisMode.FullBaseline;
             public int AnalysisWindowDays { get; set; }
+            public string FirstCommitAtUtc { get; set; } = string.Empty;
+            public int TotalCommitsAnalyzed { get; set; }
+            public int IncrementalCommitCount { get; set; }
+            public string LastAnalyzedCommit { get; set; } = string.Empty;
+            public string AnalyzedStartCommit { get; set; } = string.Empty;
+            public string AnalyzedEndCommit { get; set; } = string.Empty;
+            public string AnalysisRangeSummary { get; set; } = string.Empty;
+            public string AnalysisIdempotencyKey { get; set; } = string.Empty;
             public int StatusFileCount { get; set; }
             public int ChangedFileCount { get; set; }
             public int AddedLines { get; set; }
@@ -325,7 +439,7 @@ namespace TokenForge.Client.Git
                     warnings.Add("git_low_confidence");
                 }
 
-                if (AnalysisWindowDays >= GitRepositoryAnalysisInput.MaxAnalysisWindowDays)
+                if (AnalysisMode == GitAnalysisMode.RecentTrend && AnalysisWindowDays >= GitRepositoryAnalysisInput.MaxAnalysisWindowDays)
                 {
                     warnings.Add("git_window_capped");
                 }
@@ -364,6 +478,15 @@ namespace TokenForge.Client.Git
                     AnalysisTimeBucket = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd"),
                     HasUncommittedChanges = HasUncommittedChanges,
                     AnalysisWindowDays = AnalysisWindowDays,
+                    AnalysisMode = AnalysisMode == GitAnalysisMode.FullBaseline ? "full-baseline" : AnalysisMode.ToString().ToLowerInvariant(),
+                    FirstCommitAtUtc = FirstCommitAtUtc,
+                    TotalCommitsAnalyzed = TotalCommitsAnalyzed,
+                    IncrementalCommitCount = IncrementalCommitCount,
+                    LastAnalyzedCommit = LastAnalyzedCommit,
+                    AnalyzedStartCommit = AnalyzedStartCommit,
+                    AnalyzedEndCommit = AnalyzedEndCommit,
+                    AnalysisRangeSummary = AnalysisRangeSummary,
+                    AnalysisIdempotencyKey = AnalysisIdempotencyKey,
                     ConfidenceLevel = confidence,
                     AnalyzerVersion = Version,
                     SafeSessionAlias = "Git aggregate session",

@@ -241,6 +241,7 @@ static CGFloat TokenForgeCompanionReactionCooldown = 1.1;
 static BOOL TokenForgeCompanionAllowsWandering = NO;
 
 static NSRect TokenForgeClampFrameToVisibleFrame(NSRect frame);
+static NSRect TokenForgeNormalizeDashboardFrame(NSRect frame, NSString *source);
 static NSRect TokenForgeVisibleFrameForFrame(NSRect frame);
 static NSRect TokenForgeVisibleFrame(void);
 static CGFloat TokenForgeRectArea(NSRect rect);
@@ -1390,6 +1391,9 @@ static BOOL TokenForgeMenuCanAnalyze = NO;
 static BOOL TokenForgeMenuCanSync = NO;
 static BOOL TokenForgeMenuCanLevelUp = NO;
 static BOOL TokenForgeMenuAnalysisRunning = NO;
+static BOOL TokenForgeMenuMovementEnabled = YES;
+static NSInteger TokenForgeMenuConnectedCompanionCount = 0;
+static NSInteger TokenForgeMenuVisibleOverlayCount = 0;
 static BOOL TokenForgeLifecycleInstallInProgress = NO;
 static BOOL TokenForgeDashboardOpenPending = NO;
 static BOOL TokenForgePendingInitialDashboardOpen = NO;
@@ -1736,14 +1740,6 @@ static BOOL TokenForgeOverlayLaunchPathAllowed(NSString *function, NSString *sou
 static BOOL TokenForgeDashboardLaunchPathAllowed(NSString *function, NSString *source, BOOL explicitUserAction)
 {
     if (!TokenForgeAppReadyForWindowMutation(function ?: @"dashboard", source ?: @"unknown")) {
-        return NO;
-    }
-
-    if (TokenForgeNativeOverlayDisabledAtLaunch && !explicitUserAction) {
-        NSLog(@"INFO [NativeLaunchTrace][SKIP] function=%@ reason=nativeOverlayDisabledAtLaunch source=%@ explicit=%@",
-              function ?: @"dashboard",
-              source ?: @"unknown",
-              explicitUserAction ? @"true" : @"false");
         return NO;
     }
 
@@ -2215,7 +2211,10 @@ static void TokenForgeLogWindowLifecycle(NSString *event, NSWindow *window, NSSt
     }
 
     NSString *contentClass = window.contentView != nil ? NSStringFromClass([window.contentView class]) : @"nil";
-    NSLog(@"INFO [WindowLifecycle] %@ id=%p title=%@ class=%@ frame=(%.2f,%.2f %.2fx%.2f) contentView=%@ visible=%@ reason=%@",
+    NSScreen *screen = window.screen ?: NSScreen.mainScreen;
+    NSRect screenFrame = screen != nil ? screen.frame : NSMakeRect(0, 0, 0, 0);
+    NSRect visibleFrame = screen != nil ? screen.visibleFrame : NSMakeRect(0, 0, 0, 0);
+    NSLog(@"INFO [WindowLifecycle] %@ id=%p title=%@ class=%@ frame=(%.2f,%.2f %.2fx%.2f) contentView=%@ visible=%@ key=%@ main=%@ miniaturized=%@ screen=(%.2f,%.2f %.2fx%.2f) visibleFrame=(%.2f,%.2f %.2fx%.2f) reason=%@",
           event ?: @"event",
           window,
           window.title ?: @"",
@@ -2226,6 +2225,17 @@ static void TokenForgeLogWindowLifecycle(NSString *event, NSWindow *window, NSSt
           window.frame.size.height,
           contentClass,
           window.isVisible ? @"true" : @"false",
+          window.isKeyWindow ? @"true" : @"false",
+          window.isMainWindow ? @"true" : @"false",
+          window.isMiniaturized ? @"true" : @"false",
+          screenFrame.origin.x,
+          screenFrame.origin.y,
+          screenFrame.size.width,
+          screenFrame.size.height,
+          visibleFrame.origin.x,
+          visibleFrame.origin.y,
+          visibleFrame.size.width,
+          visibleFrame.size.height,
           reason ?: @"none");
     if (TokenForgeWindowLooksBlank(window)) {
         if (TokenForgeDumpingWindows) {
@@ -2494,6 +2504,51 @@ static NSRect TokenForgeClampFrameToVisibleFrame(NSRect frame)
     NSRect visible = TokenForgeVisibleFrameForFrame(frame);
     frame.origin.x = MIN(MAX(frame.origin.x, NSMinX(visible)), NSMaxX(visible) - frame.size.width);
     frame.origin.y = MIN(MAX(frame.origin.y, NSMinY(visible)), NSMaxY(visible) - frame.size.height);
+    return frame;
+}
+
+static NSRect TokenForgeNormalizeDashboardFrame(NSRect frame, NSString *source)
+{
+    NSRect visible = TokenForgeVisibleFrameForFrame(frame);
+    CGFloat minimumWidth = 920.0;
+    CGFloat minimumHeight = 620.0;
+    CGFloat maximumWidth = MAX(minimumWidth, visible.size.width - 24.0);
+    CGFloat maximumHeight = MAX(minimumHeight, visible.size.height - 24.0);
+    BOOL invalid = !isfinite(frame.origin.x) ||
+                   !isfinite(frame.origin.y) ||
+                   !isfinite(frame.size.width) ||
+                   !isfinite(frame.size.height) ||
+                   frame.size.width < minimumWidth ||
+                   frame.size.height < minimumHeight ||
+                   NSIsEmptyRect(frame);
+    NSRect original = frame;
+    if (!isfinite(frame.origin.x)) frame.origin.x = NSMinX(visible);
+    if (!isfinite(frame.origin.y)) frame.origin.y = NSMinY(visible);
+    if (!isfinite(frame.size.width)) frame.size.width = 1180.0;
+    if (!isfinite(frame.size.height)) frame.size.height = 760.0;
+    frame.size.width = MIN(MAX(frame.size.width, minimumWidth), maximumWidth);
+    frame.size.height = MIN(MAX(frame.size.height, minimumHeight), maximumHeight);
+    if (invalid || !NSIntersectsRect(frame, visible)) {
+        frame.origin.x = NSMidX(visible) - frame.size.width * 0.5;
+        frame.origin.y = NSMidY(visible) - frame.size.height * 0.5;
+    }
+
+    frame = TokenForgeClampFrameToVisibleFrame(frame);
+    NSLog(@"INFO [DashboardLifecycle][FRAME_RESTORE] source=%@ rawFrame=(%.2f,%.2f %.2fx%.2f) normalizedFrame=(%.2f,%.2f %.2fx%.2f) visibleFrame=(%.2f,%.2f %.2fx%.2f) repaired=%@",
+          source ?: @"unknown",
+          original.origin.x,
+          original.origin.y,
+          original.size.width,
+          original.size.height,
+          frame.origin.x,
+          frame.origin.y,
+          frame.size.width,
+          frame.size.height,
+          visible.origin.x,
+          visible.origin.y,
+          visible.size.width,
+          visible.size.height,
+          invalid ? @"true" : @"false");
     return frame;
 }
 
@@ -3915,6 +3970,188 @@ static BOOL TokenForgeDashboardBool(NSDictionary *dictionary, NSString *key, BOO
     return fallback;
 }
 
+static NSString *TokenForgeShopCategoryTitle(NSString *categoryId)
+{
+    if ([categoryId isEqualToString:@"zodiac"]) {
+        return @"Zodiac";
+    }
+    if ([categoryId isEqualToString:@"skins"]) {
+        return @"Skins";
+    }
+    if ([categoryId isEqualToString:@"accessories"]) {
+        return @"Accessories";
+    }
+    if ([categoryId isEqualToString:@"effects"]) {
+        return @"Effects";
+    }
+    if ([categoryId isEqualToString:@"motions"]) {
+        return @"Motions";
+    }
+    if ([categoryId isEqualToString:@"themes"]) {
+        return @"Themes";
+    }
+    if ([categoryId isEqualToString:@"exclusive"]) {
+        return @"Exclusive";
+    }
+    if ([categoryId isEqualToString:@"badges"]) {
+        return @"Badges";
+    }
+    if ([categoryId isEqualToString:@"owned"]) {
+        return @"Owned";
+    }
+    return @"Featured";
+}
+
+@interface TokenForgeShopPreviewView : NSView
+@property(nonatomic, strong) NSString *previewType;
+@property(nonatomic, strong) NSString *zodiacType;
+@property(nonatomic, strong) NSString *rarity;
+@end
+
+@implementation TokenForgeShopPreviewView
+- (BOOL)isFlipped { return YES; }
+- (void)drawRect:(NSRect)dirtyRect
+{
+    [super drawRect:dirtyRect];
+    NSRect bounds = NSInsetRect(self.bounds, 6.0, 6.0);
+    NSString *preview = self.previewType ?: @"generic";
+    NSString *zodiac = self.zodiacType ?: @"";
+    NSColor *accent = [NSColor colorWithCalibratedRed:0.36 green:0.62 blue:1.0 alpha:1.0];
+    if ([self.rarity isEqualToString:@"Epic"]) accent = [NSColor colorWithCalibratedRed:0.70 green:0.38 blue:1.0 alpha:1.0];
+    if ([self.rarity isEqualToString:@"Legendary"]) accent = [NSColor colorWithCalibratedRed:1.0 green:0.68 blue:0.18 alpha:1.0];
+    [[NSColor colorWithCalibratedRed:0.07 green:0.10 blue:0.15 alpha:1.0] setFill];
+    [[NSBezierPath bezierPathWithRoundedRect:self.bounds xRadius:10.0 yRadius:10.0] fill];
+    [accent setStroke];
+    NSBezierPath *frame = [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(self.bounds, 1.0, 1.0) xRadius:10.0 yRadius:10.0];
+    frame.lineWidth = 2.0;
+    [frame stroke];
+
+    if ([preview containsString:@"white_cat"] || [preview containsString:@"calico"]) {
+        [TokenForgeShopPreviewView drawCatInRect:bounds calico:[preview containsString:@"calico"]];
+    } else if ([preview containsString:@"badge"] || [preview containsString:@"crown"] || [preview containsString:@"halo"] || [preview containsString:@"glasses"] || [preview containsString:@"headphones"] || [preview containsString:@"cape"] || [preview containsString:@"scroll"] || [preview containsString:@"ring"] || [preview containsString:@"charm"] || [preview containsString:@"goggles"] || [preview containsString:@"crest"]) {
+        [TokenForgeShopPreviewView drawAccessoryInRect:bounds accent:accent preview:preview];
+    } else if (zodiac.length > 0 || [preview containsString:@"zodiac"]) {
+        [TokenForgeShopPreviewView drawZodiacMascot:zodiac.length > 0 ? zodiac : preview inRect:bounds accent:accent];
+    } else if ([preview containsString:@"trail"] || [preview containsString:@"motion"]) {
+        [TokenForgeShopPreviewView drawTrailInRect:bounds accent:accent];
+    } else {
+        [TokenForgeShopPreviewView drawAuraInRect:bounds accent:accent];
+    }
+}
++ (void)drawCatInRect:(NSRect)rect calico:(BOOL)calico
+{
+    NSColor *body = calico ? [NSColor colorWithCalibratedRed:1.0 green:0.94 blue:0.82 alpha:1.0] : [NSColor whiteColor];
+    [body setFill];
+    [[NSBezierPath bezierPathWithOvalInRect:NSInsetRect(rect, 12.0, 18.0)] fill];
+    NSBezierPath *leftEar = [NSBezierPath bezierPath];
+    [leftEar moveToPoint:NSMakePoint(NSMinX(rect)+18, NSMinY(rect)+26)];
+    [leftEar lineToPoint:NSMakePoint(NSMinX(rect)+27, NSMinY(rect)+8)];
+    [leftEar lineToPoint:NSMakePoint(NSMinX(rect)+38, NSMinY(rect)+28)];
+    [leftEar closePath];
+    [leftEar fill];
+    NSBezierPath *rightEar = [NSBezierPath bezierPath];
+    [rightEar moveToPoint:NSMakePoint(NSMaxX(rect)-18, NSMinY(rect)+26)];
+    [rightEar lineToPoint:NSMakePoint(NSMaxX(rect)-27, NSMinY(rect)+8)];
+    [rightEar lineToPoint:NSMakePoint(NSMaxX(rect)-38, NSMinY(rect)+28)];
+    [rightEar closePath];
+    [rightEar fill];
+    if (calico) {
+        [[NSColor colorWithCalibratedRed:0.95 green:0.45 blue:0.18 alpha:1.0] setFill];
+        [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(NSMinX(rect)+18, NSMinY(rect)+28, 18, 14)] fill];
+        [[NSColor colorWithCalibratedWhite:0.12 alpha:1.0] setFill];
+        [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(NSMaxX(rect)-38, NSMinY(rect)+32, 15, 12)] fill];
+    }
+    [[NSColor colorWithCalibratedWhite:0.10 alpha:1.0] setFill];
+    [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(NSMidX(rect)-13, NSMidY(rect)-5, 4, 4)] fill];
+    [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(NSMidX(rect)+9, NSMidY(rect)-5, 4, 4)] fill];
+}
++ (void)drawAccessoryInRect:(NSRect)rect accent:(NSColor *)accent preview:(NSString *)preview
+{
+    [accent setFill];
+    NSBezierPath *badge = [NSBezierPath bezierPathWithRoundedRect:NSMakeRect(NSMidX(rect)-18, NSMidY(rect)-18, 36, 36) xRadius:8 yRadius:8];
+    [badge fill];
+    [[NSColor whiteColor] setStroke];
+    NSBezierPath *mark = [NSBezierPath bezierPath];
+    if ([preview containsString:@"headphones"]) {
+        [mark appendBezierPathWithArcWithCenter:NSMakePoint(NSMidX(rect), NSMidY(rect)) radius:19 startAngle:210 endAngle:-30 clockwise:YES];
+        [mark moveToPoint:NSMakePoint(NSMidX(rect)-20, NSMidY(rect)+4)];
+        [mark lineToPoint:NSMakePoint(NSMidX(rect)-20, NSMidY(rect)+22)];
+        [mark moveToPoint:NSMakePoint(NSMidX(rect)+20, NSMidY(rect)+4)];
+        [mark lineToPoint:NSMakePoint(NSMidX(rect)+20, NSMidY(rect)+22)];
+    } else {
+        [mark moveToPoint:NSMakePoint(NSMidX(rect)-12, NSMidY(rect)+2)];
+        [mark lineToPoint:NSMakePoint(NSMidX(rect)-3, NSMidY(rect)+12)];
+        [mark lineToPoint:NSMakePoint(NSMidX(rect)+14, NSMidY(rect)-10)];
+    }
+    mark.lineWidth = 4.0;
+    [mark stroke];
+}
++ (void)drawTrailInRect:(NSRect)rect accent:(NSColor *)accent
+{
+    [accent setStroke];
+    for (NSInteger index = 0; index < 3; index++) {
+        NSBezierPath *path = [NSBezierPath bezierPath];
+        CGFloat y = NSMinY(rect) + 22 + index * 14;
+        [path moveToPoint:NSMakePoint(NSMinX(rect)+12, y)];
+        [path curveToPoint:NSMakePoint(NSMaxX(rect)-12, y-5) controlPoint1:NSMakePoint(NSMidX(rect)-18, y-18) controlPoint2:NSMakePoint(NSMidX(rect)+12, y+18)];
+        path.lineWidth = 3.0;
+        [path stroke];
+    }
+}
++ (void)drawAuraInRect:(NSRect)rect accent:(NSColor *)accent
+{
+    [[accent colorWithAlphaComponent:0.22] setFill];
+    [[NSBezierPath bezierPathWithOvalInRect:NSInsetRect(rect, 5, 5)] fill];
+    [accent setStroke];
+    NSBezierPath *star = [NSBezierPath bezierPath];
+    [star moveToPoint:NSMakePoint(NSMidX(rect), NSMinY(rect)+10)];
+    [star lineToPoint:NSMakePoint(NSMidX(rect)+10, NSMidY(rect)-4)];
+    [star lineToPoint:NSMakePoint(NSMaxX(rect)-10, NSMidY(rect))];
+    [star lineToPoint:NSMakePoint(NSMidX(rect)+8, NSMidY(rect)+8)];
+    [star lineToPoint:NSMakePoint(NSMidX(rect), NSMaxY(rect)-8)];
+    star.lineWidth = 3.0;
+    [star stroke];
+}
++ (void)drawZodiacMascot:(NSString *)zodiac inRect:(NSRect)rect accent:(NSColor *)accent
+{
+    [accent setFill];
+    [[NSBezierPath bezierPathWithOvalInRect:NSInsetRect(rect, 18, 22)] fill];
+    [[NSColor colorWithCalibratedWhite:1 alpha:0.92] setFill];
+    if ([zodiac containsString:@"rabbit"]) {
+        [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(NSMidX(rect)-22, NSMinY(rect)+2, 12, 34)] fill];
+        [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(NSMidX(rect)+10, NSMinY(rect)+2, 12, 34)] fill];
+    } else if ([zodiac containsString:@"ox"] || [zodiac containsString:@"goat"] || [zodiac containsString:@"dragon"]) {
+        NSBezierPath *horns = [NSBezierPath bezierPath];
+        [horns moveToPoint:NSMakePoint(NSMidX(rect)-18, NSMinY(rect)+26)];
+        [horns lineToPoint:NSMakePoint(NSMidX(rect)-34, NSMinY(rect)+10)];
+        [horns moveToPoint:NSMakePoint(NSMidX(rect)+18, NSMinY(rect)+26)];
+        [horns lineToPoint:NSMakePoint(NSMidX(rect)+34, NSMinY(rect)+10)];
+        horns.lineWidth = 5.0;
+        [horns stroke];
+    } else if ([zodiac containsString:@"tiger"]) {
+        [[NSColor colorWithCalibratedWhite:0.06 alpha:1] setStroke];
+        for (NSInteger index = 0; index < 3; index++) {
+            NSBezierPath *stripe = [NSBezierPath bezierPath];
+            [stripe moveToPoint:NSMakePoint(NSMidX(rect)-18 + index * 14, NSMidY(rect)-18)];
+            [stripe lineToPoint:NSMakePoint(NSMidX(rect)-22 + index * 14, NSMidY(rect)+10)];
+            stripe.lineWidth = 3.0;
+            [stripe stroke];
+        }
+    } else if ([zodiac containsString:@"snake"]) {
+        [TokenForgeShopPreviewView drawTrailInRect:rect accent:[NSColor colorWithCalibratedRed:0.2 green:0.95 blue:0.55 alpha:1]];
+    } else if ([zodiac containsString:@"rooster"]) {
+        [[NSColor systemRedColor] setFill];
+        [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(NSMidX(rect)-8, NSMinY(rect)+3, 16, 24)] fill];
+    } else if ([zodiac containsString:@"pig"]) {
+        [[NSColor colorWithCalibratedRed:1.0 green:0.68 blue:0.75 alpha:1] setFill];
+        [[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(NSMidX(rect)-13, NSMidY(rect)-2, 26, 15) xRadius:7 yRadius:7] fill];
+    } else {
+        [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(NSMinX(rect)+14, NSMinY(rect)+18, 15, 15)] fill];
+        [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(NSMaxX(rect)-29, NSMinY(rect)+18, 15, 15)] fill];
+    }
+}
+@end
+
 static BOOL TokenForgeLooksLikeRawDashboardMetadata(NSString *value)
 {
     if (value.length == 0) {
@@ -4007,6 +4244,7 @@ static NSDictionary *TokenForgeDefaultDashboardState(void)
         @"providerUsagePercentages": @[],
         @"repositories": @[],
         @"agentProviders": @[],
+        @"tokenShop": @{@"currencyName": @"Agent Coins", @"balance": @0, @"hasActiveRepository": @NO, @"statusText": @"Spend coins earned by each AI agent's token usage.", @"lastTransactionStatus": @"", @"targetType": @"aiAgent", @"selectedAgentId": @"codex", @"selectedCategory": @"featured", @"categoryIds": @[@"featured", @"zodiac", @"skins", @"accessories", @"effects", @"motions", @"themes", @"exclusive", @"badges", @"owned"], @"agents": @[], @"ownedItemIds": @"", @"equippedItemIds": @"", @"items": @[]},
         @"activity": @{@"todaySummary": @"No activity yet", @"state": @"No pending review", @"code": @0, @"focus": @0, @"debug": @0, @"design": @0, @"sync": @0, @"recentRunsSummary": @"No recent runs", @"savedReviewsSummary": @"No saved reviews", @"repositoryActivitySummary": @"No repository activity", @"agentActivitySummary": @"No AI agent activity", @"runningJobs": @[], @"pendingReviews": @[], @"recentRuns": @[], @"hasRecentRuns": @NO, @"hasSavedReviews": @NO, @"hasRepositoryActivity": @NO, @"hasAiAgentActivity": @NO},
         @"review": @{@"reviewId": @"", @"pending": @NO, @"summary": @"No pending review", @"source": @"", @"repositoryName": @"", @"providerName": @"", @"confidence": @"", @"estimatedXpDelta": @0, @"codeDelta": @0, @"focusDelta": @0, @"debugDelta": @0, @"designDelta": @0, @"syncDelta": @0, @"warnings": @"", @"canSaveGrowth": @NO, @"canDiscard": @NO, @"canViewDetails": @NO, @"detailVisible": @NO, @"selectedReviewId": @"", @"generatedAt": @"", @"status": @"none", @"evidenceSummary": @"", @"categoryBreakdown": @"", @"privacyNote": @"Raw prompt, code, file content, and command logs are not stored."}
     };
@@ -4434,6 +4672,16 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     TokenForgeCleanupDuplicateDashboardWindows(self.dashboardWindow, openSource);
     [NSApp activateIgnoringOtherApps:YES];
     BOOL wasMiniaturized = self.dashboardWindow.isMiniaturized;
+    NSRect normalizedFrame = TokenForgeNormalizeDashboardFrame(self.dashboardWindow.frame, openSource);
+    if (!NSEqualRects(normalizedFrame, self.dashboardWindow.frame)) {
+        [self.dashboardWindow setFrame:normalizedFrame display:NO];
+        NSLog(@"INFO [DashboardLifecycle][FRAME_REPAIR_APPLIED] source=%@ frame=(%.2f,%.2f %.2fx%.2f)",
+              openSource,
+              normalizedFrame.origin.x,
+              normalizedFrame.origin.y,
+              normalizedFrame.size.width,
+              normalizedFrame.size.height);
+    }
     NSLog(@"INFO [DashboardLifecycle][DEMINIATURIZE] source=%@ wasMiniaturized=%@",
           openSource,
           wasMiniaturized ? @"true" : @"false");
@@ -4618,20 +4866,25 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     NSDictionary *repository = TokenForgeDashboardDictionary(state.count > 0 ? state : self.state, @"repository");
     NSDictionary *agent = TokenForgeDashboardDictionary(state.count > 0 ? state : self.state, @"codexAgent");
     NSDictionary *agents = TokenForgeDashboardDictionary(state.count > 0 ? state : self.state, @"agents");
-    TokenForgeMenuCompanionName = [TokenForgeDashboardString(companion, @"name", @"Token") copy];
-    TokenForgeMenuStage = [TokenForgeDashboardString(companion, @"stage", @"Egg") copy];
-    TokenForgeMenuStageIndex = MAX(0, MIN(4, TokenForgeDashboardInteger(companion, @"stageIndex", 0)));
-    TokenForgeMenuLevel = MAX(1, TokenForgeDashboardInteger(companion, @"level", 1));
+    NSDictionary *farm = TokenForgeDashboardDictionary(state.count > 0 ? state : self.state, @"companionFarm");
+    BOOL repositoryConnected = TokenForgeDashboardBool(repository, @"connected", NO);
+    TokenForgeMenuCompanionName = [TokenForgeDashboardString(companion, @"name", repositoryConnected ? @"Token" : @"TokenForge") copy];
+    TokenForgeMenuStage = [TokenForgeDashboardString(companion, @"stage", repositoryConnected ? @"Egg" : @"None") copy];
+    TokenForgeMenuStageIndex = repositoryConnected ? MAX(0, MIN(4, TokenForgeDashboardInteger(companion, @"stageIndex", 0))) : 0;
+    TokenForgeMenuLevel = repositoryConnected ? MAX(1, TokenForgeDashboardInteger(companion, @"level", 1)) : 0;
     TokenForgeMenuRepositoryAlias = [TokenForgeDashboardString(repository, @"name", TokenForgeDashboardBool(repository, @"connected", NO) ? @"Repository" : @"Not selected") copy];
     TokenForgeMenuAgentStatus = [TokenForgeDashboardString(agents, @"statusText", TokenForgeDashboardString(agent, @"statusText", @"Not connected")) copy];
     TokenForgeMenuSyncStatus = [TokenForgeDashboardString(state.count > 0 ? state : self.state, @"syncStatusText", @"Optional sync") copy];
     TokenForgeMenuCompanionEnabled = TokenForgeDashboardBool(state.count > 0 ? state : self.state, @"companionVisible", TokenForgeMenuCompanionEnabled);
     TokenForgeMenuClickThrough = TokenForgeDashboardBool(state.count > 0 ? state : self.state, @"clickThroughEnabled", TokenForgeMenuClickThrough);
+    TokenForgeMenuMovementEnabled = TokenForgeDashboardBool(state.count > 0 ? state : self.state, @"movementEnabled", TokenForgeMenuMovementEnabled);
     TokenForgeMenuCanLevelUp = TokenForgeDashboardBool(companion, @"canLevelUp", NO);
     TokenForgeMenuAnalysisRunning = TokenForgeDashboardBool(state.count > 0 ? state : self.state, @"isAnalysisRunning", NO);
     TokenForgeMenuReaction = [TokenForgeDashboardString(TokenForgeDashboardDictionary(companion, @"motion"), @"reaction", @"none") copy];
     TokenForgeMenuCanAnalyze = TokenForgeDashboardBool(state.count > 0 ? state : self.state, @"primaryActionEnabled", YES) &&
         !TokenForgeDashboardBool(state.count > 0 ? state : self.state, @"isAnalysisRunning", NO);
+    TokenForgeMenuConnectedCompanionCount = MAX(0, TokenForgeDashboardInteger(repository, @"connectedCount", 0));
+    TokenForgeMenuVisibleOverlayCount = MAX(0, TokenForgeDashboardInteger(farm, @"visibleCount", 0));
     TokenForgeHydrateCompanionSnapshot(TokenForgeDashboardString(repository, @"id", @""),
                                        TokenForgeMenuStageIndex,
                                        TokenForgeMenuLevel,
@@ -4670,7 +4923,9 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     NSRect frame = NSMakeRect(0, 0, 1180, 760);
     NSString *savedFrame = [[NSUserDefaults standardUserDefaults] stringForKey:TokenForgeDashboardFrameKey];
     if (savedFrame.length > 0) {
-        frame = TokenForgeClampFrameToVisibleFrame(NSRectFromString(savedFrame));
+        frame = TokenForgeNormalizeDashboardFrame(NSRectFromString(savedFrame), @"savedFrame");
+    } else {
+        frame = TokenForgeNormalizeDashboardFrame(frame, @"defaultFrame");
     }
     self.dashboardWindow = [[NSWindow alloc] initWithContentRect:frame
                                                        styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable
@@ -4763,7 +5018,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     root.translatesAutoresizingMaskIntoConstraints = NO;
 
     NSStackView *split = TokenForgeDashboardHorizontalStack(0.0);
-    split.alignment = NSLayoutAttributeTop;
+    split.alignment = NSLayoutAttributeHeight;
     split.distribution = NSStackViewDistributionFill;
     [root addSubview:split];
     TokenForgePinSubview(split, root, 0, 0, 0, 0);
@@ -4799,11 +5054,13 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     document.translatesAutoresizingMaskIntoConstraints = NO;
     scrollView.documentView = document;
     [document.widthAnchor constraintEqualToAnchor:scrollView.contentView.widthAnchor].active = YES;
+    [document.heightAnchor constraintGreaterThanOrEqualToAnchor:scrollView.contentView.heightAnchor].active = YES;
 
     NSStackView *content = TokenForgeDashboardVerticalStack(22.0);
     content.alignment = NSLayoutAttributeWidth;
     [document addSubview:content];
     TokenForgePinSubview(content, document, 32, 44, 38, 44);
+    NSLog(@"INFO [DashboardLayout] rootHeight=fill splitAlignment=height documentMinHeight=scrollContent");
 
     [self populateDashboardContent:content];
     return root;
@@ -4816,14 +5073,15 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     NSString *syncText = TokenForgeDashboardString(self.state, @"syncStatusText", @"Optional sync");
 
     NSDictionary *repository = TokenForgeDashboardDictionary(self.state, @"repository");
-    NSButton *thumbCard = TokenForgeDashboardButton(@"", self, @selector(openActiveCompanionDashboard:));
+    BOOL repositoryConnected = TokenForgeDashboardBool(repository, @"connected", NO);
+    NSButton *thumbCard = TokenForgeDashboardButton(@"", self, repositoryConnected ? @selector(openActiveCompanionDashboard:) : @selector(connectRepository:));
     thumbCard.bordered = NO;
     thumbCard.wantsLayer = YES;
     thumbCard.layer.backgroundColor = TokenForgeCardBackgroundColor().CGColor;
     thumbCard.layer.cornerRadius = 8.0;
     thumbCard.layer.borderColor = [NSColor colorWithCalibratedWhite:0.0 alpha:0.08].CGColor;
     thumbCard.layer.borderWidth = 1.0;
-    thumbCard.toolTip = @"Open the active companion dashboard.";
+    thumbCard.toolTip = repositoryConnected ? @"Open the active companion dashboard." : @"Add a repository to create a companion.";
     thumbCard.identifier = TokenForgeDashboardString(repository, @"id", @"");
     [thumbCard.heightAnchor constraintGreaterThanOrEqualToConstant:132.0].active = YES;
     NSStackView *thumbStack = TokenForgeDashboardHorizontalStack(14.0);
@@ -4831,42 +5089,52 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     thumbStack.alignment = NSLayoutAttributeCenterY;
     [thumbCard addSubview:thumbStack];
     TokenForgePinSubview(thumbStack, thumbCard, 16, 16, 16, 16);
-    TokenForgeCompanionView *icon = [[TokenForgeCompanionView alloc] initWithFrame:NSMakeRect(0, 0, 52, 52)];
-    icon.translatesAutoresizingMaskIntoConstraints = NO;
-    icon.viewRole = TokenForgeCompanionRenderRoleDashboardPreview;
-    icon.stage = MAX(0, MIN(4, TokenForgeDashboardInteger(companion, @"stageIndex", 2)));
-    icon.visualThemeId = TokenForgeDashboardString(companion, @"skin", @"orange_cat");
-    icon.assetType = @"sidebar";
-    icon.safeDrawingInset = 5.0;
-    [icon.widthAnchor constraintEqualToConstant:52.0].active = YES;
-    [icon.heightAnchor constraintEqualToConstant:52.0].active = YES;
-    [thumbStack addArrangedSubview:icon];
+    if (repositoryConnected) {
+        TokenForgeCompanionView *icon = [[TokenForgeCompanionView alloc] initWithFrame:NSMakeRect(0, 0, 52, 52)];
+        icon.translatesAutoresizingMaskIntoConstraints = NO;
+        icon.viewRole = TokenForgeCompanionRenderRoleDashboardPreview;
+        icon.stage = MAX(0, MIN(4, TokenForgeDashboardInteger(companion, @"stageIndex", 2)));
+        icon.visualThemeId = TokenForgeDashboardString(companion, @"skin", @"orange_cat");
+        icon.assetType = @"sidebar";
+        icon.safeDrawingInset = 5.0;
+        [icon.widthAnchor constraintEqualToConstant:52.0].active = YES;
+        [icon.heightAnchor constraintEqualToConstant:52.0].active = YES;
+        [thumbStack addArrangedSubview:icon];
+    }
     NSStackView *labels = TokenForgeDashboardVerticalStack(4.0);
     labels.alignment = NSLayoutAttributeLeading;
     [labels setContentHuggingPriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
     [labels setContentCompressionResistancePriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationHorizontal];
     [labels.widthAnchor constraintGreaterThanOrEqualToConstant:142.0].active = YES;
-    NSTextField *nameLabel = TokenForgeDashboardLabel(name, 16.0, NSFontWeightSemibold, TokenForgeLightCardPrimaryTextColor(), 2);
+    NSTextField *nameLabel = TokenForgeDashboardLabel(repositoryConnected ? name : @"No repository connected", 16.0, NSFontWeightSemibold, TokenForgeLightCardPrimaryTextColor(), 2);
     nameLabel.lineBreakMode = NSLineBreakByWordWrapping;
     [nameLabel setContentCompressionResistancePriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationHorizontal];
     [labels addArrangedSubview:nameLabel];
-    NSTextField *activeLabel = TokenForgeRequiredOneLineLabel(@"● Active", 12.0, NSFontWeightMedium, [NSColor systemGreenColor]);
+    NSTextField *activeLabel = TokenForgeRequiredOneLineLabel(repositoryConnected ? @"Active repository" : @"Add Repository to begin", 12.0, NSFontWeightMedium, repositoryConnected ? [NSColor systemGreenColor] : [NSColor systemBlueColor]);
     [labels addArrangedSubview:activeLabel];
-    NSTextField *stageLabel = TokenForgeRequiredOneLineLabel([NSString stringWithFormat:@"%@ · Lv %ld", TokenForgeDashboardString(companion, @"stage", @"Egg"), (long)TokenForgeDashboardInteger(companion, @"level", 1)], 12.5, NSFontWeightMedium, TokenForgeLightCardSecondaryTextColor());
-    [labels addArrangedSubview:stageLabel];
-    if (TokenForgeDashboardBool(companion, @"canLevelUp", NO)) {
+    if (repositoryConnected) {
+        NSTextField *stageLabel = TokenForgeRequiredOneLineLabel([NSString stringWithFormat:@"%@ · Lv %ld", TokenForgeDashboardString(companion, @"stage", @"Egg"), (long)TokenForgeDashboardInteger(companion, @"level", 1)], 12.5, NSFontWeightMedium, TokenForgeLightCardSecondaryTextColor());
+        [labels addArrangedSubview:stageLabel];
+    }
+    if (repositoryConnected && TokenForgeDashboardBool(companion, @"canLevelUp", NO)) {
         [labels addArrangedSubview:TokenForgeDashboardLabel(@"Ready to evolve", 11.0, NSFontWeightSemibold, [NSColor systemOrangeColor], 1)];
         NSButton *evolve = TokenForgePrimaryButton(@"Evolve", self, @selector(levelUpCompanion:));
         [evolve.heightAnchor constraintEqualToConstant:28.0].active = YES;
         [labels addArrangedSubview:evolve];
     }
-    NSTextField *xpLabel = TokenForgeRequiredOneLineLabel([NSString stringWithFormat:@"%ld/%ld XP",
-                                                           (long)MAX(0, TokenForgeDashboardInteger(companion, @"xp", 0)),
-                                                           (long)MAX(1, TokenForgeDashboardInteger(companion, @"xpToNextLevel", 250))], 12.0, NSFontWeightRegular, TokenForgeMutedTextColor());
-    [labels addArrangedSubview:xpLabel];
-    NSString *repositoryLabel = TokenForgeDashboardBool(repository, @"connected", NO)
+    if (repositoryConnected) {
+        NSTextField *xpLabel = TokenForgeRequiredOneLineLabel([NSString stringWithFormat:@"%ld/%ld XP",
+                                                               (long)MAX(0, TokenForgeDashboardInteger(companion, @"xp", 0)),
+                                                               (long)MAX(1, TokenForgeDashboardInteger(companion, @"xpToNextLevel", 250))], 12.0, NSFontWeightRegular, TokenForgeMutedTextColor());
+        [labels addArrangedSubview:xpLabel];
+    } else {
+        NSButton *addRepository = TokenForgePrimaryButton(@"Add Repository", self, @selector(connectRepository:));
+        [addRepository.heightAnchor constraintEqualToConstant:30.0].active = YES;
+        [labels addArrangedSubview:addRepository];
+    }
+    NSString *repositoryLabel = repositoryConnected
         ? TokenForgeDashboardString(repository, @"name", @"Repository")
-        : @"No repository connected";
+        : @"No desktop overlay until a repository is active";
     NSTextField *repositoryNameLabel = TokenForgeDashboardLabel(repositoryLabel, 11.0, NSFontWeightMedium, TokenForgeMutedTextColor(), 1);
     repositoryNameLabel.lineBreakMode = NSLineBreakByTruncatingTail;
     [labels addArrangedSubview:repositoryNameLabel];
@@ -4921,6 +5189,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
         @[@"Repositories", @"repository", @"repository:"],
         @[@"AI Agents", @"aiAgents", @"codexAgent:"],
         @[@"Activity", @"activity", @"activity:"],
+        @[@"Token Shop", @"tokenShop", @"tokenShop:"],
         @[@"Settings", @"settings", @"settings:"],
         @[@"Homepage", @"homepage", @"homepage:"],
         @[@"Report Issue", @"reportIssue", @"reportIssue:"],
@@ -4984,10 +5253,14 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     }
     NSStackView *statusStrip = TokenForgeDashboardHorizontalStack(8.0);
     [statusStrip addArrangedSubview:[self pillLabel:[NSString stringWithFormat:@"AI agents · %ld connected", (long)TokenForgeDashboardInteger(agentsState, @"connectedCount", 0)]]];
-    [statusStrip addArrangedSubview:[self pillLabel:[NSString stringWithFormat:@"Lv %ld · %ld/%ld XP",
-                                                     (long)TokenForgeDashboardInteger(companion, @"level", 1),
-                                                     (long)MAX(0, TokenForgeDashboardInteger(companion, @"xp", 0)),
-                                                     (long)MAX(1, TokenForgeDashboardInteger(companion, @"xpToNextLevel", 250))]]];
+    if (TokenForgeDashboardBool(repositoryState, @"connected", NO)) {
+        [statusStrip addArrangedSubview:[self pillLabel:[NSString stringWithFormat:@"Lv %ld · %ld/%ld XP",
+                                                         (long)TokenForgeDashboardInteger(companion, @"level", 1),
+                                                         (long)MAX(0, TokenForgeDashboardInteger(companion, @"xp", 0)),
+                                                         (long)MAX(1, TokenForgeDashboardInteger(companion, @"xpToNextLevel", 250))]]];
+    } else {
+        [statusStrip addArrangedSubview:[self pillLabel:@"No repository companion"]];
+    }
     [statusStrip addArrangedSubview:[self pillLabel:[NSString stringWithFormat:@"Desktop · %@", desktopActual ? @"On" : (desktopDesired ? @"Starting" : @"Off")]]];
     [headerActions addArrangedSubview:statusStrip];
     if (TokenForgeDashboardBool(self.state, @"isAnalysisRunning", NO)) {
@@ -5023,6 +5296,11 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
 
     if ([self.selectedNavItem isEqualToString:@"activity"]) {
         [grid addArrangedSubview:[self activityScreenWithActivity:activity review:review]];
+        return;
+    }
+
+    if ([self.selectedNavItem isEqualToString:@"tokenShop"]) {
+        [grid addArrangedSubview:[self tokenShopScreen]];
         return;
     }
 
@@ -5069,6 +5347,20 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     row.alignment = NSLayoutAttributeCenterY;
     [card addSubview:row];
     TokenForgePinSubview(row, card, 24, 24, 24, 24);
+    if (!TokenForgeDashboardBool(repository, @"connected", NO)) {
+        NSStackView *empty = TokenForgeDashboardVerticalStack(10.0);
+        empty.alignment = NSLayoutAttributeLeading;
+        [row addArrangedSubview:empty];
+        [empty addArrangedSubview:TokenForgeDashboardLabel(@"No repository connected", 14.0, NSFontWeightSemibold, [NSColor systemBlueColor], 1)];
+        [empty addArrangedSubview:TokenForgeDashboardLabel(@"Add Repository to create a companion.", 25.0, NSFontWeightBold, TokenForgeLightCardPrimaryTextColor(), 2)];
+        [empty addArrangedSubview:TokenForgeLightCardBodyLabel(@"Choose a local Git repository to start growth tracking.", 3)];
+        NSStackView *buttons = TokenForgeDashboardHorizontalStack(8.0);
+        [buttons addArrangedSubview:TokenForgePrimaryButton(@"Add Repository", self, @selector(connectRepository:))];
+        [buttons addArrangedSubview:TokenForgeSecondaryButton(@"Manage AI Agents", self, @selector(codexAgent:))];
+        [empty addArrangedSubview:buttons];
+        NSLog(@"INFO [DashboardEmptyState] render=noRepository placeholderCompanion=false overlayVisible=false");
+        return card;
+    }
 
     NSStackView *copy = TokenForgeDashboardVerticalStack(8.0);
     copy.alignment = NSLayoutAttributeLeading;
@@ -5353,6 +5645,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
 
 - (NSView *)companionMotionCardWithCompanion:(NSDictionary *)companion
 {
+    BOOL repositoryConnected = TokenForgeDashboardBool(TokenForgeDashboardDictionary(self.state, @"repository"), @"connected", NO);
     BOOL desiredVisible = TokenForgeDashboardBool(self.state, @"desiredVisible", TokenForgeDashboardBool(self.state, @"companionVisible", YES));
     BOOL actualVisible = TokenForgeCompanionWindow != nil
         ? TokenForgeCompanionWindow.isVisible
@@ -5364,14 +5657,19 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     NSView *card = TokenForgeCardWithStack(&stack, 16.0, 8.0);
     [card.heightAnchor constraintEqualToConstant:220.0].active = YES;
     [stack addArrangedSubview:TokenForgeDashboardLabel(@"Desktop Companion", 13.0, NSFontWeightSemibold, [NSColor systemGreenColor], 1)];
-    NSString *state = actualVisible ? @"On" : (desiredVisible ? @"Starting" : @"Off");
+    if (!repositoryConnected) {
+        desiredVisible = NO;
+        actualVisible = NO;
+        dragEnabled = NO;
+    }
+    NSString *state = !repositoryConnected ? @"Off" : (actualVisible ? @"On" : (desiredVisible ? @"Starting" : @"Off"));
     [stack addArrangedSubview:TokenForgeDashboardLabel(state, 19.0, NSFontWeightBold, TokenForgeLightCardPrimaryTextColor(), 2)];
     NSString *detail = actualVisible
         ? [NSString stringWithFormat:@"Movement %@. Drag is %@. Click-through is %@.",
            wandering ? @"On" : @"Off",
            dragEnabled ? @"Enabled" : @"Disabled",
            clickThrough ? @"On" : @"Off"]
-        : (desiredVisible ? @"Token is set to show." : @"Show Token on the desktop.");
+        : (!repositoryConnected ? @"No repository connected." : (desiredVisible ? @"Token is set to show." : @"Show Token on the desktop."));
     if (clickThrough) {
         detail = [detail stringByAppendingString:@" Enable Drag to reposition."];
     }
@@ -5385,15 +5683,25 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     [stack addArrangedSubview:statusRows];
 
     NSStackView *buttons = TokenForgeDashboardHorizontalStack(8.0);
-    [buttons addArrangedSubview:TokenForgePrimaryButton(desiredVisible ? @"Hide Overlay" : @"Show on Desktop", self, desiredVisible ? @selector(hideCompanionFromDashboard:) : @selector(showCompanionFromDashboard:))];
-    [buttons addArrangedSubview:TokenForgeSecondaryButton(wandering ? @"Pause Movement" : @"Enable Movement", self, wandering ? @selector(disableWanderFromDashboard:) : @selector(enableWanderFromDashboard:))];
+    NSButton *visibilityButton = TokenForgePrimaryButton(desiredVisible ? @"Hide Overlay" : @"Show on Desktop", self, desiredVisible ? @selector(hideCompanionFromDashboard:) : @selector(showCompanionFromDashboard:));
+    visibilityButton.enabled = repositoryConnected;
+    [buttons addArrangedSubview:visibilityButton];
+    NSButton *movementButton = TokenForgeSecondaryButton(wandering ? @"Pause Movement" : @"Enable Movement", self, wandering ? @selector(disableWanderFromDashboard:) : @selector(enableWanderFromDashboard:));
+    movementButton.enabled = repositoryConnected;
+    [buttons addArrangedSubview:movementButton];
     [stack addArrangedSubview:buttons];
     NSStackView *modeButtons = TokenForgeDashboardHorizontalStack(8.0);
-    [modeButtons addArrangedSubview:TokenForgeSecondaryButton(dragEnabled ? @"Drag Enabled" : @"Enable Drag", self, @selector(enableDragFromDashboard:))];
-    [modeButtons addArrangedSubview:TokenForgeSecondaryButton(clickThrough ? @"Click-through On" : @"Enable Click-through", self, clickThrough ? @selector(disableClickThroughFromDashboard:) : @selector(enableClickThroughFromDashboard:))];
+    NSButton *dragButton = TokenForgeSecondaryButton(dragEnabled ? @"Drag Enabled" : @"Enable Drag", self, @selector(enableDragFromDashboard:));
+    dragButton.enabled = repositoryConnected;
+    [modeButtons addArrangedSubview:dragButton];
+    NSButton *clickThroughButton = TokenForgeSecondaryButton(clickThrough ? @"Click-through On" : @"Enable Click-through", self, clickThrough ? @selector(disableClickThroughFromDashboard:) : @selector(enableClickThroughFromDashboard:));
+    clickThroughButton.enabled = repositoryConnected;
+    [modeButtons addArrangedSubview:clickThroughButton];
     [stack addArrangedSubview:modeButtons];
     NSStackView *secondaryButtons = TokenForgeDashboardHorizontalStack(8.0);
-    [secondaryButtons addArrangedSubview:TokenForgeSecondaryButton(@"Reset Position", self, @selector(resetCompanionPosition:))];
+    NSButton *resetButton = TokenForgeSecondaryButton(@"Reset Position", self, @selector(resetCompanionPosition:));
+    resetButton.enabled = repositoryConnected;
+    [secondaryButtons addArrangedSubview:resetButton];
     [secondaryButtons addArrangedSubview:TokenForgeSecondaryButton(@"Settings", self, @selector(settings:))];
     [stack addArrangedSubview:secondaryButtons];
     NSLog(@"INFO [DesktopOverlay] hidden reason=%@", actualVisible ? @"none" : @"companionVisibleOff");
@@ -5539,6 +5847,230 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     }
 
     return card;
+}
+
+- (NSView *)tokenShopScreen
+{
+    NSDictionary *shop = TokenForgeDashboardDictionary(self.state, @"tokenShop");
+    NSStackView *stack = nil;
+    NSView *card = TokenForgeCardWithStack(&stack, 18.0, 12.0);
+    card.layer.backgroundColor = [NSColor colorWithCalibratedRed:0.075 green:0.095 blue:0.125 alpha:0.96].CGColor;
+    card.layer.borderColor = [NSColor colorWithCalibratedWhite:1.0 alpha:0.12].CGColor;
+    NSString *currency = TokenForgeDashboardString(shop, @"currencyName", @"Forge Coins");
+    NSInteger balance = MAX(0, TokenForgeDashboardInteger(shop, @"balance", TokenForgeDashboardInteger(self.state, @"tokenCurrencyBalance", 0)));
+    BOOL hasRepository = TokenForgeDashboardBool(shop, @"hasActiveRepository", TokenForgeDashboardBool(self.state, @"hasActiveRepository", NO));
+    NSString *targetType = TokenForgeDashboardString(shop, @"targetType", @"repositoryCompanion");
+    NSString *selectedCategory = TokenForgeDashboardString(shop, @"selectedCategory", @"featured");
+
+    NSStackView *header = TokenForgeDashboardHorizontalStack(14.0);
+    header.distribution = NSStackViewDistributionFill;
+    NSStackView *headerCopy = TokenForgeDashboardVerticalStack(4.0);
+    [headerCopy addArrangedSubview:TokenForgeDashboardLabel(@"Token Shop", 24.0, NSFontWeightBold, [NSColor colorWithCalibratedRed:0.965 green:0.980 blue:1.0 alpha:1.0], 1)];
+    [headerCopy addArrangedSubview:TokenForgeDashboardLabel(@"Use each AI agent's token usage coins to unlock zodiac cosmetics.", 13.0, NSFontWeightSemibold, [NSColor colorWithCalibratedRed:0.78 green:0.88 blue:1.0 alpha:1.0], 2)];
+    [headerCopy addArrangedSubview:TokenForgeDashboardLabel(TokenForgeDashboardString(shop, @"statusText", @"Local MVP shop. Purchases persist locally."), 13.0, NSFontWeightRegular, TokenForgeShellSecondaryTextColor(), 2)];
+    [header addArrangedSubview:headerCopy];
+    NSStackView *coinStack = TokenForgeDashboardVerticalStack(4.0);
+    coinStack.alignment = NSLayoutAttributeTrailing;
+    [coinStack addArrangedSubview:TokenForgeDashboardLabel([NSString stringWithFormat:@"%ld %@", (long)balance, currency], 22.0, NSFontWeightBold, [NSColor colorWithCalibratedRed:1.0 green:0.875 blue:0.360 alpha:1.0], 1)];
+    [coinStack addArrangedSubview:TokenForgeDashboardLabel(@"Cosmetic-only balance", 12.0, NSFontWeightMedium, TokenForgeShellSecondaryTextColor(), 1)];
+    [header addArrangedSubview:coinStack];
+    [stack addArrangedSubview:header];
+
+    NSString *transaction = TokenForgeDashboardString(shop, @"lastTransactionStatus", @"");
+    if (transaction.length > 0) {
+        [stack addArrangedSubview:TokenForgeDashboardLabel(transaction, 13.0, NSFontWeightSemibold, [NSColor systemGreenColor], 2)];
+    }
+
+    NSStackView *targetSelector = TokenForgeDashboardHorizontalStack(8.0);
+    NSButton *agentTarget = TokenForgeSecondaryButton(@"AI Agents", self, @selector(shopTargetAgents:));
+    agentTarget.identifier = @"shop-target-ai-agents";
+    NSButton *repositoryTarget = TokenForgeSecondaryButton(@"Repository Mascot", self, @selector(shopTargetRepository:));
+    repositoryTarget.identifier = @"shop-target-repository";
+    if ([targetType isEqualToString:@"repositoryCompanion"]) {
+        repositoryTarget.layer.backgroundColor = TokenForgeSelectedBlueColor().CGColor;
+        repositoryTarget.attributedTitle = [[NSAttributedString alloc] initWithString:@"Repository Mascot" attributes:@{NSForegroundColorAttributeName: [NSColor whiteColor], NSFontAttributeName: [NSFont systemFontOfSize:13.0 weight:NSFontWeightSemibold]}];
+    } else {
+        agentTarget.layer.backgroundColor = TokenForgeSelectedBlueColor().CGColor;
+        agentTarget.attributedTitle = [[NSAttributedString alloc] initWithString:@"AI Agents" attributes:@{NSForegroundColorAttributeName: [NSColor whiteColor], NSFontAttributeName: [NSFont systemFontOfSize:13.0 weight:NSFontWeightSemibold]}];
+    }
+    [targetSelector addArrangedSubview:agentTarget];
+    [targetSelector addArrangedSubview:repositoryTarget];
+    [stack addArrangedSubview:targetSelector];
+
+    if ([targetType isEqualToString:@"aiAgent"]) {
+        NSArray *agents = TokenForgeDashboardArray(shop, @"agents");
+        NSString *selectedAgentId = TokenForgeDashboardString(shop, @"selectedAgentId", @"");
+        BOOL selectedAgentConnected = NO;
+        BOOL foundSelectedAgent = NO;
+        NSString *selectedAgentLockedReason = @"Connect to unlock agent cosmetics.";
+        NSStackView *agentChips = TokenForgeDashboardHorizontalStack(8.0);
+        for (NSDictionary *agent in agents) {
+            if (![agent isKindOfClass:[NSDictionary class]]) {
+                continue;
+            }
+            NSString *agentId = TokenForgeDashboardString(agent, @"id", @"");
+            BOOL selectedAgent = TokenForgeDashboardBool(agent, @"selected", NO) ||
+                                 (selectedAgentId.length > 0 && [agentId isEqualToString:selectedAgentId]);
+            if (selectedAgent) {
+                foundSelectedAgent = YES;
+                selectedAgentConnected = TokenForgeDashboardBool(agent, @"connected", NO);
+                selectedAgentLockedReason = TokenForgeDashboardString(agent, @"lockedReason", @"Connect to unlock agent cosmetics.");
+            }
+            [agentChips addArrangedSubview:[self tokenShopAgentChip:agent]];
+        }
+        if (agents.count == 0) {
+            [agentChips addArrangedSubview:TokenForgeDashboardLabel(@"No configured AI agents", 13.0, NSFontWeightMedium, TokenForgeShellSecondaryTextColor(), 1)];
+        }
+        [stack addArrangedSubview:agentChips];
+        if (!foundSelectedAgent && selectedAgentId.length > 0) {
+            foundSelectedAgent = YES;
+        }
+        if (foundSelectedAgent && !selectedAgentConnected) {
+            NSString *lockedCopy = [NSString stringWithFormat:@"%@ AI agent must be connected before cosmetics can be purchased or equipped.", selectedAgentLockedReason];
+            [stack addArrangedSubview:TokenForgeDashboardLabel(lockedCopy, 13.0, NSFontWeightSemibold, [NSColor colorWithCalibratedRed:1.0 green:0.760 blue:0.330 alpha:1.0], 2)];
+            NSButton *connectAgent = TokenForgeSecondaryButton(@"Connect agent", self, @selector(shopOpenAgentConnect:));
+            connectAgent.toolTip = selectedAgentId.length > 0 ? selectedAgentId : @"codex";
+            [stack addArrangedSubview:connectAgent];
+        }
+    }
+
+    NSArray *categoryIds = TokenForgeDashboardArray(shop, @"categoryIds");
+    NSStackView *categories = TokenForgeDashboardHorizontalStack(7.0);
+    for (NSString *categoryId in categoryIds) {
+        if (![categoryId isKindOfClass:[NSString class]]) {
+            continue;
+        }
+        NSButton *button = TokenForgeSecondaryButton(TokenForgeShopCategoryTitle(categoryId), self, @selector(shopCategoryAction:));
+        button.identifier = [NSString stringWithFormat:@"shop-category-%@", categoryId];
+        button.toolTip = categoryId;
+        if ([selectedCategory isEqualToString:categoryId]) {
+            button.layer.backgroundColor = [NSColor colorWithCalibratedRed:0.125 green:0.290 blue:0.630 alpha:1.0].CGColor;
+            button.attributedTitle = [[NSAttributedString alloc] initWithString:TokenForgeShopCategoryTitle(categoryId) attributes:@{NSForegroundColorAttributeName: [NSColor whiteColor], NSFontAttributeName: [NSFont systemFontOfSize:13.0 weight:NSFontWeightSemibold]}];
+        }
+        [categories addArrangedSubview:button];
+    }
+    [stack addArrangedSubview:categories];
+
+    if (!hasRepository) {
+        [stack addArrangedSubview:TokenForgeDashboardLabel(@"No active repository. Connect a repository before using repository mascot or AI agent shops.", 13.0, NSFontWeightMedium, TokenForgeShellSecondaryTextColor(), 2)];
+        [stack addArrangedSubview:TokenForgePrimaryButton(@"Add Repository", self, @selector(connectRepository:))];
+    }
+    NSArray *items = TokenForgeDashboardArray(shop, @"items");
+    NSLog(@"INFO [TokenShop][UI] render targetSelector=true categoryTabs=true owned/equipped labels=true locked/insufficient states=true items=%ld balance=%ld activeRepository=%@", (long)items.count, (long)balance, hasRepository ? @"true" : @"false");
+    if (items.count == 0) {
+        NSString *empty = [selectedCategory isEqualToString:@"owned"] ? @"No owned items in this category yet." : @"No items in this category.";
+        [stack addArrangedSubview:TokenForgeDashboardLabel(empty, 13.0, NSFontWeightMedium, TokenForgeShellSecondaryTextColor(), 2)];
+        return card;
+    }
+    NSStackView *itemGrid = TokenForgeDashboardVerticalStack(10.0);
+    for (NSDictionary *item in items) {
+        if (![item isKindOfClass:[NSDictionary class]]) {
+            continue;
+        }
+        [itemGrid addArrangedSubview:[self tokenShopItemRow:item currency:currency]];
+    }
+    [stack addArrangedSubview:itemGrid];
+    return card;
+}
+
+- (NSView *)tokenShopItemRow:(NSDictionary *)item currency:(NSString *)currency
+{
+    NSView *row = TokenForgeDashboardCard();
+    row.layer.backgroundColor = [NSColor colorWithCalibratedRed:0.980 green:0.986 blue:0.996 alpha:0.96].CGColor;
+    row.layer.borderColor = [NSColor colorWithCalibratedWhite:1.0 alpha:0.22].CGColor;
+    [row.heightAnchor constraintGreaterThanOrEqualToConstant:148.0].active = YES;
+    NSString *itemId = TokenForgeDashboardString(item, @"itemId", @"");
+    BOOL owned = TokenForgeDashboardBool(item, @"owned", NO);
+    BOOL equipped = TokenForgeDashboardBool(item, @"equipped", NO);
+    BOOL available = TokenForgeDashboardBool(item, @"available", NO);
+    BOOL canEquip = TokenForgeDashboardBool(item, @"canEquip", NO);
+    BOOL locked = TokenForgeDashboardBool(item, @"locked", NO);
+    NSString *lockedAgentReason = TokenForgeDashboardString(item, @"lockedAgentReason", @"");
+    BOOL agentLocked = lockedAgentReason.length > 0;
+    NSInteger price = MAX(0, TokenForgeDashboardInteger(item, @"price", 0));
+
+    NSStackView *layout = TokenForgeDashboardHorizontalStack(14.0);
+    layout.distribution = NSStackViewDistributionFill;
+    [row addSubview:layout];
+    TokenForgePinSubview(layout, row, 14, 14, 14, 14);
+
+    TokenForgeShopPreviewView *preview = [[TokenForgeShopPreviewView alloc] initWithFrame:NSMakeRect(0, 0, 82, 82)];
+    preview.wantsLayer = YES;
+    preview.previewType = TokenForgeDashboardString(item, @"previewType", TokenForgeDashboardString(item, @"previewIcon", @"generic"));
+    preview.zodiacType = TokenForgeDashboardString(item, @"zodiacType", @"");
+    preview.rarity = TokenForgeDashboardString(item, @"rarity", @"Common");
+    [preview.widthAnchor constraintEqualToConstant:74.0].active = YES;
+    [preview.heightAnchor constraintEqualToConstant:74.0].active = YES;
+    [layout addArrangedSubview:preview];
+
+    NSStackView *copy = TokenForgeDashboardVerticalStack(6.0);
+    [copy addArrangedSubview:TokenForgeDashboardLabel(TokenForgeDashboardString(item, @"name", @"Shop Item"), 16.0, NSFontWeightBold, TokenForgeLightCardPrimaryTextColor(), 1)];
+    NSString *meta = [NSString stringWithFormat:@"%@ · %@ · %@",
+                      TokenForgeDashboardString(item, @"itemType", @"Cosmetic"),
+                      TokenForgeDashboardString(item, @"rarity", @"Common"),
+                      TokenForgeDashboardString(item, @"targetCompatibility", @"Repository Companion")];
+    [copy addArrangedSubview:TokenForgeDashboardLabel(meta, 12.0, NSFontWeightSemibold, [NSColor colorWithCalibratedRed:0.250 green:0.350 blue:0.580 alpha:1.0], 1)];
+    [copy addArrangedSubview:TokenForgeLightCardCaptionLabel(TokenForgeDashboardString(item, @"description", @"Cosmetic item."), 2)];
+    [copy addArrangedSubview:TokenForgeLightCardCaptionLabel(TokenForgeDashboardString(item, @"previewEffect", @"Preview cosmetic"), 2)];
+    [layout addArrangedSubview:copy];
+
+    NSStackView *stateStack = TokenForgeDashboardVerticalStack(7.0);
+    stateStack.alignment = NSLayoutAttributeTrailing;
+    NSString *state = TokenForgeDashboardString(item, @"stateLabel", owned ? @"Owned" : locked ? @"Locked" : available ? @"Buy" : @"Need Coins");
+    NSColor *stateColor = equipped ? [NSColor systemGreenColor] : owned ? [NSColor systemBlueColor] : available ? [NSColor systemIndigoColor] : [NSColor systemOrangeColor];
+    [stateStack addArrangedSubview:TokenForgeDashboardLabel(state, 13.0, NSFontWeightBold, stateColor, 2)];
+    [stateStack addArrangedSubview:TokenForgeDashboardLabel([NSString stringWithFormat:@"%ld %@", (long)price, currency ?: @"Forge Coins"], 13.0, NSFontWeightSemibold, TokenForgeLightCardPrimaryTextColor(), 1)];
+    NSStackView *buttons = TokenForgeDashboardHorizontalStack(8.0);
+    NSButton *purchase = TokenForgePrimaryButton(TokenForgeDashboardString(item, @"buttonTitle", @"Buy"), self, @selector(purchaseTokenShopItemAction:));
+    purchase.toolTip = itemId;
+    purchase.enabled = !agentLocked && (available || canEquip) && itemId.length > 0;
+    if (canEquip) {
+        purchase.action = @selector(equipTokenShopItemAction:);
+    }
+    if (!purchase.enabled) {
+        purchase.toolTip = TokenForgeDashboardString(item, @"disabledReason", agentLocked ? lockedAgentReason : owned ? @"Already owned." : @"Unavailable.");
+    }
+    [buttons addArrangedSubview:purchase];
+    if (equipped) {
+        [buttons addArrangedSubview:TokenForgeDisabledButton(@"Equipped")];
+    } else if (owned) {
+        [buttons addArrangedSubview:TokenForgeDisabledButton(@"Owned")];
+    }
+    [stateStack addArrangedSubview:buttons];
+    NSString *disabledReason = TokenForgeDashboardString(item, @"disabledReason", @"");
+    if (disabledReason.length == 0 && agentLocked) {
+        disabledReason = lockedAgentReason;
+    }
+    if (disabledReason.length > 0 && !available && !canEquip) {
+        [stateStack addArrangedSubview:TokenForgeDashboardLabel(disabledReason, 11.0, NSFontWeightMedium, TokenForgeLightCardSecondaryTextColor(), 3)];
+    }
+    [layout addArrangedSubview:stateStack];
+    return row;
+}
+
+- (NSView *)tokenShopAgentChip:(NSDictionary *)agent
+{
+    BOOL connected = TokenForgeDashboardBool(agent, @"connected", NO);
+    BOOL selected = TokenForgeDashboardBool(agent, @"selected", NO);
+    NSString *agentId = TokenForgeDashboardString(agent, @"id", @"");
+    NSString *title = TokenForgeDashboardString(agent, @"displayName", @"AI Agent");
+    NSInteger coins = MAX(0, TokenForgeDashboardInteger(agent, @"spendableCoins", 0));
+    NSString *currency = TokenForgeDashboardString(agent, @"currencyName", @"Agent Coins");
+    NSString *zodiacLabel = TokenForgeDashboardString(agent, @"zodiacLabel", @"Zodiac");
+    NSString *buttonTitle = connected
+        ? [NSString stringWithFormat:@"%@ · %ld %@ · %@", title, (long)coins, currency, zodiacLabel]
+        : [NSString stringWithFormat:@"%@ · Locked", title];
+    NSButton *button = TokenForgeSecondaryButton(buttonTitle, self, connected ? @selector(shopTargetAgentChip:) : @selector(shopOpenAgentConnect:));
+    button.identifier = [NSString stringWithFormat:@"shop-agent-%@", agentId];
+    button.toolTip = agentId;
+    if (selected) {
+        button.layer.backgroundColor = TokenForgeSelectedBlueColor().CGColor;
+        button.attributedTitle = [[NSAttributedString alloc] initWithString:buttonTitle attributes:@{NSForegroundColorAttributeName: [NSColor whiteColor], NSFontAttributeName: [NSFont systemFontOfSize:12.0 weight:NSFontWeightSemibold]}];
+    } else if (!connected) {
+        button.layer.backgroundColor = [NSColor colorWithCalibratedWhite:1.0 alpha:0.18].CGColor;
+        button.attributedTitle = [[NSAttributedString alloc] initWithString:buttonTitle attributes:@{NSForegroundColorAttributeName: TokenForgeShellSecondaryTextColor(), NSFontAttributeName: [NSFont systemFontOfSize:12.0 weight:NSFontWeightMedium]}];
+    }
+    return button;
 }
 
 - (NSView *)agentProviderRow:(NSDictionary *)provider
@@ -5992,6 +6524,8 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
 {
     if (sender == self.dashboardWindow) {
         TokenForgeDashboardLifecycleLog(@"INFO [DashboardLifecycle] close.request source=dashboardX");
+        NSLog(@"INFO [DashboardLifecycle][CLOSE_REQUEST] shouldTerminate=false source=dashboardX");
+        NSLog(@"INFO [OverlayLifecycle][KEEP_ALIVE_AFTER_DASHBOARD_CLOSE] enabled=%@", TokenForgeDesiredCompanionVisible ? @"true" : @"false");
         [self hideDashboardFromSource:@"dashboardX"];
         TokenForgeLogWindowLifecycle(@"windowShouldCloseIntercepted", sender, @"dashboardXHidePolicy");
         NSLog(@"INFO [AppLifecycle] dashboardWindowClosed keepAppRunning=true");
@@ -6077,6 +6611,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
 - (void)repository:(id)sender { [self setSelectedNav:@"repository" action:"navigation.openRepositories" showDashboard:YES]; }
 - (void)codexAgent:(id)sender { [self setSelectedNav:@"aiAgents" action:"navigation.openAgents" showDashboard:YES]; }
 - (void)activity:(id)sender { [self setSelectedNav:@"activity" action:"navigation.openActivity" showDashboard:YES]; }
+- (void)tokenShop:(id)sender { [self setSelectedNav:@"tokenShop" action:"shop.open" showDashboard:YES]; }
 - (void)settings:(id)sender { [self setSelectedNav:@"settings" action:"openSettings" showDashboard:YES]; [self showSettings]; }
 - (void)homepage:(id)sender { TokenForgeSendDashboardAction("homepage"); if (TokenForgeDashboardActionClicked == nil) [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://github.com/HwangSeokBeom/TokenForge"]]; }
 - (void)reportIssue:(id)sender
@@ -6132,6 +6667,13 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
 - (void)viewRepositoryGrowthAction:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @""; self.activityFilterValue = value.length > 0 ? [@"repo:" stringByAppendingString:value] : @"active"; [self setSelectedNav:@"activity" action:"navigation.openActivity" showDashboard:YES]; }
 - (void)evolveRepositoryAction:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @""; NSString *payload = [NSString stringWithFormat:@"companion.levelUp:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
 - (void)disconnectRepositoryAction:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @""; NSString *payload = [NSString stringWithFormat:@"repository.archive:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)purchaseTokenShopItemAction:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @""; NSString *payload = [NSString stringWithFormat:@"shop.purchase:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)equipTokenShopItemAction:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @""; NSString *payload = [NSString stringWithFormat:@"shop.equip:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)shopTargetRepository:(id)sender { TokenForgeSendDashboardAction("shop.target:repository"); }
+- (void)shopTargetAgents:(id)sender { TokenForgeSendDashboardAction("shop.target.agent:codex"); }
+- (void)shopTargetAgentChip:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @"codex"; NSString *payload = [NSString stringWithFormat:@"shop.target.agent:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)shopOpenAgentConnect:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @"codex"; NSString *payload = [NSString stringWithFormat:@"shop.openAgentConnect:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
+- (void)shopCategoryAction:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @"featured"; NSString *payload = [NSString stringWithFormat:@"shop.category:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
 - (void)connectAgentAction:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @"codex"; NSString *payload = [NSString stringWithFormat:@"agent.connect:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
 - (void)autoDetectAgentAction:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @"codex"; NSString *payload = [NSString stringWithFormat:@"agent.autoDetect:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
 - (void)chooseAgentFolderAction:(id)sender { NSString *value = [(NSButton *)sender toolTip] ?: @"codex"; NSString *payload = [NSString stringWithFormat:@"agent.chooseFolder:%@", value]; TokenForgeSendDashboardAction(payload.UTF8String); }
@@ -6166,7 +6708,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
 - (void)debugDumpOverlayPanelState:(id)sender { TokenForgeDumpOverlayPanelState(@"debugButton"); }
 - (void)closeSettings:(id)sender { [self.settingsWindow orderOut:nil]; }
 - (void)resetLocalState:(id)sender { TokenForgeSendDashboardAction("reset_local_state"); }
-- (void)quit:(id)sender { TokenForgeSendDashboardAction("app.quit"); TokenForgeExplicitQuitRequested = YES; TokenForgeEnsureLifecycleDelegate().explicitTerminationRequested = YES; [NSApp terminate:nil]; }
+- (void)quit:(id)sender { NSLog(@"INFO [AppLifecycle][QUIT_REQUESTED] source=dashboard"); TokenForgeSendDashboardAction("app.quit"); TokenForgeExplicitQuitRequested = YES; TokenForgeEnsureLifecycleDelegate().explicitTerminationRequested = YES; [NSApp terminate:nil]; }
 
 @end
 
@@ -6226,6 +6768,23 @@ static void TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(NSStrin
         NSLog(@"INFO [LaunchDashboard][REQUEST] source=launch.initial appReady=%@ pending=%@",
               TokenForgeAppKitRegistrationReady() ? @"true" : @"false",
               TokenForgePendingInitialDashboardOpen ? @"true" : @"false");
+    }
+
+    if (!TokenForgeAppKitRegistrationReady()) {
+        NSLog(@"INFO [NativeLifecycle] open_dashboard deferred reason=app_not_ready");
+        if ([openSourceForLog isEqualToString:@"launch.initial"]) {
+            TokenForgePendingInitialDashboardOpen = YES;
+            NSLog(@"INFO [LaunchDashboard][DEFER] reason=appNotReady");
+        }
+        if (!TokenForgeDashboardOpenPending) {
+            TokenForgeDashboardOpenPending = YES;
+            NSString *deferredSource = [openSourceForLog copy];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                TokenForgeDashboardOpenPending = NO;
+                TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(deferredSource ?: @"deferred", explicitUserOpen);
+            });
+        }
+        return;
     }
 
     if (!TokenForgeDashboardLaunchPathAllowed(@"TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness", source ?: @"unknown", explicitUserOpen || TokenForgeSourceLooksExplicit(source ?: @""))) {
@@ -6420,6 +6979,16 @@ static void TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(NSStrin
     repositoryItem.tag = 1002;
     [menu addItem:repositoryItem];
 
+    NSMenuItem *activeRepositoryItem = [[NSMenuItem alloc] initWithTitle:@"Active Repository" action:nil keyEquivalent:@""];
+    activeRepositoryItem.tag = 1018;
+    NSMenu *activeRepositoryMenu = [[NSMenu alloc] initWithTitle:@"Active Repository"];
+    NSMenuItem *activeRepositoryNameItem = [[NSMenuItem alloc] initWithTitle:@"None" action:nil keyEquivalent:@""];
+    activeRepositoryNameItem.enabled = NO;
+    activeRepositoryNameItem.tag = 1019;
+    [activeRepositoryMenu addItem:activeRepositoryNameItem];
+    [activeRepositoryItem setSubmenu:activeRepositoryMenu];
+    [menu addItem:activeRepositoryItem];
+
     NSMenuItem *agentItem = [[NSMenuItem alloc] initWithTitle:@"AI Agents: Not connected" action:nil keyEquivalent:@""];
     agentItem.enabled = NO;
     agentItem.tag = 1003;
@@ -6464,6 +7033,11 @@ static void TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(NSStrin
     clickThroughItem.tag = 1013;
     [menu addItem:clickThroughItem];
 
+    NSMenuItem *movementItem = [[NSMenuItem alloc] initWithTitle:@"Pause Movement" action:@selector(toggleMovementFromStatusItem:) keyEquivalent:@""];
+    movementItem.target = self;
+    movementItem.tag = 1017;
+    [menu addItem:movementItem];
+
     NSMenuItem *resetPositionItem = [[NSMenuItem alloc] initWithTitle:@"Reset Companion Position" action:@selector(resetCompanionPositionFromStatusItem:) keyEquivalent:@""];
     resetPositionItem.target = self;
     resetPositionItem.tag = 1014;
@@ -6495,6 +7069,11 @@ static void TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(NSStrin
     settingsItem.target = self;
     settingsItem.tag = 1012;
     [menu addItem:settingsItem];
+
+    NSMenuItem *tokenShopItem = [[NSMenuItem alloc] initWithTitle:@"Token Shop" action:@selector(tokenShopFromStatusItem:) keyEquivalent:@""];
+    tokenShopItem.target = self;
+    tokenShopItem.tag = 1020;
+    [menu addItem:tokenShopItem];
 
     [menu addItem:[NSMenuItem separatorItem]];
 
@@ -6558,8 +7137,11 @@ static void TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(NSStrin
     NSLog(@"INFO [MenuBarCompanion] buttonImageUpdated changed=%@", oldImage != newImage ? @"true" : @"false");
     NSLog(@"INFO [MenuBarCompanion] cacheKey=%@ cacheHit=%@", cacheKey, oldImage == newImage ? @"true" : @"false");
     NSLog(@"INFO [MenuBarCompanion] frame index=%ld state=%@ animationRunning=true", (long)self.statusAnimationFrame, mode);
-    [[self.statusItem.menu itemWithTag:1001] setTitle:[NSString stringWithFormat:@"%@ · %@ · Level %ld%@", TokenForgeMenuCompanionName, TokenForgeMenuStage, (long)MAX(1, TokenForgeMenuLevel), TokenForgeMenuCanLevelUp ? @" · Level Up Ready" : @""]];
+    [[self.statusItem.menu itemWithTag:1001] setTitle:TokenForgeMenuConnectedCompanionCount > 0
+        ? [NSString stringWithFormat:@"%@ · %@ · Level %ld%@", TokenForgeMenuCompanionName, TokenForgeMenuStage, (long)MAX(1, TokenForgeMenuLevel), TokenForgeMenuCanLevelUp ? @" · Level Up Ready" : @""]
+        : @"TokenForge · No repository companion"];
     [[self.statusItem.menu itemWithTag:1002] setTitle:[NSString stringWithFormat:@"Repository: %@", TokenForgeMenuRepositoryAlias]];
+    [[self.statusItem.menu itemWithTag:1019] setTitle:TokenForgeMenuConnectedCompanionCount > 0 ? [NSString stringWithFormat:@"%@ · %@ · Level %ld", TokenForgeMenuRepositoryAlias, TokenForgeMenuStage, (long)MAX(1, TokenForgeMenuLevel)] : @"None connected"];
     [[self.statusItem.menu itemWithTag:1003] setTitle:[NSString stringWithFormat:@"AI Agents: %@", TokenForgeMenuAgentStatus]];
     [[self.statusItem.menu itemWithTag:1004] setTitle:[NSString stringWithFormat:@"Safe Sync: %@", TokenForgeMenuSyncStatus]];
     [[self.statusItem.menu itemWithTag:1005] setTitle:[NSString stringWithFormat:@"Desktop Companion: %@", TokenForgeMenuCompanionEnabled ? (TokenForgeMenuClickThrough ? @"Native Active · Click-through" : @"Native Active · Interactive") : @"Off"]];
@@ -6568,6 +7150,8 @@ static void TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(NSStrin
     [[self.statusItem.menu itemWithTag:1006] setTitle:@"Show Companion"];
     [[self.statusItem.menu itemWithTag:1007] setTitle:@"Hide Companion"];
     [[self.statusItem.menu itemWithTag:1013] setTitle:TokenForgeMenuClickThrough ? @"Disable Click-through" : @"Enable Click-through"];
+    [[self.statusItem.menu itemWithTag:1017] setTitle:TokenForgeMenuMovementEnabled ? @"Pause Movement" : @"Resume Movement"];
+    [self.statusItem.menu itemWithTag:1017].enabled = TokenForgeMenuCompanionEnabled;
     [self.statusItem.menu itemWithTag:1013].enabled = TokenForgeMenuCompanionEnabled;
     [self.statusItem.menu itemWithTag:1014].enabled = TokenForgeMenuCompanionEnabled;
     [self.statusItem.menu itemWithTag:1015].enabled = YES;
@@ -6577,10 +7161,13 @@ static void TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(NSStrin
     [self.statusItem.menu itemWithTag:1010].enabled = TokenForgeMenuCanAnalyze;
     [self.statusItem.menu itemWithTag:1011].enabled = TokenForgeMenuCanSync;
     [self.statusItem.menu itemWithTag:1012].enabled = YES;
-    NSLog(@"INFO [StatusItem][UPDATE] repo=%@ agents=%@ level=%ld",
+    [self.statusItem.menu itemWithTag:1020].enabled = YES;
+    NSLog(@"INFO [StatusItem][UPDATE] repo=%@ agents=%@ level=%ld connectedCompanions=%ld visibleOverlays=%ld",
           TokenForgeMenuRepositoryAlias ?: @"Not selected",
           TokenForgeMenuAgentStatus ?: @"No agent connected",
-          (long)MAX(1, TokenForgeMenuLevel));
+          (long)MAX(1, TokenForgeMenuLevel),
+          (long)TokenForgeMenuConnectedCompanionCount,
+          (long)TokenForgeMenuVisibleOverlayCount);
     NSLog(@"INFO [StatusItem][VISIBLE] exists=%@ button=%@ length=%.2f",
           self.statusItem != nil ? @"true" : @"false",
           self.statusItem.button != nil ? @"true" : @"false",
@@ -6676,6 +7263,11 @@ static void TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(NSStrin
           explicitQuit ? @"false" : @"true",
           explicitQuit ? @"false" : @"true",
           TokenForgeIsDraggingOverlay ? @"true" : @"false");
+    if (!explicitQuit) {
+        NSLog(@"WARN [AppLifecycle][UNEXPECTED_TERMINATE_ATTEMPT] source=system_or_unknown dashboardVisible=%@ overlayVisible=%@",
+              TokenForgeIsDashboardVisible() ? @"true" : @"false",
+              TokenForgeIsCompanionOverlayVisible() ? @"true" : @"false");
+    }
     if (!explicitQuit && TokenForgeIsDraggingOverlay) {
         NSLog(@"WARN [AppLifecycle] termination cancelled reason=dragInProgress watchdog.suppressedDuringDrag=true");
         return NSTerminateCancel;
@@ -6912,6 +7504,13 @@ static void TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(NSStrin
     [self updateStatusItemMenu];
 }
 
+- (void)toggleMovementFromStatusItem:(id)sender
+{
+    TokenForgeMenuMovementEnabled = !TokenForgeMenuMovementEnabled;
+    TokenForgeSendMenuAction(TokenForgeMenuMovementEnabled ? "desktop.movement.enable" : "desktop.movement.pause");
+    [self updateStatusItemMenu];
+}
+
 - (void)resetCompanionPositionFromStatusItem:(id)sender
 {
     TokenForgeSendMenuAction("desktop.position.reset");
@@ -6921,6 +7520,7 @@ static void TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(NSStrin
 
 - (void)quitTokenForgeFromStatusItem:(id)sender
 {
+    NSLog(@"INFO [AppLifecycle][QUIT_REQUESTED] source=menu");
     TokenForgeSendMenuAction("quit");
     TokenForgeExplicitQuitRequested = YES;
     self.explicitTerminationRequested = YES;
@@ -6955,6 +7555,12 @@ static void TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(NSStrin
 {
     TokenForgeSendMenuAction("settings");
     [TokenForgeEnsureNativeDashboardController() showSettings];
+}
+
+- (void)tokenShopFromStatusItem:(id)sender
+{
+    TokenForgeSendMenuAction("tokenShop");
+    TokenForgeOpenOrFocusDashboard(@"menubar.tokenShop");
 }
 
 - (BOOL)respondsToSelector:(SEL)aSelector
@@ -7392,6 +7998,7 @@ extern "C" bool TokenForge_IsDashboardVisible()
 extern "C" void QuitTokenForgeApp()
 {
     dispatch_async(dispatch_get_main_queue(), ^{
+        NSLog(@"INFO [AppLifecycle][QUIT_REQUESTED] source=api");
         TokenForgeExplicitQuitRequested = YES;
         TokenForgeEnsureLifecycleDelegate().explicitTerminationRequested = YES;
         [NSApp terminate:nil];
