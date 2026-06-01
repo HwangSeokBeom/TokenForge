@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="5" result="Passed" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-06-01 15:16:38Z" end-time="2026-06-01 15:16:38Z" duration="0.337091">
+  <test-suite type="TestSuite" id="1560" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="480" result="Passed" start-time="2026-06-01 15:16:38Z" end-time="2026-06-01 15:16:38Z" duration="0.337091" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties />
+    <test-suite type="Assembly" id="2115" name="TokenForge.Client.Tests.dll" fullname="/Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/ScriptAssemblies/TokenForge.Client.Tests.dll" runstate="Runnable" testcasecount="480" result="Passed" start-time="2026-06-01 15:16:38Z" end-time="2026-06-01 15:16:38Z" duration="0.316552" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="81985" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+      </properties>
+      <test-suite type="TestSuite" id="2116" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="480" result="Passed" start-time="2026-06-01 15:16:38Z" end-time="2026-06-01 15:16:38Z" duration="0.312121" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="2117" name="Client" fullname="TokenForge.Client" runstate="Runnable" testcasecount="480" result="Passed" start-time="2026-06-01 15:16:38Z" end-time="2026-06-01 15:16:38Z" duration="0.311033" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="2118" name="Tests" fullname="TokenForge.Client.Tests" runstate="Runnable" testcasecount="480" result="Passed" start-time="2026-06-01 15:16:38Z" end-time="2026-06-01 15:16:38Z" duration="0.309973" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1634" name="CompanionPrivacyTests" fullname="TokenForge.Client.Tests.CompanionPrivacyTests" classname="TokenForge.Client.Tests.CompanionPrivacyTests" runstate="Runnable" testcasecount="5" result="Passed" start-time="2026-06-01 15:16:38Z" end-time="2026-06-01 15:16:38Z" duration="0.287704" total="5" passed="5" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1638" name="CompanionSaveData_UsesOnlySafeAggregateFields" fullname="TokenForge.Client.Tests.CompanionPrivacyTests.CompanionSaveData_UsesOnlySafeAggregateFields" methodname="CompanionSaveData_UsesOnlySafeAggregateFields" classname="TokenForge.Client.Tests.CompanionPrivacyTests" runstate="Runnable" seed="1868263979" result="Passed" start-time="2026-06-01 15:16:38Z" end-time="2026-06-01 15:16:38Z" duration="0.181932" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1639" name="DomainCompanionModels_DoNotExposeForbiddenRawFields" fullname="TokenForge.Client.Tests.CompanionPrivacyTests.DomainCompanionModels_DoNotExposeForbiddenRawFields" methodname="DomainCompanionModels_DoNotExposeForbiddenRawFields" classname="TokenForge.Client.Tests.CompanionPrivacyTests" runstate="Runnable" seed="23068032" result="Passed" start-time="2026-06-01 15:16:38Z" end-time="2026-06-01 15:16:38Z" duration="0.003647" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1635" name="OldSaveWithoutCompanionData_LoadsDefaultEgg" fullname="TokenForge.Client.Tests.CompanionPrivacyTests.OldSaveWithoutCompanionData_LoadsDefaultEgg" methodname="OldSaveWithoutCompanionData_LoadsDefaultEgg" classname="TokenForge.Client.Tests.CompanionPrivacyTests" runstate="Runnable" seed="1799480186" result="Passed" start-time="2026-06-01 15:16:38Z" end-time="2026-06-01 15:16:38Z" duration="0.080434" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1636" name="PrivacyValidator_RejectsForbiddenCompanionFields" fullname="TokenForge.Client.Tests.CompanionPrivacyTests.PrivacyValidator_RejectsForbiddenCompanionFields" methodname="PrivacyValidator_RejectsForbiddenCompanionFields" classname="TokenForge.Client.Tests.CompanionPrivacyTests" runstate="Runnable" seed="1035122087" result="Passed" start-time="2026-06-01 15:16:38Z" end-time="2026-06-01 15:16:38Z" duration="0.002552" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1637" name="SaveDataRepository_RejectsUnsafeCompanionReasonText" fullname="TokenForge.Client.Tests.CompanionPrivacyTests.SaveDataRepository_RejectsUnsafeCompanionReasonText" methodname="SaveDataRepository_RejectsUnsafeCompanionReasonText" classname="TokenForge.Client.Tests.CompanionPrivacyTests" runstate="Runnable" seed="1487389767" result="Passed" start-time="2026-06-01 15:16:38Z" end-time="2026-06-01 15:16:38Z" duration="0.003527" asserts="0">
+                <properties />
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

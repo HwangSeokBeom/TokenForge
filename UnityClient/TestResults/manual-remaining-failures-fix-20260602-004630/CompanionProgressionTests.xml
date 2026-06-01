@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="16" result="Passed" total="16" passed="16" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-06-01 15:47:15Z" end-time="2026-06-01 15:47:16Z" duration="0.340231">
+  <test-suite type="TestSuite" id="1560" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="480" result="Passed" start-time="2026-06-01 15:47:15Z" end-time="2026-06-01 15:47:16Z" duration="0.340231" total="16" passed="16" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties />
+    <test-suite type="Assembly" id="2115" name="TokenForge.Client.Tests.dll" fullname="/Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/ScriptAssemblies/TokenForge.Client.Tests.dll" runstate="Runnable" testcasecount="480" result="Passed" start-time="2026-06-01 15:47:15Z" end-time="2026-06-01 15:47:16Z" duration="0.329798" total="16" passed="16" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="3125" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+      </properties>
+      <test-suite type="TestSuite" id="2116" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="480" result="Passed" start-time="2026-06-01 15:47:15Z" end-time="2026-06-01 15:47:16Z" duration="0.328888" total="16" passed="16" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="2117" name="Client" fullname="TokenForge.Client" runstate="Runnable" testcasecount="480" result="Passed" start-time="2026-06-01 15:47:15Z" end-time="2026-06-01 15:47:16Z" duration="0.325947" total="16" passed="16" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="2118" name="Tests" fullname="TokenForge.Client.Tests" runstate="Runnable" testcasecount="480" result="Passed" start-time="2026-06-01 15:47:15Z" end-time="2026-06-01 15:47:16Z" duration="0.325178" total="16" passed="16" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1640" name="CompanionProgressionTests" fullname="TokenForge.Client.Tests.CompanionProgressionTests" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" testcasecount="16" result="Passed" start-time="2026-06-01 15:47:15Z" end-time="2026-06-01 15:47:16Z" duration="0.312189" total="16" passed="16" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-suite type="ParameterizedMethod" id="1650" name="ArchetypeResolver_UsesSafeAggregateScores" fullname="TokenForge.Client.Tests.CompanionProgressionTests.ArchetypeResolver_UsesSafeAggregateScores" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" testcasecount="6" result="Passed" start-time="2026-06-01 15:47:15Z" end-time="2026-06-01 15:47:15Z" duration="0.012553" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+                <properties />
+                <test-case id="1644" name="ArchetypeResolver_UsesSafeAggregateScores(Builder)" fullname="TokenForge.Client.Tests.CompanionProgressionTests.ArchetypeResolver_UsesSafeAggregateScores(Builder)" methodname="ArchetypeResolver_UsesSafeAggregateScores" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" seed="1119440681" result="Passed" start-time="2026-06-01 15:47:15Z" end-time="2026-06-01 15:47:15Z" duration="0.009365" asserts="0">
+                  <properties />
+                </test-case>
+                <test-case id="1645" name="ArchetypeResolver_UsesSafeAggregateScores(Debugger)" fullname="TokenForge.Client.Tests.CompanionProgressionTests.ArchetypeResolver_UsesSafeAggregateScores(Debugger)" methodname="ArchetypeResolver_UsesSafeAggregateScores" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" seed="1141220922" result="Passed" start-time="2026-06-01 15:47:15Z" end-time="2026-06-01 15:47:15Z" duration="0.000169" asserts="0">
+                  <properties />
+                </test-case>
+                <test-case id="1646" name="ArchetypeResolver_UsesSafeAggregateScores(Architect)" fullname="TokenForge.Client.Tests.CompanionProgressionTests.ArchetypeResolver_UsesSafeAggregateScores(Architect)" methodname="ArchetypeResolver_UsesSafeAggregateScores" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" seed="1391460782" result="Passed" start-time="2026-06-01 15:47:15Z" end-time="2026-06-01 15:47:15Z" duration="0.000049" asserts="0">
+                  <properties />
+                </test-case>
+                <test-case id="1647" name="ArchetypeResolver_UsesSafeAggregateScores(Explorer)" fullname="TokenForge.Client.Tests.CompanionProgressionTests.ArchetypeResolver_UsesSafeAggregateScores(Explorer)" methodname="ArchetypeResolver_UsesSafeAggregateScores" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" seed="1976854177" result="Passed" start-time="2026-06-01 15:47:15Z" end-time="2026-06-01 15:47:15Z" duration="0.000043" asserts="0">
+                  <properties />
+                </test-case>
+                <test-case id="1648" name="ArchetypeResolver_UsesSafeAggregateScores(Refiner)" fullname="TokenForge.Client.Tests.CompanionProgressionTests.ArchetypeResolver_UsesSafeAggregateScores(Refiner)" methodname="ArchetypeResolver_UsesSafeAggregateScores" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" seed="642938681" result="Passed" start-time="2026-06-01 15:47:15Z" end-time="2026-06-01 15:47:15Z" duration="0.000041" asserts="0">
+                  <properties />
+                </test-case>
+                <test-case id="1649" name="ArchetypeResolver_UsesSafeAggregateScores(Sprinter)" fullname="TokenForge.Client.Tests.CompanionProgressionTests.ArchetypeResolver_UsesSafeAggregateScores(Sprinter)" methodname="ArchetypeResolver_UsesSafeAggregateScores" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" seed="1307231045" result="Passed" start-time="2026-06-01 15:47:15Z" end-time="2026-06-01 15:47:15Z" duration="0.000033" asserts="0">
+                  <properties />
+                </test-case>
+              </test-suite>
+              <test-case id="1654" name="BalancedTokenAndGit_AddsGrowthBoost" fullname="TokenForge.Client.Tests.CompanionProgressionTests.BalancedTokenAndGit_AddsGrowthBoost" methodname="BalancedTokenAndGit_AddsGrowthBoost" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" seed="422249759" result="Passed" start-time="2026-06-01 15:47:15Z" end-time="2026-06-01 15:47:15Z" duration="0.016334" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1641" name="DefaultCompanionState_IsEggWithNoGrowth" fullname="TokenForge.Client.Tests.CompanionProgressionTests.DefaultCompanionState_IsEggWithNoGrowth" methodname="DefaultCompanionState_IsEggWithNoGrowth" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" seed="1791486993" result="Passed" start-time="2026-06-01 15:47:15Z" end-time="2026-06-01 15:47:15Z" duration="0.000264" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1657" name="DiscardedReview_DoesNotMutatePersistedCompanionState" fullname="TokenForge.Client.Tests.CompanionProgressionTests.DiscardedReview_DoesNotMutatePersistedCompanionState" methodname="DiscardedReview_DoesNotMutatePersistedCompanionState" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" seed="255371957" result="Passed" start-time="2026-06-01 15:47:15Z" end-time="2026-06-01 15:47:16Z" duration="0.218727" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [RepositoryIdentity][CANONICALIZE] rawPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeTests/y8nfdk9b.7h3/PrivateRepo canonicalPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeTests/y8nfdk9b.7h3/PrivateRepo repositoryId=1b0f86176da25419996054b73fc6b9c779fc10b2a1e0e07eb79b7863b72b953d
+INFO [RepositoryIdentity][LOOKUP_BY_PATH] canonicalPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeTests/y8nfdk9b.7h3/PrivateRepo found=False
+INFO [RepositoryIdentity][LOOKUP_BY_LEGACY_KEY] legacyKey=e9c6e52d01a09b4ef3bc377b2c9d8e46137aed26cbd88a05c3c938663f554276 found=False
+INFO [CompanionProfile][LOOKUP_LEGACY] repo=1b0f86176da25419996054b73fc6b9c779fc10b2a1e0e07eb79b7863b72b953d found=False
+INFO [RepositoryIdentity][RESTORE] repositoryId=1b0f86176da25419996054b73fc6b9c779fc10b2a1e0e07eb79b7863b72b953d found=False
+INFO [CompanionProfile][LOOKUP] repo=1b0f86176da25419996054b73fc6b9c779fc10b2a1e0e07eb79b7863b72b953d found=False stage=none level=0 xp=0
+INFO [CompanionProfile][CREATE_NEW] repo=1b0f86176da25419996054b73fc6b9c779fc10b2a1e0e07eb79b7863b72b953d reason=noExistingProfile stage=Egg level=1
+INFO [RepositoryStore][UPSERT_BEGIN] repo=1b0f86176da25419996054b73fc6b9c779fc10b2a1e0e07eb79b7863b72b953d
+INFO [RepositoryStore][CREATE_NEW] repo=1b0f86176da25419996054b73fc6b9c779fc10b2a1e0e07eb79b7863b72b953d
+INFO [RepositoryStore][SAVE_COMMIT] repo=1b0f86176da25419996054b73fc6b9c779fc10b2a1e0e07eb79b7863b72b953d connected=true
+INFO [RepositoryStore][VERIFY_AFTER_SAVE] repo=1b0f86176da25419996054b73fc6b9c779fc10b2a1e0e07eb79b7863b72b953d found=true connected=true
+INFO [RepositorySelection][SET_ACTIVE] repo=1b0f86176da25419996054b73fc6b9c779fc10b2a1e0e07eb79b7863b72b953d source=addRepository
+INFO [CompanionProfile][SAVE] repo=1b0f86176da25419996054b73fc6b9c779fc10b2a1e0e07eb79b7863b72b953d stage=Egg level=1 xp=0
+INFO [RepositoryProjection][ACTIVE_REPOSITORY_FROM_CONNECTED_PROJECT] repositoryId=1b0f86176da25419996054b73fc6b9c779fc10b2a1e0e07eb79b7863b72b953d
+]]></output>
+              </test-case>
+              <test-case id="1656" name="GitCommitStyleInfluencesRefinerSprinterAndExplorer" fullname="TokenForge.Client.Tests.CompanionProgressionTests.GitCommitStyleInfluencesRefinerSprinterAndExplorer" methodname="GitCommitStyleInfluencesRefinerSprinterAndExplorer" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" seed="835704685" result="Passed" start-time="2026-06-01 15:47:16Z" end-time="2026-06-01 15:47:16Z" duration="0.002351" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1651" name="PendingReview_DoesNotMutatePersistedCompanionState" fullname="TokenForge.Client.Tests.CompanionProgressionTests.PendingReview_DoesNotMutatePersistedCompanionState" methodname="PendingReview_DoesNotMutatePersistedCompanionState" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" seed="1694597672" result="Passed" start-time="2026-06-01 15:47:16Z" end-time="2026-06-01 15:47:16Z" duration="0.015705" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [RepositoryIdentity][CANONICALIZE] rawPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeTests/3l1xmefk.8ap/PrivateRepo canonicalPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeTests/3l1xmefk.8ap/PrivateRepo repositoryId=6c290d38bfe18034db42de2b059e961a84cd2a86f7b76eb89082957d3dfb001d
+INFO [RepositoryIdentity][LOOKUP_BY_PATH] canonicalPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeTests/3l1xmefk.8ap/PrivateRepo found=False
+INFO [RepositoryIdentity][LOOKUP_BY_LEGACY_KEY] legacyKey=54eb7be64d396b198c1ad940065cc341ee80f1a0fa1a3d521fd8631e01230361 found=False
+INFO [CompanionProfile][LOOKUP_LEGACY] repo=6c290d38bfe18034db42de2b059e961a84cd2a86f7b76eb89082957d3dfb001d found=False
+INFO [RepositoryIdentity][RESTORE] repositoryId=6c290d38bfe18034db42de2b059e961a84cd2a86f7b76eb89082957d3dfb001d found=False
+INFO [CompanionProfile][LOOKUP] repo=6c290d38bfe18034db42de2b059e961a84cd2a86f7b76eb89082957d3dfb001d found=False stage=none level=0 xp=0
+INFO [CompanionProfile][CREATE_NEW] repo=6c290d38bfe18034db42de2b059e961a84cd2a86f7b76eb89082957d3dfb001d reason=noExistingProfile stage=Egg level=1
+INFO [RepositoryStore][UPSERT_BEGIN] repo=6c290d38bfe18034db42de2b059e961a84cd2a86f7b76eb89082957d3dfb001d
+INFO [RepositoryStore][CREATE_NEW] repo=6c290d38bfe18034db42de2b059e961a84cd2a86f7b76eb89082957d3dfb001d
+INFO [RepositoryStore][SAVE_COMMIT] repo=6c290d38bfe18034db42de2b059e961a84cd2a86f7b76eb89082957d3dfb001d connected=true
+INFO [RepositoryStore][VERIFY_AFTER_SAVE] repo=6c290d38bfe18034db42de2b059e961a84cd2a86f7b76eb89082957d3dfb001d found=true connected=true
+INFO [RepositorySelection][SET_ACTIVE] repo=6c290d38bfe18034db42de2b059e961a84cd2a86f7b76eb89082957d3dfb001d source=addRepository
+INFO [CompanionProfile][SAVE] repo=6c290d38bfe18034db42de2b059e961a84cd2a86f7b76eb89082957d3dfb001d stage=Egg level=1 xp=0
+INFO [RepositoryProjection][ACTIVE_REPOSITORY_FROM_CONNECTED_PROJECT] repositoryId=6c290d38bfe18034db42de2b059e961a84cd2a86f7b76eb89082957d3dfb001d
+]]></output>
+              </test-case>
+              <test-case id="1655" name="ProviderInfluence_CodexDebuggerAndClaudeArchitectAreDeterministic" fullname="TokenForge.Client.Tests.CompanionProgressionTests.ProviderInfluence_CodexDebuggerAndClaudeArchitectAreDeterministic" methodname="ProviderInfluence_CodexDebuggerAndClaudeArchitectAreDeterministic" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" seed="1559359450" result="Passed" start-time="2026-06-01 15:47:16Z" end-time="2026-06-01 15:47:16Z" duration="0.000876" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1652" name="SaveReview_UpdatesCompanionOnlyAfterApproval" fullname="TokenForge.Client.Tests.CompanionProgressionTests.SaveReview_UpdatesCompanionOnlyAfterApproval" methodname="SaveReview_UpdatesCompanionOnlyAfterApproval" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" seed="646394172" result="Passed" start-time="2026-06-01 15:47:16Z" end-time="2026-06-01 15:47:16Z" duration="0.036108" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [RepositoryIdentity][CANONICALIZE] rawPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeTests/9l6up20c.7pq/PrivateRepo canonicalPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeTests/9l6up20c.7pq/PrivateRepo repositoryId=b42e5af391851bf78ac1e7e280772458f961abf5e999f1589896980be09380d2
+INFO [RepositoryIdentity][LOOKUP_BY_PATH] canonicalPath=/var/folders/nh/ktd1wq6j3rq9pvgj65ffj9k80000gn/T/TokenForgeTests/9l6up20c.7pq/PrivateRepo found=False
+INFO [RepositoryIdentity][LOOKUP_BY_LEGACY_KEY] legacyKey=42af373a88fc483591080eb8cda1064e6cdef7a0aa0fe1ac49a87e29a47893c1 found=False
+INFO [CompanionProfile][LOOKUP_LEGACY] repo=b42e5af391851bf78ac1e7e280772458f961abf5e999f1589896980be09380d2 found=False
+INFO [RepositoryIdentity][RESTORE] repositoryId=b42e5af391851bf78ac1e7e280772458f961abf5e999f1589896980be09380d2 found=False
+INFO [CompanionProfile][LOOKUP] repo=b42e5af391851bf78ac1e7e280772458f961abf5e999f1589896980be09380d2 found=False stage=none level=0 xp=0
+INFO [CompanionProfile][CREATE_NEW] repo=b42e5af391851bf78ac1e7e280772458f961abf5e999f1589896980be09380d2 reason=noExistingProfile stage=Egg level=1
+INFO [RepositoryStore][UPSERT_BEGIN] repo=b42e5af391851bf78ac1e7e280772458f961abf5e999f1589896980be09380d2
+INFO [RepositoryStore][CREATE_NEW] repo=b42e5af391851bf78ac1e7e280772458f961abf5e999f1589896980be09380d2
+INFO [RepositoryStore][SAVE_COMMIT] repo=b42e5af391851bf78ac1e7e280772458f961abf5e999f1589896980be09380d2 connected=true
+INFO [RepositoryStore][VERIFY_AFTER_SAVE] repo=b42e5af391851bf78ac1e7e280772458f961abf5e999f1589896980be09380d2 found=true connected=true
+INFO [RepositorySelection][SET_ACTIVE] repo=b42e5af391851bf78ac1e7e280772458f961abf5e999f1589896980be09380d2 source=addRepository
+INFO [CompanionProfile][SAVE] repo=b42e5af391851bf78ac1e7e280772458f961abf5e999f1589896980be09380d2 stage=Egg level=1 xp=0
+INFO [RepositoryProjection][ACTIVE_REPOSITORY_FROM_CONNECTED_PROJECT] repositoryId=b42e5af391851bf78ac1e7e280772458f961abf5e999f1589896980be09380d2
+INFO [RepositoryProjection][ACTIVE_REPOSITORY_FROM_CONNECTED_PROJECT] repositoryId=b42e5af391851bf78ac1e7e280772458f961abf5e999f1589896980be09380d2
+INFO [RepositoryProjection][ACTIVE_REPOSITORY_FROM_CONNECTED_PROJECT] repositoryId=b42e5af391851bf78ac1e7e280772458f961abf5e999f1589896980be09380d2
+INFO [RepositoryProjection][ACTIVE_REPOSITORY_FROM_CONNECTED_PROJECT] repositoryId=b42e5af391851bf78ac1e7e280772458f961abf5e999f1589896980be09380d2
+INFO [GrowthApply] repositoryId=b42e5af391851bf78ac1e7e280772458f961abf5e999f1589896980be09380d2 lifetimeGrowthXP=129 appliedGitSessions=1 tokenCurrency=0
+]]></output>
+              </test-case>
+              <test-case id="1643" name="StageMapping_UsesLevelAndKeepsLevelFourOutOfEgg" fullname="TokenForge.Client.Tests.CompanionProgressionTests.StageMapping_UsesLevelAndKeepsLevelFourOutOfEgg" methodname="StageMapping_UsesLevelAndKeepsLevelFourOutOfEgg" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" seed="415496781" result="Passed" start-time="2026-06-01 15:47:16Z" end-time="2026-06-01 15:47:16Z" duration="0.000520" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1642" name="StageThresholds_AreDeterministic" fullname="TokenForge.Client.Tests.CompanionProgressionTests.StageThresholds_AreDeterministic" methodname="StageThresholds_AreDeterministic" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" seed="2026775893" result="Passed" start-time="2026-06-01 15:47:16Z" end-time="2026-06-01 15:47:16Z" duration="0.000169" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1653" name="TokenOnlyHighUsage_UsesCautiousGrowthReason" fullname="TokenForge.Client.Tests.CompanionProgressionTests.TokenOnlyHighUsage_UsesCautiousGrowthReason" methodname="TokenOnlyHighUsage_UsesCautiousGrowthReason" classname="TokenForge.Client.Tests.CompanionProgressionTests" runstate="Runnable" seed="2065862132" result="Passed" start-time="2026-06-01 15:47:16Z" end-time="2026-06-01 15:47:16Z" duration="0.000557" asserts="0">
+                <properties />
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

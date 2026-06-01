@@ -54,7 +54,9 @@ namespace TokenForge.Client.UI
                 return;
             }
 
+            var profile = CompanionVisualProfileResolver.Resolve(companionState, settings.MotionMode);
             companionState = CompanionProgressionRules.Normalize(companionState);
+            companionState.Stage = profile.Stage;
             motionState = motionState ?? CompanionMotionStateResolver.Resolve(new CompanionMotionSignal { CanLevelUp = companionState.CanLevelUp });
             if (!tickStartedLogged)
             {
@@ -64,13 +66,12 @@ namespace TokenForge.Client.UI
 
             if (overlayService.IsNativeOverlay)
             {
-                var profile = CompanionVisualProfileResolver.Resolve(companionState, settings.MotionMode);
                 ApplyMotionIntensity(profile, motionState);
                 overlayService.SetClickEnabled(!settings.IsClickThroughEnabled);
                 overlayService.SetClickThrough(settings.IsClickThroughEnabled);
                 overlayService.SetVisualTheme(settings.VisualThemeId);
                 overlayService.SetMotionProfile(profile);
-                overlayService.SetVisualState(companionState.Stage, companionState.Archetype, profile.IdleAnimation, false);
+                overlayService.SetVisualState(profile.Stage, companionState.Archetype, profile.IdleAnimation, false);
                 return;
             }
 

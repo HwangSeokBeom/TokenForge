@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="25" result="Failed(Child)" total="25" passed="23" failed="2" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.30972">
+  <test-suite type="TestSuite" id="1560" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="480" result="Failed" site="Child" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.309720" total="25" passed="23" failed="2" inconclusive="0" skipped="0" asserts="0">
+    <properties />
+    <failure>
+      <message><![CDATA[One or more child tests had errors]]></message>
+    </failure>
+    <test-suite type="Assembly" id="2115" name="TokenForge.Client.Tests.dll" fullname="/Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/ScriptAssemblies/TokenForge.Client.Tests.dll" runstate="Runnable" testcasecount="480" result="Failed" site="Child" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.298044" total="25" passed="23" failed="2" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="68410" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+      </properties>
+      <failure>
+        <message><![CDATA[One or more child tests had errors]]></message>
+      </failure>
+      <test-suite type="TestSuite" id="2116" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="480" result="Failed" site="Child" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.297151" total="25" passed="23" failed="2" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <failure>
+          <message><![CDATA[One or more child tests had errors]]></message>
+        </failure>
+        <test-suite type="TestSuite" id="2117" name="Client" fullname="TokenForge.Client" runstate="Runnable" testcasecount="480" result="Failed" site="Child" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.296627" total="25" passed="23" failed="2" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <failure>
+            <message><![CDATA[One or more child tests had errors]]></message>
+          </failure>
+          <test-suite type="TestSuite" id="2118" name="Tests" fullname="TokenForge.Client.Tests" runstate="Runnable" testcasecount="480" result="Failed" site="Child" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.296108" total="25" passed="23" failed="2" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <failure>
+              <message><![CDATA[One or more child tests had errors]]></message>
+            </failure>
+            <test-suite type="TestFixture" id="1608" name="CompanionDesktopOverlayServiceTests" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" testcasecount="25" result="Failed" site="Child" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.282647" total="25" passed="23" failed="2" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <failure>
+                <message><![CDATA[One or more child tests had errors]]></message>
+              </failure>
+              <test-case id="1618" name="ClickReactionOffDisablesNativeClickCallback" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.ClickReactionOffDisablesNativeClickCallback" methodname="ClickReactionOffDisablesNativeClickCallback" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="449092174" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.011920" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [DesktopCompanion] companion overlay enabled
+]]></output>
+              </test-case>
+              <test-case id="1624" name="DashboardHideDoesNotClearSaveData" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.DashboardHideDoesNotClearSaveData" methodname="DashboardHideDoesNotClearSaveData" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="75022675" result="Failed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.183530" asserts="0">
+                <properties />
+                <failure>
+                  <message><![CDATA[  Expected: True
+  But was:  False
+]]></message>
+                  <stack-trace><![CDATA[at TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.DashboardHideDoesNotClearSaveData () [0x000c4] in /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Assets/_Project/Tests/EditMode/CompanionDesktopOverlayServiceTests.cs:309
+]]></stack-trace>
+                </failure>
+              </test-case>
+              <test-case id="1614" name="DashboardHideDoesNotMutateCompanionOverlayState" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.DashboardHideDoesNotMutateCompanionOverlayState" methodname="DashboardHideDoesNotMutateCompanionOverlayState" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="1311212987" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.002152" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [DesktopCompanion] companion overlay enabled
+]]></output>
+              </test-case>
+              <test-case id="1621" name="DesktopCompanionDisableCleansUpActiveState" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.DesktopCompanionDisableCleansUpActiveState" methodname="DesktopCompanionDisableCleansUpActiveState" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="1153023474" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.001489" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [DesktopCompanion] companion overlay enabled
+]]></output>
+              </test-case>
+              <test-case id="1623" name="DesktopCompanionEnabledStateSurvivesDashboardHideShowBridgeCalls" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.DesktopCompanionEnabledStateSurvivesDashboardHideShowBridgeCalls" methodname="DesktopCompanionEnabledStateSurvivesDashboardHideShowBridgeCalls" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="1210195358" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.000224" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1620" name="DesktopCompanionEnableTwiceIsIdempotent" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.DesktopCompanionEnableTwiceIsIdempotent" methodname="DesktopCompanionEnableTwiceIsIdempotent" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="991958904" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.000674" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [DesktopCompanion] companion overlay enabled
+]]></output>
+              </test-case>
+              <test-case id="1622" name="DesktopCompanionFailureShowsReasonAndUsesFallback" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.DesktopCompanionFailureShowsReasonAndUsesFallback" methodname="DesktopCompanionFailureShowsReasonAndUsesFallback" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="440413151" result="Failed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.001060" asserts="0">
+                <properties />
+                <failure>
+                  <message><![CDATA[  Expected: Fallback
+  But was:  Active
+]]></message>
+                  <stack-trace><![CDATA[at TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.DesktopCompanionFailureShowsReasonAndUsesFallback () [0x00057] in /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Assets/_Project/Tests/EditMode/CompanionDesktopOverlayServiceTests.cs:273
+]]></stack-trace>
+                </failure>
+                <output><![CDATA[INFO [DesktopCompanion] companion overlay enabled
+]]></output>
+              </test-case>
+              <test-case id="1610" name="DesktopMovementControllerUsesAbstractionAndUpdatesVisualState" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.DesktopMovementControllerUsesAbstractionAndUpdatesVisualState" methodname="DesktopMovementControllerUsesAbstractionAndUpdatesVisualState" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="1569298320" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.001217" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [DesktopCompanion] idle/wander tick started
+]]></output>
+              </test-case>
+              <test-case id="1619" name="DragEndedCallbackReportsPersistablePosition" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.DragEndedCallbackReportsPersistablePosition" methodname="DragEndedCallbackReportsPersistablePosition" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="244715357" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.005844" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [DesktopCompanion] companion overlay enabled
+INFO [CompanionMotion] idleResumed anchor=(320,240)
+INFO [CompanionDrag] mouseUp final=(320,240) saved=pending
+INFO [OverlayPositionSync][COMMIT] source=dragEnd position=(320,240)
+]]></output>
+              </test-case>
+              <test-case id="1631" name="EmptyFarmProjectionDoesNotShowDashboardPlaceholderOverlay" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.EmptyFarmProjectionDoesNotShowDashboardPlaceholderOverlay" methodname="EmptyFarmProjectionDoesNotShowDashboardPlaceholderOverlay" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="21296693" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.002772" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [FarmProjection][SKIP_PLACEHOLDER] reason=noRepository
+INFO [FarmProjection][BUILD] connectedRepositories=0 snapshots=0
+]]></output>
+              </test-case>
+              <test-case id="1625" name="ExplicitQuitBridgeIsSeparateFromHideAndShowBridge" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.ExplicitQuitBridgeIsSeparateFromHideAndShowBridge" methodname="ExplicitQuitBridgeIsSeparateFromHideAndShowBridge" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="2016316609" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.000480" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1626" name="FakeMenuBarLifecycleActionsSeparateShowHideAndQuit" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.FakeMenuBarLifecycleActionsSeparateShowHideAndQuit" methodname="FakeMenuBarLifecycleActionsSeparateShowHideAndQuit" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="381000210" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.000137" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1609" name="FallbackServiceReportsUnavailableWithoutCreatingNativeWindow" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.FallbackServiceReportsUnavailableWithoutCreatingNativeWindow" methodname="FallbackServiceReportsUnavailableWithoutCreatingNativeWindow" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="1589794642" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.001192" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [DesktopCompanion] fallback companion active
+INFO [DesktopCompanion] fallback companion active
+]]></output>
+              </test-case>
+              <test-case id="1633" name="FarmProjectionMarksOnlyMatchingRepositoryAsDragging" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.FarmProjectionMarksOnlyMatchingRepositoryAsDragging" methodname="FarmProjectionMarksOnlyMatchingRepositoryAsDragging" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="1961450396" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.001796" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [CSharpProjection][SKIP_TO_NATIVE] repo=repo-a reason=overlayDragInProgress
+]]></output>
+              </test-case>
+              <test-case id="1632" name="FarmProjectionSkipsDefaultAndUnapprovedPlaceholderProfiles" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.FarmProjectionSkipsDefaultAndUnapprovedPlaceholderProfiles" methodname="FarmProjectionSkipsDefaultAndUnapprovedPlaceholderProfiles" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="1849336519" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.001056" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [FarmProjection][SKIP_PLACEHOLDER] reason=noRepository
+INFO [FarmProjection][BUILD] connectedRepositories=0 snapshots=0
+]]></output>
+              </test-case>
+              <test-case id="1630" name="FarmSnapshotIdentityUsesEachRepositoryCompanionProfile" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.FarmSnapshotIdentityUsesEachRepositoryCompanionProfile" methodname="FarmSnapshotIdentityUsesEachRepositoryCompanionProfile" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="1683580192" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.000569" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1613" name="MacLifecycleBridgeNoOpsOutsideMacPlayerBuild" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.MacLifecycleBridgeNoOpsOutsideMacPlayerBuild" methodname="MacLifecycleBridgeNoOpsOutsideMacPlayerBuild" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="1986474035" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.000238" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1612" name="MotionIntensityScalesNativeOverlayProfile" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.MotionIntensityScalesNativeOverlayProfile" methodname="MotionIntensityScalesNativeOverlayProfile" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="141207673" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.003615" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [DesktopCompanion] idle/wander tick started
+]]></output>
+              </test-case>
+              <test-case id="1629" name="NativeStatusItemUsesImageInsteadOfTfTitleFallback" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.NativeStatusItemUsesImageInsteadOfTfTitleFallback" methodname="NativeStatusItemUsesImageInsteadOfTfTitleFallback" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="1841609835" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.045609" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1617" name="OverlayClickCallbackDoesNotShowMainWindowWhenClickThroughEnabled" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.OverlayClickCallbackDoesNotShowMainWindowWhenClickThroughEnabled" methodname="OverlayClickCallbackDoesNotShowMainWindowWhenClickThroughEnabled" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="126878188" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.001026" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [DesktopCompanion] companion overlay enabled
+]]></output>
+              </test-case>
+              <test-case id="1615" name="OverlayClickCallbackTriggersReactionWithoutShowingMainWindow" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.OverlayClickCallbackTriggersReactionWithoutShowingMainWindow" methodname="OverlayClickCallbackTriggersReactionWithoutShowingMainWindow" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="1064033629" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.000884" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [DesktopCompanion] companion overlay enabled
+INFO [DesktopCompanion] single click reaction triggered
+]]></output>
+              </test-case>
+              <test-case id="1616" name="OverlayDoubleClickCallbackShowsMainWindowInNormalMode" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.OverlayDoubleClickCallbackShowsMainWindowInNormalMode" methodname="OverlayDoubleClickCallbackShowsMainWindowInNormalMode" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="827974547" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.002390" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [DesktopCompanion] companion overlay enabled
+INFO [DesktopCompanion] double click dashboard restore requested
+]]></output>
+              </test-case>
+              <test-case id="1628" name="StageMotionProfilesKeepEarlyStagesSlowAndAllowEnabledWandering" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.StageMotionProfilesKeepEarlyStagesSlowAndAllowEnabledWandering" methodname="StageMotionProfilesKeepEarlyStagesSlowAndAllowEnabledWandering" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="1667164016" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.000399" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1627" name="StatusIconProviderReturnsStageSpecificPixelAssetKeys" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.StatusIconProviderReturnsStageSpecificPixelAssetKeys" methodname="StatusIconProviderReturnsStageSpecificPixelAssetKeys" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="1154708306" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.000115" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1611" name="WanderMovementOffStopsMotionProfileImmediately" fullname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests.WanderMovementOffStopsMotionProfileImmediately" methodname="WanderMovementOffStopsMotionProfileImmediately" classname="TokenForge.Client.Tests.CompanionDesktopOverlayServiceTests" runstate="Runnable" seed="1055289919" result="Passed" start-time="2026-06-01 15:04:04Z" end-time="2026-06-01 15:04:04Z" duration="0.000746" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [DesktopCompanion] idle/wander tick started
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

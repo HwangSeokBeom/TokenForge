@@ -3,6 +3,9 @@ using System.Collections;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using TokenForge.Client.Domain;
 using TokenForge.Client.Persistence;
@@ -667,9 +670,9 @@ namespace TokenForge.Client.Tests
             var settings = RepositoryCompanionProfileService.GetSelectedDesktopCompanionSettings(saveData);
             settings.ZodiacTypeId = "dragon";
             RepositoryCompanionProfileService.SetSelectedDesktopCompanionSettings(saveData, settings);
-            repository.SaveAsync(saveData).GetAwaiter().GetResult();
+            RunAsync("save zodiac settings", token => repository.SaveAsync(saveData, token));
 
-            var loaded = repository.LoadAsync().GetAwaiter().GetResult();
+            var loaded = RunAsync("load zodiac settings", token => repository.LoadAsync(token));
             var restored = RepositoryCompanionProfileService.GetSelectedDesktopCompanionSettings(loaded);
 
             Assert.AreEqual("dragon", restored.ZodiacTypeId);
@@ -699,9 +702,9 @@ namespace TokenForge.Client.Tests
             var saveData = SaveData.CreateDefault();
             saveData.OnboardingPreferences.FirstRunOnboardingCompleted = true;
             saveData.OnboardingPreferences.CompletedAtUtc = DateTimeOffset.UtcNow;
-            repository.SaveAsync(saveData).GetAwaiter().GetResult();
+            RunAsync("save onboarding preferences", token => repository.SaveAsync(saveData, token));
 
-            var loaded = repository.LoadAsync().GetAwaiter().GetResult();
+            var loaded = RunAsync("load onboarding preferences", token => repository.LoadAsync(token));
 
             Assert.IsTrue(loaded.OnboardingPreferences.FirstRunOnboardingCompleted);
             Assert.IsNotNull(loaded.OnboardingPreferences.CompletedAtUtc);
@@ -968,6 +971,38 @@ namespace TokenForge.Client.Tests
             var path = Path.Combine(parent, string.IsNullOrWhiteSpace(directoryName) ? "Repository" : directoryName);
             Directory.CreateDirectory(Path.Combine(path, ".git"));
             return path;
+        }
+
+        private static T RunAsync<T>(
+            string operationName,
+            Func<CancellationToken, Task<T>> action,
+            [CallerMemberName] string testName = "")
+        {
+            const int TimeoutMilliseconds = 10000;
+            using (var cancellation = new CancellationTokenSource())
+            {
+                var originalContext = SynchronizationContext.Current;
+                try
+                {
+                    SynchronizationContext.SetSynchronizationContext(null);
+                    var operationTask = action(cancellation.Token);
+                    var timeoutTask = Task.Delay(TimeoutMilliseconds);
+                    var completed = Task.WhenAny(operationTask, timeoutTask).GetAwaiter().GetResult();
+                    if (!ReferenceEquals(completed, operationTask))
+                    {
+                        cancellation.Cancel();
+                        Assert.Fail(
+                            testName + " timed out after " + TimeoutMilliseconds + "ms while running " + operationName +
+                            ". The async operation did not complete; check for Unity main-thread continuation capture, an infinite wait, or an unobserved cancellation path.");
+                    }
+
+                    return operationTask.GetAwaiter().GetResult();
+                }
+                finally
+                {
+                    SynchronizationContext.SetSynchronizationContext(originalContext);
+                }
+            }
         }
 
         private static IList InvokeRepositoryCompanionDisplayItems(SaveData saveData)

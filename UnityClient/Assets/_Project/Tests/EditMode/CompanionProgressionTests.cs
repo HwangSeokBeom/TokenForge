@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
@@ -79,8 +80,8 @@ namespace TokenForge.Client.Tests
         {
             var fixture = CreateGitFixture();
 
-            RunAsync(() => fixture.Flow.SelectRepositoryAsync());
-            var review = RunAsync(() => fixture.Flow.AnalyzeAsync());
+            RunAsync("SelectRepositoryAsync", cancellationToken => fixture.Flow.SelectRepositoryAsync(cancellationToken));
+            var review = RunAsync("AnalyzeAsync", cancellationToken => fixture.Flow.AnalyzeAsync(cancellationToken));
 
             Assert.IsTrue(review.IsSuccess, review.ErrorMessage);
             Assert.IsTrue(fixture.Flow.HasPendingReview);
@@ -94,9 +95,9 @@ namespace TokenForge.Client.Tests
         {
             var fixture = CreateGitFixture();
 
-            RunAsync(() => fixture.Flow.SelectRepositoryAsync());
-            RunAsync(() => fixture.Flow.AnalyzeAsync());
-            var saved = RunAsync(() => fixture.Flow.SaveSessionAsync());
+            RunAsync("SelectRepositoryAsync", cancellationToken => fixture.Flow.SelectRepositoryAsync(cancellationToken));
+            RunAsync("AnalyzeAsync", cancellationToken => fixture.Flow.AnalyzeAsync(cancellationToken));
+            var saved = RunAsync("SaveSessionAsync", cancellationToken => fixture.Flow.SaveSessionAsync(cancellationToken));
 
             Assert.IsTrue(saved.IsSuccess, saved.ErrorMessage);
             Assert.AreEqual(2, fixture.Repository.SaveCount);
@@ -196,8 +197,8 @@ namespace TokenForge.Client.Tests
         {
             var fixture = CreateGitFixture();
 
-            RunAsync(() => fixture.Flow.SelectRepositoryAsync());
-            RunAsync(() => fixture.Flow.AnalyzeAsync());
+            RunAsync("SelectRepositoryAsync", cancellationToken => fixture.Flow.SelectRepositoryAsync(cancellationToken));
+            RunAsync("AnalyzeAsync", cancellationToken => fixture.Flow.AnalyzeAsync(cancellationToken));
             var discarded = fixture.Flow.DiscardPendingReview();
 
             Assert.IsTrue(discarded.IsSuccess, discarded.ErrorMessage);
@@ -298,9 +299,36 @@ namespace TokenForge.Client.Tests
             return new GitFixture(flow, repository);
         }
 
-        private static T RunAsync<T>(Func<Task<T>> action)
+        private static T RunAsync<T>(
+            string operationName,
+            Func<CancellationToken, Task<T>> action,
+            [CallerMemberName] string testName = "")
         {
-            return action().GetAwaiter().GetResult();
+            const int TimeoutMilliseconds = 10000;
+            using (var cancellation = new CancellationTokenSource())
+            {
+                var originalContext = SynchronizationContext.Current;
+                try
+                {
+                    SynchronizationContext.SetSynchronizationContext(null);
+                    var operationTask = action(cancellation.Token);
+                    var timeoutTask = Task.Delay(TimeoutMilliseconds);
+                    var completed = Task.WhenAny(operationTask, timeoutTask).GetAwaiter().GetResult();
+                    if (!ReferenceEquals(completed, operationTask))
+                    {
+                        cancellation.Cancel();
+                        Assert.Fail(
+                            testName + " timed out after " + TimeoutMilliseconds + "ms while running " + operationName +
+                            ". The async operation did not complete; check for Unity main-thread continuation capture, an infinite wait, or an unobserved cancellation path.");
+                    }
+
+                    return operationTask.GetAwaiter().GetResult();
+                }
+                finally
+                {
+                    SynchronizationContext.SetSynchronizationContext(originalContext);
+                }
+            }
         }
 
         private sealed class GitFixture

@@ -37,31 +37,20 @@ namespace TokenForge.Client.Domain
             }
 
             state.TotalLifetimeXp = Math.Max(0, state.TotalLifetimeXp);
-            state.Level = Math.Max(Math.Max(1, state.Level), LevelForXp(state.TotalLifetimeXp));
+            state.Level = Math.Max(1, state.Level);
             if (state.CurrentXp <= 0 && state.TotalXp > 0)
             {
                 state.CurrentXp = state.TotalXp;
             }
 
             state.CurrentXp = Math.Max(0, state.CurrentXp);
-            state.XpRequiredForNextLevel = XpRequiredForLevel(state.Level);
-            state.CanLevelUp = state.CurrentXp >= state.XpRequiredForNextLevel;
-            state.Stats = state.Stats ?? CompanionStatProfile.Empty();
-            state.WeeklyStats = state.WeeklyStats ?? CompanionStatProfile.Empty();
-            state.GrowthProfile = state.GrowthProfile ?? new CompanionGrowthProfile();
-            state.GrowthProfile.SchemaVersion = SchemaVersion;
-            state.GrowthProfile.TokenUsageProfile = state.GrowthProfile.TokenUsageProfile ?? new CompanionTokenUsageProfile();
-            state.EvolutionBias = CompanionEvolutionPathResolver.Resolve(state.Stats, state.Stage);
             state.LastGrowthReasonIds = state.LastGrowthReasonIds ?? new List<string>();
             if (state.LastGrowthReasonIds.Count == 0)
             {
                 state.LastGrowthReasonIds.Add(state.TotalXp <= 0 ? CompanionGrowthReasonIds.NoApprovedGrowthYet : CompanionGrowthReasonIds.ApprovedAggregateGrowth);
             }
 
-            state.Stage = StageForLevel(state.Level);
-            state.XpToNextStage = XpToNextStage(state.TotalLifetimeXp);
-            state.TotalXp = state.TotalLifetimeXp;
-            state.EvolutionBias = CompanionEvolutionPathResolver.Resolve(state.Stats, state.Stage);
+            RefreshDerivedFields(state);
             if (state.TotalLifetimeXp <= 0)
             {
                 state.Archetype = CompanionArchetype.Unknown;
@@ -122,9 +111,7 @@ namespace TokenForge.Client.Domain
 
             state.CurrentXp -= state.XpRequiredForNextLevel;
             state.Level += 1;
-            state.XpRequiredForNextLevel = XpRequiredForLevel(state.Level);
-            state.CanLevelUp = state.CurrentXp >= state.XpRequiredForNextLevel;
-            Normalize(state);
+            RefreshDerivedFields(state);
             return true;
         }
 
@@ -164,6 +151,21 @@ namespace TokenForge.Client.Domain
         private static int XpForLevelFloor(int level)
         {
             return Math.Max(0, Math.Max(1, level) - 1) * XpPerCompanionLevel;
+        }
+
+        private static void RefreshDerivedFields(CompanionState state)
+        {
+            state.XpRequiredForNextLevel = XpRequiredForLevel(state.Level);
+            state.CanLevelUp = state.CurrentXp >= state.XpRequiredForNextLevel;
+            state.Stats = state.Stats ?? CompanionStatProfile.Empty();
+            state.WeeklyStats = state.WeeklyStats ?? CompanionStatProfile.Empty();
+            state.GrowthProfile = state.GrowthProfile ?? new CompanionGrowthProfile();
+            state.GrowthProfile.SchemaVersion = SchemaVersion;
+            state.GrowthProfile.TokenUsageProfile = state.GrowthProfile.TokenUsageProfile ?? new CompanionTokenUsageProfile();
+            state.Stage = StageForLevel(state.Level);
+            state.XpToNextStage = XpToNextStage(state.TotalLifetimeXp);
+            state.TotalXp = state.TotalLifetimeXp;
+            state.EvolutionBias = CompanionEvolutionPathResolver.Resolve(state.Stats, state.Stage);
         }
 
         private static CompanionGrowthProfile BuildProfile(
@@ -298,8 +300,9 @@ namespace TokenForge.Client.Domain
                 profile.ImplementationScore += 2;
             }
 
-                ApplyProviderScores(profile, session, git, action);
-                ApplyGitStyleScores(profile, session, git, action);
+            ApplyProviderScores(profile, session, git, action);
+            ApplyGitStyleScores(profile, session, git, action);
+            ApplyTokenScores(profile, session, git, action);
 
             if (session.WorkType == WorkType.Bugfix || session.WorkType == WorkType.Test)
             {
@@ -687,7 +690,9 @@ namespace TokenForge.Client.Domain
         {
             var baseXp = Math.Max(0, (growthHistory ?? new List<CharacterGrowthResult>()).Sum(growth => Math.Max(0, growth.ExpGained)));
             var boost = Math.Max(0, profile.SteadyReviewSaveCount) * 10;
-            return Math.Max(0, baseXp + boost);
+            var balancedTokenGitBoost = Math.Max(0, profile.BalancedTokenGitActivityCount) * 20;
+            var cautiousTokenOnlyAdjustment = Math.Max(0, profile.HighTokenLowLocalActivityCount) * 40;
+            return Math.Max(0, baseXp + boost + balancedTokenGitBoost - cautiousTokenOnlyAdjustment);
         }
 
         private static void ApplyHistoricalConsistency(CompanionGrowthProfile profile)

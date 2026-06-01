@@ -115,7 +115,8 @@ namespace TokenForge.Client.Privacy
                 return Result.Failure("privacy_null_save_data", "Save data is required.");
             }
 
-            return ValidateNoForbiddenFields(saveData);
+            var validation = ValidateObject(saveData);
+            return ToResult(validation);
         }
 
         public void ThrowIfUnsafe(object payload)
@@ -157,8 +158,45 @@ namespace TokenForge.Client.Privacy
                     {
                         AddViolation(result, "Sensitive string pattern", path);
                     }
+
+                    if (IsCompanionGrowthReasonPath(path) && !IsSafeCompanionGrowthReasonId(value))
+                    {
+                        AddViolation(result, "Unsafe companion growth reason id", path);
+                    }
                     break;
             }
+        }
+
+        private static bool IsCompanionGrowthReasonPath(string path)
+        {
+            return !string.IsNullOrWhiteSpace(path) &&
+                   path.IndexOf(".LastGrowthReasonIds[", StringComparison.Ordinal) >= 0;
+        }
+
+        private static bool IsSafeCompanionGrowthReasonId(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            value = value.Trim();
+            if (value.Length > 80)
+            {
+                return false;
+            }
+
+            foreach (var character in value)
+            {
+                var isLowercaseLetter = character >= 'a' && character <= 'z';
+                var isDigit = character >= '0' && character <= '9';
+                if (!isLowercaseLetter && !isDigit && character != '_')
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static void AddViolation(PrivacyValidationResult result, string message, string location)

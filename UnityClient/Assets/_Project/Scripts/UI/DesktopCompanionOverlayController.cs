@@ -84,7 +84,15 @@ namespace TokenForge.Client.UI
                 overlayService.Create();
                 movementController = new CompanionDesktopMovementController(overlayService);
             }
-            overlayService.HideAllRepositoryCompanions("csharp.initialize");
+            else if (overlayService.State == CompanionDesktopOverlayState.Unavailable)
+            {
+                lastFailureReason = overlayService.StatusMessage;
+            }
+
+            if (overlayService.State != CompanionDesktopOverlayState.Unavailable)
+            {
+                overlayService.HideAllRepositoryCompanions("csharp.initialize");
+            }
         }
 
         public void ApplyFarmSettings(
@@ -193,9 +201,10 @@ namespace TokenForge.Client.UI
         public void ApplySettings(DesktopCompanionSettings desktopSettings, CompanionState state, CompanionMotionState motion = null, string repositoryId = "", int currentXp = 0)
         {
             settings = desktopSettings ?? DesktopCompanionSettings.CreateDefault();
+            visualProfile = CompanionVisualProfileResolver.Resolve(state, settings.MotionMode);
             companionState = CompanionProgressionRules.Normalize(state);
+            companionState.Stage = visualProfile.Stage;
             motionState = motion ?? CompanionMotionStateResolver.Resolve(new CompanionMotionSignal { CanLevelUp = companionState.CanLevelUp });
-            visualProfile = CompanionVisualProfileResolver.Resolve(companionState, settings.MotionMode);
             ApplyMotionIntensity(visualProfile, motionState);
             if (overlayService == null)
             {

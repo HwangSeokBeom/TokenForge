@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="5" result="Failed(Child)" total="5" passed="4" failed="1" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-06-01 14:49:19Z" end-time="2026-06-01 14:49:19Z" duration="0.1098236">
+  <test-suite type="TestSuite" id="1560" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="480" result="Failed" site="Child" start-time="2026-06-01 14:49:19Z" end-time="2026-06-01 14:49:19Z" duration="0.109824" total="5" passed="4" failed="1" inconclusive="0" skipped="0" asserts="0">
+    <properties />
+    <failure>
+      <message><![CDATA[One or more child tests had errors]]></message>
+    </failure>
+    <test-suite type="Assembly" id="2115" name="TokenForge.Client.Tests.dll" fullname="/Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/ScriptAssemblies/TokenForge.Client.Tests.dll" runstate="Runnable" testcasecount="480" result="Failed" site="Child" start-time="2026-06-01 14:49:19Z" end-time="2026-06-01 14:49:19Z" duration="0.103816" total="5" passed="4" failed="1" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="55284" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+      </properties>
+      <failure>
+        <message><![CDATA[One or more child tests had errors]]></message>
+      </failure>
+      <test-suite type="TestSuite" id="2116" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="480" result="Failed" site="Child" start-time="2026-06-01 14:49:19Z" end-time="2026-06-01 14:49:19Z" duration="0.103406" total="5" passed="4" failed="1" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <failure>
+          <message><![CDATA[One or more child tests had errors]]></message>
+        </failure>
+        <test-suite type="TestSuite" id="2117" name="Client" fullname="TokenForge.Client" runstate="Runnable" testcasecount="480" result="Failed" site="Child" start-time="2026-06-01 14:49:19Z" end-time="2026-06-01 14:49:19Z" duration="0.103066" total="5" passed="4" failed="1" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <failure>
+            <message><![CDATA[One or more child tests had errors]]></message>
+          </failure>
+          <test-suite type="TestSuite" id="2118" name="Tests" fullname="TokenForge.Client.Tests" runstate="Runnable" testcasecount="480" result="Failed" site="Child" start-time="2026-06-01 14:49:19Z" end-time="2026-06-01 14:49:19Z" duration="0.101746" total="5" passed="4" failed="1" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <failure>
+              <message><![CDATA[One or more child tests had errors]]></message>
+            </failure>
+            <test-suite type="TestFixture" id="1634" name="CompanionPrivacyTests" fullname="TokenForge.Client.Tests.CompanionPrivacyTests" classname="TokenForge.Client.Tests.CompanionPrivacyTests" runstate="Runnable" testcasecount="5" result="Failed" site="Child" start-time="2026-06-01 14:49:19Z" end-time="2026-06-01 14:49:19Z" duration="0.095988" total="5" passed="4" failed="1" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <failure>
+                <message><![CDATA[One or more child tests had errors]]></message>
+              </failure>
+              <test-case id="1638" name="CompanionSaveData_UsesOnlySafeAggregateFields" fullname="TokenForge.Client.Tests.CompanionPrivacyTests.CompanionSaveData_UsesOnlySafeAggregateFields" methodname="CompanionSaveData_UsesOnlySafeAggregateFields" classname="TokenForge.Client.Tests.CompanionPrivacyTests" runstate="Runnable" seed="1531668924" result="Passed" start-time="2026-06-01 14:49:19Z" end-time="2026-06-01 14:49:19Z" duration="0.056198" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1639" name="DomainCompanionModels_DoNotExposeForbiddenRawFields" fullname="TokenForge.Client.Tests.CompanionPrivacyTests.DomainCompanionModels_DoNotExposeForbiddenRawFields" methodname="DomainCompanionModels_DoNotExposeForbiddenRawFields" classname="TokenForge.Client.Tests.CompanionPrivacyTests" runstate="Runnable" seed="957784554" result="Passed" start-time="2026-06-01 14:49:19Z" end-time="2026-06-01 14:49:19Z" duration="0.000259" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1635" name="OldSaveWithoutCompanionData_LoadsDefaultEgg" fullname="TokenForge.Client.Tests.CompanionPrivacyTests.OldSaveWithoutCompanionData_LoadsDefaultEgg" methodname="OldSaveWithoutCompanionData_LoadsDefaultEgg" classname="TokenForge.Client.Tests.CompanionPrivacyTests" runstate="Runnable" seed="526198353" result="Passed" start-time="2026-06-01 14:49:19Z" end-time="2026-06-01 14:49:19Z" duration="0.026093" asserts="0">
+                <properties />
+                <output><![CDATA[INFO [RepositoryProjection][NO_APPROVED_REPOSITORY_CLEAR_ACTIVE]
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+]]></output>
+              </test-case>
+              <test-case id="1636" name="PrivacyValidator_RejectsForbiddenCompanionFields" fullname="TokenForge.Client.Tests.CompanionPrivacyTests.PrivacyValidator_RejectsForbiddenCompanionFields" methodname="PrivacyValidator_RejectsForbiddenCompanionFields" classname="TokenForge.Client.Tests.CompanionPrivacyTests" runstate="Runnable" seed="179167389" result="Passed" start-time="2026-06-01 14:49:19Z" end-time="2026-06-01 14:49:19Z" duration="0.000706" asserts="0">
+                <properties />
+              </test-case>
+              <test-case id="1637" name="SaveDataRepository_RejectsUnsafeCompanionReasonText" fullname="TokenForge.Client.Tests.CompanionPrivacyTests.SaveDataRepository_RejectsUnsafeCompanionReasonText" methodname="SaveDataRepository_RejectsUnsafeCompanionReasonText" classname="TokenForge.Client.Tests.CompanionPrivacyTests" runstate="Runnable" seed="1053237865" result="Failed" start-time="2026-06-01 14:49:19Z" end-time="2026-06-01 14:49:19Z" duration="0.007991" asserts="0">
+                <properties />
+                <failure>
+                  <message><![CDATA[  Expected: False
+  But was:  True
+]]></message>
+                  <stack-trace><![CDATA[at TokenForge.Client.Tests.CompanionPrivacyTests.SaveDataRepository_RejectsUnsafeCompanionReasonText () [0x00064] in /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Assets/_Project/Tests/EditMode/CompanionPrivacyTests.cs:53
+]]></stack-trace>
+                </failure>
+                <output><![CDATA[INFO [RepositoryProjection][NO_APPROVED_REPOSITORY_CLEAR_ACTIVE]
+INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

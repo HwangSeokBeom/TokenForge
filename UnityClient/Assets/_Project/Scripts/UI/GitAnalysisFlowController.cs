@@ -102,7 +102,7 @@ namespace TokenForge.Client.UI
         public async Task<Result> SelectRepositoryAsync(CancellationToken cancellationToken = default)
         {
             logger?.Info("Git repository selection started");
-            var result = await repositoryPicker.PickRepositoryAsync(cancellationToken);
+            var result = await repositoryPicker.PickRepositoryAsync(cancellationToken).ConfigureAwait(false);
             if (!result.IsSuccess)
             {
                 selectedRepositoryRootPath = string.Empty;
@@ -124,7 +124,7 @@ namespace TokenForge.Client.UI
             selectedRepositoryRootPath = result.RepositoryRootPath;
             Review = null;
             pendingSession = null;
-            var profileResult = await PersistSelectedRepositoryProfileAsync(selectedRepositoryRootPath, cancellationToken);
+            var profileResult = await PersistSelectedRepositoryProfileAsync(selectedRepositoryRootPath, cancellationToken).ConfigureAwait(false);
             if (!profileResult.IsSuccess)
             {
                 return Fail(profileResult.ErrorCode, profileResult.ErrorMessage);
@@ -166,7 +166,7 @@ namespace TokenForge.Client.UI
             UserMessage = "Analyzing repository aggregate activity.";
             logger?.Info("Git analysis flow analysis started");
 
-            var saveDataBeforeAnalysis = await repository.LoadAsync(cancellationToken);
+            var saveDataBeforeAnalysis = await repository.LoadAsync(cancellationToken).ConfigureAwait(false);
             RepositoryCompanionProfileService.Normalize(saveDataBeforeAnalysis);
             var selectedRepositoryHash = RepositoryCompanionProfileService.HashRepositoryPath(selectedRepositoryRootPath);
             var connection = FindConnectedProject(saveDataBeforeAnalysis, selectedRepositoryHash);
@@ -174,7 +174,7 @@ namespace TokenForge.Client.UI
                 ? GitAnalysisMode.FullBaseline
                 : GitAnalysisMode.Incremental;
             var input = Settings.ToInput(selectedRepositoryRootPath, analysisMode, connection?.LastAnalyzedCommit ?? string.Empty);
-            var analysisResult = await Task.Run(() => analyzer.AnalyzeAsync(input, cancellationToken), cancellationToken);
+            var analysisResult = await Task.Run(() => analyzer.AnalyzeAsync(input, cancellationToken), cancellationToken).ConfigureAwait(false);
             if (!analysisResult.IsSuccess)
             {
                 var failure = Fail(analysisResult.ErrorCode, SafeGitFailureMessage(analysisResult.ErrorCode, analysisResult.ErrorMessage));
@@ -232,7 +232,7 @@ namespace TokenForge.Client.UI
                 return Result<SaveData>.Failure(failure.ErrorCode, failure.ErrorMessage);
             }
 
-            var saveData = await repository.LoadAsync(cancellationToken);
+            var saveData = await repository.LoadAsync(cancellationToken).ConfigureAwait(false);
             saveData.CharacterProfile = saveData.CharacterProfile ?? new CharacterProfile();
             saveData.CompanionState = CompanionProgressionRules.Normalize(saveData.CompanionState);
             saveData.DailyProgress = saveData.DailyProgress ?? new DailyProgress();
@@ -288,7 +288,7 @@ namespace TokenForge.Client.UI
                 return Result<SaveData>.Failure(failure.ErrorCode, failure.ErrorMessage);
             }
 
-            var saveResult = await repository.SaveAsync(saveData, cancellationToken);
+            var saveResult = await repository.SaveAsync(saveData, cancellationToken).ConfigureAwait(false);
             if (!saveResult.IsSuccess)
             {
                 var failure = Fail(saveResult.ErrorCode, "Save failed with a safe error category.");
@@ -320,7 +320,7 @@ namespace TokenForge.Client.UI
             State = GitAnalysisFlowState.Syncing;
             ErrorCategory = string.Empty;
             UserMessage = "Syncing safe aggregate data.";
-            var syncResult = await syncService.PushThenPullAsync(cancellationToken);
+            var syncResult = await syncService.PushThenPullAsync(cancellationToken).ConfigureAwait(false);
             if (!syncResult.IsSuccess)
             {
                 var failure = Fail(syncResult.ErrorCode, "Sync failed with a safe error category.");
@@ -345,7 +345,7 @@ namespace TokenForge.Client.UI
 
         private async Task<Result<RepositoryCompanionProfile>> PersistSelectedRepositoryProfileAsync(string repositoryRootPath, CancellationToken cancellationToken)
         {
-            var saveData = await repository.LoadAsync(cancellationToken);
+            var saveData = await repository.LoadAsync(cancellationToken).ConfigureAwait(false);
             var profileResult = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repositoryRootPath);
             if (!profileResult.IsSuccess)
             {
@@ -358,7 +358,7 @@ namespace TokenForge.Client.UI
                 return Result<RepositoryCompanionProfile>.Failure(validation.ErrorCode, validation.ErrorMessage);
             }
 
-            var saveResult = await repository.SaveAsync(saveData, cancellationToken);
+            var saveResult = await repository.SaveAsync(saveData, cancellationToken).ConfigureAwait(false);
             return saveResult.IsSuccess
                 ? profileResult
                 : Result<RepositoryCompanionProfile>.Failure(saveResult.ErrorCode, saveResult.ErrorMessage);
@@ -403,7 +403,7 @@ namespace TokenForge.Client.UI
                 return Fail("RepositoryFolderNotFound", "Repository folder was not found. Reconnect required.");
             }
 
-            var validation = await analyzer.ValidateRepositoryRootAsync(repositoryRootPath, cancellationToken);
+            var validation = await analyzer.ValidateRepositoryRootAsync(repositoryRootPath, cancellationToken).ConfigureAwait(false);
             if (!validation.IsSuccess)
             {
                 return Fail(validation.ErrorCode, SafeGitFailureMessage(validation.ErrorCode, validation.ErrorMessage));
@@ -415,7 +415,7 @@ namespace TokenForge.Client.UI
                 return Fail("RepositoryFolderNotFound", "Repository folder was not found. Reconnect required.");
             }
 
-            var profileResult = await PersistSelectedRepositoryProfileAsync(canonicalRoot, cancellationToken);
+            var profileResult = await PersistSelectedRepositoryProfileAsync(canonicalRoot, cancellationToken).ConfigureAwait(false);
             if (!profileResult.IsSuccess)
             {
                 return Fail(profileResult.ErrorCode, profileResult.ErrorMessage);

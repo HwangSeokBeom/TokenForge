@@ -447,7 +447,7 @@ namespace TokenForge.Client.Domain
                 Featured = true,
                 ItemType = "Accessory",
                 PreviewIcon = "zodiac_" + zodiacId,
-                PreviewType = accessoryPreview,
+                PreviewType = "zodiac_" + zodiacId + "_" + accessoryPreview,
                 Compatibility = ZodiacDisplayName(zodiacId) + " zodiac",
                 ZodiacTypeId = zodiacId,
                 CompatibleAgentIds = new List<string> { "codex", "claudeCode", "geminiCli", "cursor", "githubCopilot", "manual" }
@@ -463,7 +463,7 @@ namespace TokenForge.Client.Domain
                 Rarity = ShopItemRarity.Epic,
                 ItemType = effectName.IndexOf("Motion", StringComparison.OrdinalIgnoreCase) >= 0 ? "Motion" : "Effect",
                 PreviewIcon = "zodiac_" + zodiacId,
-                PreviewType = effectPreview,
+                PreviewType = "zodiac_" + zodiacId + "_" + effectPreview,
                 Compatibility = ZodiacDisplayName(zodiacId) + " zodiac",
                 ZodiacTypeId = zodiacId,
                 CompatibleAgentIds = new List<string> { "codex", "claudeCode", "geminiCli", "cursor", "githubCopilot", "manual" }
@@ -618,11 +618,17 @@ namespace TokenForge.Client.Domain
             saveData.ConnectedProjects = NormalizeConnectedProjects(saveData.ConnectedProjects);
             SyncConnectedProjectActiveFlags(saveData);
 
+            var hadRepositorySelection = !string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash);
+            var hadActiveRepositoryProjection = saveData.ConnectedProjects.Any(project => project != null && project.IsActive && !project.IsArchived) ||
+                                                saveData.RepositoryCompanionProfiles.Any(profile => profile != null && profile.ArchivedAtUtc == null);
             var connectedRepositoryIds = ConnectedRepositoryIds(saveData);
             if (connectedRepositoryIds.Count == 0)
             {
                 saveData.SelectedRepositoryHash = string.Empty;
-                UnityEngine.Debug.Log("INFO [RepositoryProjection][NO_APPROVED_REPOSITORY_CLEAR_ACTIVE]");
+                if (hadRepositorySelection || hadActiveRepositoryProjection)
+                {
+                    UnityEngine.Debug.Log("INFO [RepositoryProjection][NO_APPROVED_REPOSITORY_CLEAR_ACTIVE]");
+                }
             }
             else if (string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash) ||
                      !connectedRepositoryIds.Contains(saveData.SelectedRepositoryHash))
@@ -655,11 +661,7 @@ namespace TokenForge.Client.Domain
             else
             {
                 saveData.CompanionState = CompanionState.CreateDefault();
-                saveData.DesktopCompanionSettings = DisabledDesktopCompanionSettings(saveData.DesktopCompanionSettings);
-                if (connectedRepositoryIds.Count == 0)
-                {
-                    UnityEngine.Debug.Log("INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository");
-                }
+                saveData.DesktopCompanionSettings = CloneDesktopCompanionSettings(saveData.DesktopCompanionSettings);
             }
 
             return saveData;
@@ -699,7 +701,7 @@ namespace TokenForge.Client.Domain
                 EventType = SafeTimelineText(eventType, "system_event", 80),
                 Title = SafeTimelineText(title, eventType, 120),
                 Summary = SafeTimelineText(summary, string.Empty, 300),
-                Source = SafeTimelineText(source, "local", 80),
+                TimelineSource = SafeTimelineText(source, "local", 80),
                 DeltaXp = deltaXp,
                 DeltaCoins = deltaCoins,
                 AiAgentId = SafeTimelineText(aiAgentId, string.Empty, 80),

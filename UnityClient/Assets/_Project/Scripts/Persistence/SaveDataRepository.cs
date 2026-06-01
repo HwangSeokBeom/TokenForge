@@ -103,6 +103,12 @@ namespace TokenForge.Client.Persistence
                 throw new ArgumentNullException(nameof(saveData));
             }
 
+            var inputValidation = privacySanitizer.ValidateSafeSaveData(saveData);
+            if (!inputValidation.IsSuccess)
+            {
+                return inputValidation;
+            }
+
             saveData = Migrate(saveData, saveData.SchemaVersion);
             saveData.SchemaVersion = SaveData.CurrentSchemaVersion;
             saveData.SaveVersion = SaveData.CurrentSaveVersion;

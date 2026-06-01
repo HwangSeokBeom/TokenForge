@@ -181,7 +181,7 @@ namespace TokenForge.Client.Domain
         public string EventType { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;
         public string Summary { get; set; } = string.Empty;
-        public string Source { get; set; } = "local";
+        public string TimelineSource { get; set; } = "local";
         public int DeltaXp { get; set; }
         public int DeltaCoins { get; set; }
         public string AiAgentId { get; set; } = string.Empty;

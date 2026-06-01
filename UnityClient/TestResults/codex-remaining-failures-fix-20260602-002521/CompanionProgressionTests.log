@@ -1,0 +1,20 @@
+Unity Editor version:    2022.3.0f1 (fb119bb0b476)
+Branch:                  2022.3/release
+Build type:              Release
+Batch mode:              YES
+macOS version:           Version 26.4.1 (Build 25E253)
+Darwin version:          25.4.0
+Architecture:            arm64
+Running under Rosetta:   NO
+Available memory:        32768 MB
+[Licensing::Module] Trying to connect to existing licensing client channel...
+No explicit failure code handling for error of type 1
+[Licensing::IpcConnector] Error: Failed to connect to License Client channel (error code: 0x80000000) .
+[Licensing::IpcConnector] Error: Connection attempt to the License Client on channel: "LicenseClient-hwangseokbeom" failed); code: "0x80000000"
+[Licensing::IpcConnector] Error: Failed to connect to License Client channel (error code: 0x80000000) .
+[Licensing::IpcConnector] Connection attempt to the License Client on channel: "LicenseClient-hwangseokbeom-2022.3.0" failed because channel doesn't exist; code: "0x80000002"
+Launching external process: /Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/Frameworks/UnityLicensingClient.app/Contents/MacOS/Unity.Licensing.Client
+[Licensing::Module] Successfully launched the LicensingClient (PId: 93134)
+[Licensing::IpcConnector] Connection attempt to the License Client on channel: "LicenseClient-hwangseokbeom-2022.3.0" failed because channel doesn't exist; code: "0x80000002"
+[Licensing::Module] Timed-out after 60.01s, waiting for channel: "LicenseClient-hwangseokbeom-2022.3.0"
+IPC channel to LicensingClient doesn't exist; aborting

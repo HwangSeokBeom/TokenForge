@@ -393,20 +393,36 @@ namespace TokenForge.Client.Domain
     {
         public static CompanionVisualProfile Resolve(CompanionState state, CompanionDesktopMotionMode motionMode = CompanionDesktopMotionMode.Normal)
         {
+            var projectedStage = ProjectStageForVisualState(state);
             state = CompanionProgressionRules.Normalize(state);
             var profile = new CompanionVisualProfile
             {
-                Stage = state.Stage,
+                Stage = projectedStage,
                 Archetype = state.Archetype,
-                MainSpriteKey = SpriteKey(state.Stage),
-                MenuBarIconKey = StatusIconKey(state.Stage),
-                DashboardHeroImageKey = HeroImageKey(state.Stage),
-                IdleAnimation = IdleAnimationFor(state.Stage),
-                MotionProfile = MotionProfileFor(state.Stage, motionMode),
-                ReactionProfile = ReactionProfileFor(state.Stage)
+                MainSpriteKey = SpriteKey(projectedStage),
+                MenuBarIconKey = StatusIconKey(projectedStage),
+                DashboardHeroImageKey = HeroImageKey(projectedStage),
+                IdleAnimation = IdleAnimationFor(projectedStage),
+                MotionProfile = MotionProfileFor(projectedStage, motionMode),
+                ReactionProfile = ReactionProfileFor(projectedStage)
             };
 
             return profile;
+        }
+
+        private static CompanionStage ProjectStageForVisualState(CompanionState state)
+        {
+            if (state == null)
+            {
+                return CompanionStage.Egg;
+            }
+
+            if (state.Stage != CompanionStage.Egg)
+            {
+                return state.Stage;
+            }
+
+            return CompanionProgressionRules.Normalize(state).Stage;
         }
 
         private static CompanionAnimationState IdleAnimationFor(CompanionStage stage)
@@ -749,7 +765,7 @@ namespace TokenForge.Client.Domain
         public int TotalLifetimeXp { get; set; }
         public int XpRequiredForNextLevel { get; set; } = 250;
         public bool CanLevelUp { get; set; }
-        public int XpToNextStage { get; set; } = 250;
+        public int XpToNextStage { get; set; } = 500;
         public CompanionStatProfile Stats { get; set; } = CompanionStatProfile.Empty();
         public CompanionStatProfile WeeklyStats { get; set; } = CompanionStatProfile.Empty();
         public CompanionEvolutionBias EvolutionBias { get; set; } = new CompanionEvolutionBias();
