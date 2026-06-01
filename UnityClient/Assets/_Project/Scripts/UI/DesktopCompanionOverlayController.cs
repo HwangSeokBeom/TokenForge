@@ -370,10 +370,11 @@ namespace TokenForge.Client.UI
         {
             switch (stage)
             {
-                case CompanionStage.Hatching: return new Vector2(92f, 92f);
-                case CompanionStage.Baby: return new Vector2(96f, 96f);
-                case CompanionStage.Junior: return new Vector2(110f, 110f);
+                case CompanionStage.Hatchling: return new Vector2(92f, 92f);
+                case CompanionStage.Child: return new Vector2(96f, 96f);
+                case CompanionStage.Teen: return new Vector2(110f, 110f);
                 case CompanionStage.Adult: return new Vector2(128f, 128f);
+                case CompanionStage.Legendary: return new Vector2(138f, 138f);
                 default: return new Vector2(84f, 84f);
             }
         }

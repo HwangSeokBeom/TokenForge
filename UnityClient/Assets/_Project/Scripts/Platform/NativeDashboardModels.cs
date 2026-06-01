@@ -47,6 +47,10 @@ namespace TokenForge.Client.Platform
         ViewReviewDetails,
         ReviewActivity,
         TokenShop,
+        Wardrobe,
+        Onboarding,
+        CompleteOnboarding,
+        ResetOnboarding,
         PurchaseTokenShopItem,
         SelectShopRepositoryTarget,
         SelectShopAgentTarget,
@@ -71,6 +75,7 @@ namespace TokenForge.Client.Platform
         DisableClick,
         ResetCompanionPosition,
         ResetLocalState,
+        SelectRepositoryZodiacMascot,
         Unsupported
     }
 
@@ -178,6 +183,7 @@ namespace TokenForge.Client.Platform
         public NativeAgentProviderState[] agentProviders = new NativeAgentProviderState[0];
         public NativeProviderUsagePercentage[] providerUsagePercentages = new NativeProviderUsagePercentage[0];
         public NativeTokenShopState tokenShop = NativeTokenShopState.CreateDefault();
+        public NativeOnboardingState onboarding = NativeOnboardingState.CreateDefault();
         public NativeActivityState activity = NativeActivityState.CreateDefault();
         public NativeReviewState review = NativeReviewState.CreateDefault();
         public string statusText = "Repo: None · AI Agents: 0 connected";
@@ -273,6 +279,8 @@ namespace TokenForge.Client.Platform
         public string levelUpDisabledReason = "Earn enough XP before leveling up.";
         public string mood = "active";
         public string skin = "orange_cat";
+        public string zodiacType = "rat";
+        public string zodiacLabel = "Rat / 쥐";
         public bool evolveActionVisible;
         public string evolveActionHiddenReason = "currentXP below requirement";
         public string xpStatusText = "0 XP · 250 XP required";
@@ -297,10 +305,10 @@ namespace TokenForge.Client.Platform
         public string statusText = "Not selected";
         public int connectedCount;
         public string lastAnalyzedAt = string.Empty;
-        public string disabledReason = "Connect a repository first.";
+        public string disabledReason = "Connect a repository first";
         public bool hasValidSource;
         public bool canAnalyze;
-        public string analyzeDisabledReason = "Connect an active repository first.";
+        public string analyzeDisabledReason = "Connect a repository first";
 
         public static NativeRepositoryState CreateDefault()
         {
@@ -461,7 +469,7 @@ namespace TokenForge.Client.Platform
         public string targetType = "repositoryCompanion";
         public string selectedAgentId = string.Empty;
         public string selectedCategory = "featured";
-        public string[] categoryIds = new[] { "featured", "skins", "accessories", "effects", "motions", "themes", "owned" };
+        public string[] categoryIds = new[] { "featured", "zodiac", "skins", "outfits", "accessories", "effects", "motions", "themes", "exclusive", "owned" };
         public NativeTokenShopAgentState[] agents = new NativeTokenShopAgentState[0];
         public string ownedItemIds = string.Empty;
         public string equippedItemIds = string.Empty;
@@ -516,6 +524,21 @@ namespace TokenForge.Client.Platform
         public string currencyName = "Agent Coins";
         public string zodiacType = string.Empty;
         public string zodiacLabel = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class NativeOnboardingState
+    {
+        public bool firstRunCompleted;
+        public string currentStep = "welcome";
+        public string statusText = "Learn how TokenForge turns local Git and AI activity into cosmetic companion growth.";
+        public string[] steps = new[] { "Welcome", "Repository Companion", "Connect Repository", "Connect AI Agents", "Growth System", "Token Shop", "Wardrobe", "Desktop Companion", "Privacy", "Finish" };
+        public string[] zodiacIds = new[] { "rat", "ox", "tiger", "rabbit", "dragon", "snake", "horse", "goat", "monkey", "rooster", "dog", "pig" };
+
+        public static NativeOnboardingState CreateDefault()
+        {
+            return new NativeOnboardingState();
+        }
     }
 
     [Serializable]

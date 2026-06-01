@@ -61,11 +61,11 @@ namespace TokenForge.Client.Tests
             var saveData = SaveData.CreateDefault();
             saveData.CompanionState = new CompanionState
             {
-                Stage = CompanionStage.Junior,
+                Stage = CompanionStage.Child,
                 Archetype = CompanionArchetype.Builder,
-                Level = 3,
-                TotalXp = 1200,
-                XpToNextStage = 1400,
+                Level = 4,
+                TotalXp = 1500,
+                XpToNextStage = 1500,
                 GrowthProfile = new CompanionGrowthProfile
                 {
                     ApprovedSessionCount = 4,

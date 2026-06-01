@@ -66,7 +66,7 @@ namespace TokenForge.Client.UI
                 hop = Mathf.Sin(Mathf.Clamp01(1f - hopTimer) * Mathf.PI) * 18f;
             }
 
-            if (stage == CompanionStage.Hatching)
+            if (stage == CompanionStage.Hatchling)
             {
                 anchored.x += Mathf.Sin(phase * 18f) * 1.8f;
             }

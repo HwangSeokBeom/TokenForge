@@ -1,0 +1,30 @@
+final status: LICENSING_BLOCKED
+artifact dir: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/TestResults/codex-onepass-20260601-040239
+Unity path: /Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/MacOS/Unity
+project path: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient
+-quit used: NO
+external timeout used: YES
+reset mode: YES
+smoke attempts: 3
+smoke XML existence: NO
+smoke history:
+  nunit-discovery-smoke-attempt-1: exit=199 xml_exists=NO
+  nunit-discovery-smoke-attempt-2: exit=199 xml_exists=NO
+  nunit-discovery-smoke-attempt-3: exit=199 xml_exists=NO
+test status:
+  not_run
+touched-file git diff --check status: not_run
+native symbol status: not_run
+build status: not_run
+hash status: not_run
+runtime status: not_run
+manual checks: Unity LicensingClient IPC/channel or Unity test runner did not produce smoke XML
+exact licensing lines:
+[Licensing::IpcConnector] Error: Failed to connect to License Client channel (error code: 0x80000000) .
+[Licensing::IpcConnector] Error: Connection attempt to the License Client on channel: "LicenseClient-hwangseokbeom" failed); code: "0x80000000"
+[Licensing::IpcConnector] Error: Failed to connect to License Client channel (error code: 0x80000000) .
+[Licensing::IpcConnector] Connection attempt to the License Client on channel: "LicenseClient-hwangseokbeom-2022.3.0" failed because channel doesn't exist; code: "0x80000002"
+[Licensing::IpcConnector] Connection attempt to the License Client on channel: "LicenseClient-hwangseokbeom-2022.3.0" failed because channel doesn't exist; code: "0x80000002"
+[Licensing::Module] Timed-out after 60.00s, waiting for channel: "LicenseClient-hwangseokbeom-2022.3.0"
+IPC channel to LicensingClient doesn't exist; aborting
+Instruction: run with TOKENFORGE_FORCE_LICENSE_RESET=1 from normal macOS Terminal after confirming Unity Hub login.

@@ -1089,16 +1089,31 @@ namespace TokenForge.Client.UI
         {
             var saveData = await repository.LoadAsync(cancellationToken);
             saveData.RecentNativeAnalysisRuns = saveData.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>();
+            var normalizedStatus = SafeLocalAlias(status, "failed");
             saveData.RecentNativeAnalysisRuns.Insert(0, new NativeAnalysisRunRecord
             {
                 RunId = Guid.NewGuid().ToString("N"),
                 SourceKind = SafeLocalAlias(sourceKind, "activity"),
-                Status = SafeLocalAlias(status, "failed"),
+                Status = normalizedStatus,
                 ErrorCode = SafeLocalAlias(errorCode, "unknown"),
                 SafeSummary = SafeLocalAlias(safeSummary, "Analysis failed safely."),
                 CreatedAtUtc = DateTimeOffset.UtcNow
             });
             saveData.RecentNativeAnalysisRuns = saveData.RecentNativeAnalysisRuns.Take(20).ToList();
+            RepositoryCompanionProfileService.RecordTimelineEvent(
+                saveData,
+                string.Equals(normalizedStatus, "failed", StringComparison.OrdinalIgnoreCase) ? "analysis_failed" : "analysis_completed",
+                string.Equals(normalizedStatus, "failed", StringComparison.OrdinalIgnoreCase) ? "Analysis failed" : "Analysis completed",
+                SafeLocalAlias(safeSummary, "Analysis run recorded."),
+                saveData.SelectedRepositoryHash,
+                string.Empty,
+                SafeLocalAlias(sourceKind, "activity"),
+                0,
+                0,
+                PendingProviderId(saveData.PendingNativeActivityReview),
+                string.Empty,
+                string.Empty,
+                string.Equals(normalizedStatus, "failed", StringComparison.OrdinalIgnoreCase) ? "error" : "info");
             var validation = privacySanitizer.ValidateSafeSaveData(saveData);
             if (!validation.IsSuccess)
             {
@@ -1301,6 +1316,64 @@ namespace TokenForge.Client.UI
         {
             visualThemeId = CompanionSkinCatalog.Normalize(visualThemeId);
             return await UpdateDesktopCompanionSettingsAsync(settings => settings.VisualThemeId = visualThemeId, cancellationToken);
+        }
+
+        public async Task<Result<DesktopCompanionSettings>> SetRepositoryZodiacMascotAsync(string zodiacTypeId, CancellationToken cancellationToken = default)
+        {
+            zodiacTypeId = RepositoryCompanionProfileService.NormalizeZodiacTypeId(zodiacTypeId, "repository");
+            return await UpdateDesktopCompanionSettingsAsync(settings => settings.ZodiacTypeId = zodiacTypeId, cancellationToken);
+        }
+
+        public async Task<Result> CompleteFirstRunOnboardingAsync(CancellationToken cancellationToken = default)
+        {
+            var saveData = await repository.LoadAsync(cancellationToken);
+            saveData.OnboardingPreferences = saveData.OnboardingPreferences ?? new OnboardingPreferences();
+            saveData.OnboardingPreferences.FirstRunOnboardingCompleted = true;
+            saveData.OnboardingPreferences.CompletedAtUtc = DateTimeOffset.UtcNow;
+            saveData.OnboardingPreferences.LastOpenedAtUtc = DateTimeOffset.UtcNow;
+            RepositoryCompanionProfileService.RecordTimelineEvent(
+                saveData,
+                "onboarding_completed",
+                "Onboarding completed",
+                "First-run onboarding was completed and routed back to Dashboard.",
+                saveData.SelectedRepositoryHash,
+                string.Empty,
+                "onboarding");
+            return await repository.SaveAsync(saveData, cancellationToken);
+        }
+
+        public async Task<Result> MarkOnboardingOpenedAsync(CancellationToken cancellationToken = default)
+        {
+            var saveData = await repository.LoadAsync(cancellationToken);
+            saveData.OnboardingPreferences = saveData.OnboardingPreferences ?? new OnboardingPreferences();
+            saveData.OnboardingPreferences.LastOpenedAtUtc = DateTimeOffset.UtcNow;
+            RepositoryCompanionProfileService.RecordTimelineEvent(
+                saveData,
+                "app_reopened",
+                "Onboarding opened",
+                "Onboarding was reopened from the dashboard.",
+                saveData.SelectedRepositoryHash,
+                string.Empty,
+                "onboarding");
+            return await repository.SaveAsync(saveData, cancellationToken);
+        }
+
+        public async Task<Result> ResetFirstRunOnboardingAsync(CancellationToken cancellationToken = default)
+        {
+            var saveData = await repository.LoadAsync(cancellationToken);
+            saveData.OnboardingPreferences = saveData.OnboardingPreferences ?? new OnboardingPreferences();
+            saveData.OnboardingPreferences.FirstRunOnboardingCompleted = false;
+            saveData.OnboardingPreferences.CompletedAtUtc = null;
+            saveData.OnboardingPreferences.LastOpenedAtUtc = DateTimeOffset.UtcNow;
+            RepositoryCompanionProfileService.RecordTimelineEvent(
+                saveData,
+                "onboarding_reset",
+                "Onboarding reset",
+                "First-run onboarding will open again until it is completed.",
+                saveData.SelectedRepositoryHash,
+                string.Empty,
+                "onboarding");
+            return await repository.SaveAsync(saveData, cancellationToken);
         }
 
         public async Task<Result<DesktopCompanionSettings>> ResetDesktopCompanionPositionAsync(CancellationToken cancellationToken = default)
@@ -3128,11 +3201,16 @@ namespace TokenForge.Client.UI
         {
             saveData = RepositoryCompanionProfileService.Normalize(saveData);
             var connectedProjects = (saveData.ConnectedProjects ?? new List<ConnectedProject>())
-                .Where(project => project != null && !project.IsArchived)
+                .Where(project => project != null &&
+                                  !project.IsArchived &&
+                                  project.ApprovedAt != null &&
+                                  !RepositoryCompanionProfileService.IsStaleFallbackProject(project))
                 .GroupBy(project => string.IsNullOrWhiteSpace(project.Id) ? project.PathHash : project.Id, StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
             return (saveData.RepositoryCompanionProfiles ?? new List<RepositoryCompanionProfile>())
-                .Where(profile => profile != null && connectedProjects.ContainsKey(profile.RepositoryHash))
+                .Where(profile => profile != null &&
+                                  profile.ArchivedAtUtc == null &&
+                                  connectedProjects.ContainsKey(profile.RepositoryHash))
                 .Select(profile =>
                 {
                     var companion = CompanionProgressionRules.Normalize(profile.CompanionState);
@@ -3178,6 +3256,7 @@ namespace TokenForge.Client.UI
                 })
                 .Where(item => !string.IsNullOrWhiteSpace(item.RepositoryHash))
                 .Where(item => !string.Equals(item.SafeRepositoryAlias, "Local Repository", StringComparison.OrdinalIgnoreCase))
+                .Where(item => item.ApprovedByUser && !item.Archived)
                 .ToList();
         }
 

@@ -14,14 +14,16 @@ namespace TokenForge.Client.Platform
         {
             switch (stage)
             {
-                case CompanionStage.Hatching:
-                    return "companion.status.hatching.pixel";
-                case CompanionStage.Baby:
-                    return "companion.status.baby.pixel";
-                case CompanionStage.Junior:
-                    return "companion.status.junior.pixel";
+                case CompanionStage.Hatchling:
+                    return "companion.status.hatchling.pixel";
+                case CompanionStage.Child:
+                    return "companion.status.child.pixel";
+                case CompanionStage.Teen:
+                    return "companion.status.teen.pixel";
                 case CompanionStage.Adult:
                     return "companion.status.adult.pixel";
+                case CompanionStage.Legendary:
+                    return "companion.status.legendary.pixel";
                 default:
                     return "companion.status.egg.pixel";
             }

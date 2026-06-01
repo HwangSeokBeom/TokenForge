@@ -242,6 +242,11 @@ namespace TokenForge.Client.Domain
 
         public static IReadOnlyList<TokenShopItemDefinition> GetTokenShopCatalog()
         {
+            return FullTokenShopCatalog();
+        }
+
+        private static IReadOnlyList<TokenShopItemDefinition> FullTokenShopCatalog()
+        {
             return TokenShopItems.Concat(ExtendedTokenShopItems).ToList();
         }
 
@@ -254,47 +259,107 @@ namespace TokenForge.Client.Domain
         {
             return new List<ZodiacCompanionDefinition>
             {
-                Zodiac("rat", "쥐", "Rat", "Quick, curious, and clever with small optimizations.", "silver,blue", "round ears, thin tail"),
-                Zodiac("ox", "소", "Ox", "Steady, patient, and strong through long refactors.", "iron,green", "broad horns, grounded stance"),
-                Zodiac("tiger", "호랑이", "Tiger", "Bold, sharp, and energetic when tackling hard bugs.", "orange,black", "ears, stripes, sweeping tail"),
-                Zodiac("rabbit", "토끼", "Rabbit", "Gentle, fast, and precise in focused edits.", "moon white,pink", "long ears, light hop pose"),
-                Zodiac("dragon", "용", "Dragon", "Mythic, ambitious, and great at large system changes.", "jade,gold", "horns, whiskers, cloud body"),
-                Zodiac("snake", "뱀", "Snake", "Quiet, analytical, and graceful through complex flows.", "emerald,amber", "coiled body, narrow head"),
-                Zodiac("horse", "말", "Horse", "Fast, resilient, and tuned for momentum.", "chestnut,sky", "mane, long face, sprint pose"),
-                Zodiac("goat", "양", "Goat", "Soft, creative, and careful with interface details.", "wool,meadow", "curved horns, wool silhouette"),
-                Zodiac("monkey", "원숭이", "Monkey", "Playful, inventive, and great at tool-assisted loops.", "cocoa,yellow", "round ears, curled tail"),
-                Zodiac("rooster", "닭", "Rooster", "Bright, organized, and alert to regressions.", "red,gold", "comb, beak, feather tail"),
-                Zodiac("dog", "개", "Dog", "Loyal, protective, and reliable in maintenance work.", "tan,blue", "floppy ears, collar"),
-                Zodiac("pig", "돼지", "Pig", "Lucky, warm, and persistent through polish passes.", "pink,gold", "snout, round body")
+                Zodiac("rat", "쥐", "Rat", "Quick optimizer", "Quick, curious, and clever with small optimizations.", "silver,blue", "round ears, thin tail", "Best for short iterative sessions and review sweeps.", true),
+                Zodiac("ox", "소", "Ox", "Steady builder", "Steady, patient, and strong through long refactors.", "iron,green", "broad horns, grounded stance", "Best for long-running implementation work.", false),
+                Zodiac("tiger", "호랑이", "Tiger", "Bold debugger", "Bold, sharp, and energetic when tackling hard bugs.", "orange,black", "ears, stripes, sweeping tail", "Best for risky fixes and high-signal debugging.", false),
+                Zodiac("rabbit", "토끼", "Rabbit", "Precise editor", "Gentle, fast, and precise in focused edits.", "moon white,pink", "long ears, light hop pose", "Best for UI polish and tidy follow-through.", false),
+                Zodiac("dragon", "용", "Dragon", "System shaper", "Mythic, ambitious, and great at large system changes.", "jade,gold", "horns, whiskers, cloud body", "Best for architecture and broad product passes.", false),
+                Zodiac("snake", "뱀", "Snake", "Quiet analyst", "Quiet, analytical, and graceful through complex flows.", "emerald,amber", "coiled body, narrow head", "Best for tracing lifecycle, state, and data bugs.", false),
+                Zodiac("horse", "말", "Horse", "Momentum runner", "Fast, resilient, and tuned for momentum.", "chestnut,sky", "mane, long face, sprint pose", "Best for shipping focused batches quickly.", false),
+                Zodiac("goat", "양", "Goat", "Soft designer", "Soft, creative, and careful with interface details.", "wool,meadow", "curved horns, wool silhouette", "Best for product UX and gentle visual systems.", false),
+                Zodiac("monkey", "원숭이", "Monkey", "Tool tinkerer", "Playful, inventive, and great at tool-assisted loops.", "cocoa,yellow", "round ears, curled tail", "Best for automation and agent-heavy workflows.", false),
+                Zodiac("rooster", "닭", "Rooster", "Regression watcher", "Bright, organized, and alert to regressions.", "red,gold", "comb, beak, feather tail", "Best for test runs and release-readiness checks.", false),
+                Zodiac("dog", "개", "Dog", "Reliable maintainer", "Loyal, protective, and reliable in maintenance work.", "tan,blue", "floppy ears, collar", "Best for support, cleanup, and dependency care.", false),
+                Zodiac("pig", "돼지", "Pig", "Lucky polisher", "Lucky, warm, and persistent through polish passes.", "pink,gold", "snout, round body", "Best for final polish and persistence-heavy work.", false)
             };
         }
 
-        private static ZodiacCompanionDefinition Zodiac(string id, string korean, string english, string personality, string palette, string silhouette)
+        private static ZodiacCompanionDefinition Zodiac(string id, string korean, string english, string shortDescription, string personality, string palette, string silhouette, string playStyleHint, bool equippedByDefault)
         {
             return new ZodiacCompanionDefinition
             {
                 Id = id,
+                DisplayName = english + " / " + korean,
                 KoreanName = korean,
                 EnglishName = english,
+                ShortDescription = shortDescription,
                 Personality = personality,
+                VisualTheme = english.ToLowerInvariant() + " zodiac mascot",
                 BasePalette = palette,
                 SilhouetteHint = silhouette,
-                EvolutionStageMapping = "egg:" + id + "_egg,hatchling:" + id + "_hatchling,companion:" + id
+                PlayStyleHint = playStyleHint,
+                UnlockState = "unlocked",
+                EquippedByDefault = equippedByDefault,
+                ExclusiveItemIds = new List<string>(),
+                CompatibleCommonItemIds = new List<string>(),
+                EvolutionStageMapping = "egg:" + id + "_egg,hatchling:" + id + "_hatchling,child:" + id + "_child,teen:" + id + "_teen,adult:" + id + "_adult,legendary:" + id + "_legendary",
+                Stages = BuildZodiacStages(id, silhouette)
+            };
+        }
+
+        private static List<ZodiacEvolutionStageDefinition> BuildZodiacStages(string zodiacId, string silhouette)
+        {
+            return new List<ZodiacEvolutionStageDefinition>
+            {
+                ZodiacStage(zodiacId, "egg", "Egg", "알", "Lv 1", "0-499 XP", silhouette + " sealed in a zodiac egg", "Connect a repository"),
+                ZodiacStage(zodiacId, "hatchling", "Hatchling", "유년기", "Lv 2-3", "500-1499 XP", silhouette + " tiny hatchling proportions", "Reach level 2"),
+                ZodiacStage(zodiacId, "child", "Child", "성장기", "Lv 4-6", "1500-2999 XP", silhouette + " clear young mascot silhouette", "Reach level 4"),
+                ZodiacStage(zodiacId, "teen", "Teen", "청소년기", "Lv 7-10", "3000-4999 XP", silhouette + " energetic teen stance", "Reach level 7"),
+                ZodiacStage(zodiacId, "adult", "Adult", "성체", "Lv 11-19", "5000-9499 XP", silhouette + " mature mascot silhouette", "Reach level 11"),
+                ZodiacStage(zodiacId, "legendary", "Legendary", "전설", "Lv 20+", "9500+ XP", silhouette + " legendary aura and signature traits", "Reach level 20")
+            };
+        }
+
+        private static ZodiacEvolutionStageDefinition ZodiacStage(string zodiacId, string stageId, string stageName, string koreanStageName, string levelRange, string xpRange, string silhouetteTrait, string unlockRequirement)
+        {
+            return new ZodiacEvolutionStageDefinition
+            {
+                StageId = stageId,
+                StageName = stageName,
+                KoreanStageName = koreanStageName,
+                LevelRange = levelRange,
+                XpRange = xpRange,
+                ArtVariantKey = zodiacId + "_" + stageId,
+                SilhouetteTrait = silhouetteTrait,
+                UnlockRequirement = unlockRequirement
             };
         }
 
         private static IReadOnlyList<TokenShopItemDefinition> BuildExtendedTokenShopItems()
         {
             var items = new List<TokenShopItemDefinition>();
+            AddCommonItem(items, "agent_skin_night_owl", "Night Owl Skin", "A late-session cosmetic skin for any AI agent mascot.", 5, ShopItemCategory.Skins, ShopItemRarity.Common, "skin_night_owl", true);
+            AddCommonItem(items, "agent_skin_blueprint", "Blueprint Skin", "A blueprint cosmetic skin for planning sessions.", 5, ShopItemCategory.Skins, ShopItemRarity.Common, "skin_blueprint", false);
+            AddCommonItem(items, "agent_skin_neon_terminal", "Neon Terminal Skin", "A bright terminal skin for any AI agent mascot.", 6, ShopItemCategory.Skins, ShopItemRarity.Rare, "skin_neon_terminal", true);
+            AddCommonItem(items, "agent_skin_sakura_diff", "Sakura Diff Skin", "A soft diff-review skin for any AI agent mascot.", 6, ShopItemCategory.Skins, ShopItemRarity.Rare, "skin_sakura_diff", false);
+            AddCommonItem(items, "agent_skin_solar_review", "Solar Review Skin", "A warm review-pass skin for any AI agent mascot.", 7, ShopItemCategory.Skins, ShopItemRarity.Epic, "skin_solar_review", false);
+            AddCommonItem(items, "agent_skin_mono_matrix", "Mono Matrix Skin", "A crisp monochrome matrix skin for any AI agent mascot.", 7, ShopItemCategory.Skins, ShopItemRarity.Epic, "skin_mono_matrix", false);
             AddCommonItem(items, "agent_aura_soft_glow", "Soft Glow Aura", "A gentle cosmetic glow around any AI agent mascot.", 4, ShopItemCategory.Effects, ShopItemRarity.Common, "effect_soft_glow", true);
             AddCommonItem(items, "agent_effect_commit_sparkle", "Commit Sparkle", "Small sparkles when saved growth is shown.", 5, ShopItemCategory.Effects, ShopItemRarity.Uncommon, "effect_sparkle", true);
+            AddCommonItem(items, "agent_effect_diff_mist", "Diff Mist", "A soft diff-review mist for any AI agent mascot.", 4, ShopItemCategory.Effects, ShopItemRarity.Common, "effect_diff_mist", false);
+            AddCommonItem(items, "agent_effect_test_flash", "Test Flash", "A quick flash for test-run focused sessions.", 5, ShopItemCategory.Effects, ShopItemRarity.Rare, "effect_test_flash", false);
             AddCommonItem(items, "agent_motion_typing_trail", "Typing Trail", "A cosmetic trail that follows typing activity previews.", 5, ShopItemCategory.Motions, ShopItemRarity.Uncommon, "trail_typing", true);
+            AddCommonItem(items, "agent_motion_review_bounce", "Review Bounce", "A gentle bounce for reviewed AI activity.", 4, ShopItemCategory.Motions, ShopItemRarity.Common, "motion_review_bounce", false);
+            AddCommonItem(items, "agent_motion_focus_float", "Focus Float", "A slow focus float for any AI agent mascot.", 5, ShopItemCategory.Motions, ShopItemRarity.Common, "motion_focus_float", false);
+            AddCommonItem(items, "agent_motion_build_spin", "Build Spin", "A playful build-check spin animation.", 6, ShopItemCategory.Motions, ShopItemRarity.Rare, "motion_build_spin", false);
             AddCommonItem(items, "agent_accessory_focus_halo", "Focus Halo", "A calm halo accessory for focused sessions.", 6, ShopItemCategory.Accessories, ShopItemRarity.Rare, "halo_focus", true);
             AddCommonItem(items, "agent_accessory_mini_headphones", "Mini Headphones", "Tiny headphones for any AI agent mascot.", 4, ShopItemCategory.Accessories, ShopItemRarity.Common, "accessory_headphones", false);
             AddCommonItem(items, "agent_accessory_developer_glasses", "Developer Glasses", "A lightweight glasses accessory.", 4, ShopItemCategory.Accessories, ShopItemRarity.Common, "accessory_glasses", false);
+            AddCommonItem(items, "agent_accessory_patch_pin", "Patch Pin", "A small patch pin for any AI agent mascot.", 3, ShopItemCategory.Accessories, ShopItemRarity.Common, "accessory_patch_pin", false);
+            AddCommonItem(items, "agent_accessory_review_scarf", "Review Scarf", "A compact scarf for review-heavy days.", 5, ShopItemCategory.Accessories, ShopItemRarity.Rare, "accessory_review_scarf", false);
             AddCommonItem(items, "agent_badge_debug", "Debug Badge", "A cosmetic debug badge for agent cards.", 3, ShopItemCategory.Badges, ShopItemRarity.Common, "badge_debug", false);
+            AddCommonItem(items, "agent_badge_review", "Review Badge", "A cosmetic review badge for agent cards.", 3, ShopItemCategory.Badges, ShopItemRarity.Common, "badge_review", false);
+            AddCommonItem(items, "agent_badge_build", "Build Badge", "A cosmetic build badge for agent cards.", 3, ShopItemCategory.Badges, ShopItemRarity.Common, "badge_build", false);
+            AddCommonItem(items, "agent_badge_release", "Release Badge", "A cosmetic release badge for agent cards.", 4, ShopItemCategory.Badges, ShopItemRarity.Rare, "badge_release", false);
             AddCommonItem(items, "agent_accessory_terminal_cape", "Terminal Cape", "A dramatic cape with terminal trim.", 8, ShopItemCategory.Accessories, ShopItemRarity.Epic, "cape_terminal", true);
+            AddCommonItem(items, "agent_outfit_work_jacket", "Work Jacket", "A practical outfit for focused work sessions.", 6, ShopItemCategory.Outfits, ShopItemRarity.Common, "outfit_work_jacket", true);
+            AddCommonItem(items, "agent_outfit_wizard_robe", "Wizard Robe", "A robe for deep reasoning sessions.", 8, ShopItemCategory.Outfits, ShopItemRarity.Epic, "outfit_wizard_robe", true);
+            AddCommonItem(items, "agent_outfit_astronaut_suit", "Astronaut Suit", "A suit for exploratory agent runs.", 9, ShopItemCategory.Outfits, ShopItemRarity.Epic, "outfit_astronaut", false);
+            AddCommonItem(items, "agent_outfit_ninja", "Ninja Outfit", "A quiet outfit for precise edits.", 7, ShopItemCategory.Outfits, ShopItemRarity.Rare, "outfit_ninja", false);
             AddCommonItem(items, "agent_theme_blue_dashboard_frame", "Blue Dashboard Frame", "A blue item frame for shop and agent cards.", 7, ShopItemCategory.Themes, ShopItemRarity.Rare, "theme_frame_blue", false);
+            AddCommonItem(items, "agent_theme_review_lilac", "Review Lilac Theme", "A lilac frame for calm review sessions.", 6, ShopItemCategory.Themes, ShopItemRarity.Rare, "theme_review_lilac", false);
+            AddCommonItem(items, "agent_theme_build_green", "Build Green Theme", "A green frame for build-and-test loops.", 6, ShopItemCategory.Themes, ShopItemRarity.Rare, "theme_build_green", false);
+            AddCommonItem(items, "agent_theme_release_gold", "Release Gold Theme", "A gold frame for release readiness.", 8, ShopItemCategory.Themes, ShopItemRarity.Epic, "theme_release_gold", true);
             AddCommonItem(items, "agent_effect_gold_level_up_burst", "Gold Level-Up Burst", "A visual-only level-up burst. No multiplier is applied.", 10, ShopItemCategory.Effects, ShopItemRarity.Legendary, "effect_gold_burst", true);
 
             AddAgentExclusive(items, "codex", "agent_codex_code_flame", "Code Flame Aura", "A Codex-only cosmetic code flame.", 7, ShopItemCategory.Effects, ShopItemRarity.Epic, "agent_codex");
@@ -410,6 +475,7 @@ namespace TokenForge.Client.Domain
             switch (category)
             {
                 case ShopItemCategory.Skins: return "Skin";
+                case ShopItemCategory.Outfits: return "Outfit";
                 case ShopItemCategory.Accessories: return "Accessory";
                 case ShopItemCategory.Effects: return "Effect";
                 case ShopItemCategory.Motions: return "Motion";
@@ -475,6 +541,7 @@ namespace TokenForge.Client.Domain
             saveData = saveData ?? SaveData.CreateDefault();
             saveData.RepositoryCompanionProfiles = saveData.RepositoryCompanionProfiles ?? new List<RepositoryCompanionProfile>();
             saveData.ConnectedProjects = saveData.ConnectedProjects ?? new List<ConnectedProject>();
+            saveData.RepositoryTimelineEvents = saveData.RepositoryTimelineEvents ?? new List<RepositoryTimelineEvent>();
             saveData.AiAgentShopStates = (saveData.AiAgentShopStates ?? new List<AiAgentShopState>())
                 .Where(state => state != null)
                 .Select(state =>
@@ -528,6 +595,7 @@ namespace TokenForge.Client.Domain
                     profile.ConnectionSource = string.IsNullOrWhiteSpace(profile.ConnectionSource) ? "debugFallback" : profile.ConnectionSource;
                     profile.ArchivedAtUtc = DateTimeOffset.UtcNow;
                     profile.UpdatedAtUtc = DateTimeOffset.UtcNow;
+                    UnityEngine.Debug.LogWarning("WARN [RepositoryProjection][LEGACY_PROFILE_SUPPRESSED] repositoryId=" + profile.RepositoryHash + " alias=" + profile.SafeRepositoryAlias);
                 }
             }
 
@@ -543,19 +611,27 @@ namespace TokenForge.Client.Domain
                     project.IsActive = false;
                     project.IsArchived = true;
                     project.ConnectionSource = string.IsNullOrWhiteSpace(project.ConnectionSource) ? "debugFallback" : project.ConnectionSource;
+                    UnityEngine.Debug.LogWarning("WARN [RepositoryProjection][LEGACY_PROFILE_SUPPRESSED] repositoryId=" + FirstNonEmpty(project.Id, project.PathHash, project.ProjectPathHash));
                 }
             }
 
             saveData.ConnectedProjects = NormalizeConnectedProjects(saveData.ConnectedProjects);
-            EnsureConnectionsForApprovedProfiles(saveData);
             SyncConnectedProjectActiveFlags(saveData);
 
             var connectedRepositoryIds = ConnectedRepositoryIds(saveData);
-            if (string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash) ||
-                !connectedRepositoryIds.Contains(saveData.SelectedRepositoryHash))
+            if (connectedRepositoryIds.Count == 0)
             {
-                var nextActive = saveData.ConnectedProjects.FirstOrDefault(project => project != null && project.IsActive && !project.IsArchived)?.Id ??
-                                 saveData.ConnectedProjects.FirstOrDefault(project => project != null && !project.IsArchived)?.Id;
+                saveData.SelectedRepositoryHash = string.Empty;
+                UnityEngine.Debug.Log("INFO [RepositoryProjection][NO_APPROVED_REPOSITORY_CLEAR_ACTIVE]");
+            }
+            else if (string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash) ||
+                     !connectedRepositoryIds.Contains(saveData.SelectedRepositoryHash))
+            {
+                var nextActive = saveData.ConnectedProjects
+                                     .Where(project => project != null && project.IsActive && !project.IsArchived)
+                                     .Select(project => FirstNonEmpty(project.Id, project.PathHash, project.ProjectPathHash))
+                                     .FirstOrDefault(id => connectedRepositoryIds.Contains(id)) ??
+                                 connectedRepositoryIds.FirstOrDefault();
                 saveData.SelectedRepositoryHash = nextActive ?? string.Empty;
             }
 
@@ -567,6 +643,7 @@ namespace TokenForge.Client.Domain
                 string.Equals(profile.RepositoryHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal));
             if (selected != null)
             {
+                UnityEngine.Debug.Log("INFO [RepositoryProjection][ACTIVE_REPOSITORY_FROM_CONNECTED_PROJECT] repositoryId=" + selected.RepositoryHash);
                 if (ShouldMigrateLegacyDesktopSettings(selected.DesktopCompanionSettings, saveData.DesktopCompanionSettings))
                 {
                     selected.DesktopCompanionSettings = CloneDesktopCompanionSettings(saveData.DesktopCompanionSettings);
@@ -588,6 +665,57 @@ namespace TokenForge.Client.Domain
             return saveData;
         }
 
+        public static RepositoryTimelineEvent RecordTimelineEvent(
+            SaveData saveData,
+            string eventType,
+            string title,
+            string summary,
+            string repositoryId = "",
+            string repositoryAlias = "",
+            string source = "local",
+            int deltaXp = 0,
+            int deltaCoins = 0,
+            string aiAgentId = "",
+            string itemId = "",
+            string zodiacId = "",
+            string severity = "info",
+            string metadataJson = "")
+        {
+            saveData = saveData ?? SaveData.CreateDefault();
+            saveData.RepositoryTimelineEvents = saveData.RepositoryTimelineEvents ?? new List<RepositoryTimelineEvent>();
+            repositoryId = string.IsNullOrWhiteSpace(repositoryId) ? saveData.SelectedRepositoryHash ?? string.Empty : repositoryId.Trim();
+            repositoryAlias = string.IsNullOrWhiteSpace(repositoryAlias)
+                ? (saveData.RepositoryCompanionProfiles ?? new List<RepositoryCompanionProfile>())
+                    .FirstOrDefault(profile => string.Equals(profile.RepositoryHash, repositoryId, StringComparison.Ordinal))
+                    ?.SafeRepositoryAlias ?? string.Empty
+                : repositoryAlias.Trim();
+
+            var timelineEvent = new RepositoryTimelineEvent
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                TimestampUtc = DateTimeOffset.UtcNow,
+                RepositoryId = repositoryId,
+                RepositoryAlias = repositoryAlias,
+                EventType = SafeTimelineText(eventType, "system_event", 80),
+                Title = SafeTimelineText(title, eventType, 120),
+                Summary = SafeTimelineText(summary, string.Empty, 300),
+                Source = SafeTimelineText(source, "local", 80),
+                DeltaXp = deltaXp,
+                DeltaCoins = deltaCoins,
+                AiAgentId = SafeTimelineText(aiAgentId, string.Empty, 80),
+                ItemId = SafeTimelineText(itemId, string.Empty, 120),
+                ZodiacId = SafeTimelineText(zodiacId, string.Empty, 80),
+                Severity = SafeTimelineText(severity, "info", 16),
+                MetadataJson = SafeTimelineText(metadataJson, string.Empty, 500)
+            };
+            saveData.RepositoryTimelineEvents.Insert(0, timelineEvent);
+            saveData.RepositoryTimelineEvents = saveData.RepositoryTimelineEvents
+                .OrderByDescending(item => item.TimestampUtc)
+                .Take(500)
+                .ToList();
+            return timelineEvent;
+        }
+
         public static DesktopCompanionSettings GetSelectedDesktopCompanionSettings(SaveData saveData)
         {
             saveData = Normalize(saveData);
@@ -605,11 +733,50 @@ namespace TokenForge.Client.Domain
             saveData = Normalize(saveData);
             var selected = GetSelectedProfile(saveData);
             var normalized = CloneDesktopCompanionSettings(settings);
+            var previous = selected == null ? CloneDesktopCompanionSettings(saveData.DesktopCompanionSettings) : CloneDesktopCompanionSettings(selected.DesktopCompanionSettings);
             saveData.DesktopCompanionSettings = CloneDesktopCompanionSettings(normalized);
             if (selected != null)
             {
                 selected.DesktopCompanionSettings = CloneDesktopCompanionSettings(normalized);
                 selected.UpdatedAtUtc = DateTimeOffset.UtcNow;
+                if (!string.Equals(previous.ZodiacTypeId, normalized.ZodiacTypeId, StringComparison.Ordinal))
+                {
+                    RecordTimelineEvent(
+                        saveData,
+                        "zodiac_changed",
+                        "Zodiac mascot changed",
+                        ZodiacDisplayName(normalized.ZodiacTypeId) + " equipped for the repository mascot.",
+                        selected.RepositoryHash,
+                        selected.SafeRepositoryAlias,
+                        "settings",
+                        0,
+                        0,
+                        string.Empty,
+                        string.Empty,
+                        normalized.ZodiacTypeId);
+                }
+                else if (previous.IsDesktopCompanionEnabled != normalized.IsDesktopCompanionEnabled)
+                {
+                    RecordTimelineEvent(
+                        saveData,
+                        normalized.IsDesktopCompanionEnabled ? "desktop_companion_enabled" : "desktop_companion_disabled",
+                        normalized.IsDesktopCompanionEnabled ? "Desktop companion enabled" : "Desktop companion disabled",
+                        normalized.IsDesktopCompanionEnabled ? "Desktop companion can be shown for this repository." : "Desktop companion hidden for this repository.",
+                        selected.RepositoryHash,
+                        selected.SafeRepositoryAlias,
+                        "settings");
+                }
+                else if (previous.IsClickThroughEnabled != normalized.IsClickThroughEnabled)
+                {
+                    RecordTimelineEvent(
+                        saveData,
+                        normalized.IsClickThroughEnabled ? "clickthrough_enabled" : "clickthrough_disabled",
+                        normalized.IsClickThroughEnabled ? "Click-through enabled" : "Click-through disabled",
+                        normalized.IsClickThroughEnabled ? "Desktop companion ignores clicks while visible." : "Desktop companion can be dragged and clicked.",
+                        selected.RepositoryHash,
+                        selected.SafeRepositoryAlias,
+                        "settings");
+                }
             }
         }
 
@@ -622,7 +789,7 @@ namespace TokenForge.Client.Domain
         {
             saveData = Normalize(saveData);
             itemId = (itemId ?? string.Empty).Trim();
-            var item = TokenShopItems.FirstOrDefault(candidate => string.Equals(candidate.ItemId, itemId, StringComparison.Ordinal));
+            var item = FullTokenShopCatalog().FirstOrDefault(candidate => string.Equals(candidate.ItemId, itemId, StringComparison.Ordinal));
             if (item == null)
             {
                 return Result<TokenShopPurchaseResult>.Failure("shop_item_not_found", "This shop item is not available.");
@@ -669,6 +836,35 @@ namespace TokenForge.Client.Domain
             });
 
             EquipPurchasedItem(saveData, target.Value, item);
+            UnityEngine.Debug.Log("INFO [Wardrobe][EQUIP_ITEM] targetType=" + TargetTypeId(targetType) +
+                                  " targetId=" + target.Value.TargetId +
+                                  " itemId=" + item.ItemId);
+            RecordTimelineEvent(
+                saveData,
+                "shop_item_purchased",
+                "Shop item purchased",
+                item.Name + " purchased for " + target.Value.TargetType + ".",
+                targetType == ShopTargetType.RepositoryCompanion ? target.Value.TargetId : saveData.SelectedRepositoryHash,
+                string.Empty,
+                "token_shop",
+                0,
+                -Math.Max(0, item.Price),
+                targetType == ShopTargetType.AiAgent ? target.Value.TargetId : string.Empty,
+                item.ItemId,
+                item.ZodiacTypeId);
+            RecordTimelineEvent(
+                saveData,
+                "shop_item_equipped",
+                "Shop item equipped",
+                item.Name + " equipped for " + target.Value.TargetType + ".",
+                targetType == ShopTargetType.RepositoryCompanion ? target.Value.TargetId : saveData.SelectedRepositoryHash,
+                string.Empty,
+                "token_shop",
+                0,
+                0,
+                targetType == ShopTargetType.AiAgent ? target.Value.TargetId : string.Empty,
+                item.ItemId,
+                item.ZodiacTypeId);
 
             UnityEngine.Debug.Log("INFO [TokenShop][PURCHASE] targetType=" + TargetTypeId(targetType) +
                                   " targetId=" + target.Value.TargetId +
@@ -695,7 +891,7 @@ namespace TokenForge.Client.Domain
         {
             saveData = Normalize(saveData);
             itemId = (itemId ?? string.Empty).Trim();
-            var item = TokenShopItems.FirstOrDefault(candidate => string.Equals(candidate.ItemId, itemId, StringComparison.Ordinal));
+            var item = FullTokenShopCatalog().FirstOrDefault(candidate => string.Equals(candidate.ItemId, itemId, StringComparison.Ordinal));
             if (item == null)
             {
                 return Result<TokenShopPurchaseResult>.Failure("shop_item_not_found", "This shop item is not available.");
@@ -720,6 +916,22 @@ namespace TokenForge.Client.Domain
             }
 
             EquipPurchasedItem(saveData, target.Value, item);
+            UnityEngine.Debug.Log("INFO [Wardrobe][EQUIP_ITEM] targetType=" + TargetTypeId(targetType) +
+                                  " targetId=" + target.Value.TargetId +
+                                  " itemId=" + item.ItemId);
+            RecordTimelineEvent(
+                saveData,
+                "wardrobe_item_equipped",
+                "Wardrobe item equipped",
+                item.Name + " equipped for " + target.Value.TargetType + ".",
+                targetType == ShopTargetType.RepositoryCompanion ? target.Value.TargetId : saveData.SelectedRepositoryHash,
+                string.Empty,
+                "wardrobe",
+                0,
+                0,
+                targetType == ShopTargetType.AiAgent ? target.Value.TargetId : string.Empty,
+                item.ItemId,
+                item.ZodiacTypeId);
             return Result<TokenShopPurchaseResult>.Success(new TokenShopPurchaseResult
             {
                 ItemId = item.ItemId,
@@ -773,6 +985,8 @@ namespace TokenForge.Client.Domain
                                   " stage=" + (profile == null ? "none" : CompanionProgressionRules.Normalize(profile.CompanionState).Stage.ToString()) +
                                   " level=" + (profile == null ? 0 : Math.Max(1, CompanionProgressionRules.Normalize(profile.CompanionState).Level)) +
                                   " xp=" + (profile == null ? 0 : Math.Max(0, CompanionProgressionRules.Normalize(profile.CompanionState).CurrentXp)));
+            var createdProfile = profile == null;
+            var reconnectingArchivedProfile = profile?.ArchivedAtUtc != null;
             if (profile == null)
             {
                 profile = CreateProfile(hash, safeAlias);
@@ -804,6 +1018,14 @@ namespace TokenForge.Client.Domain
             UpsertConnectedRepository(saveData, profile, hash, "addRepository");
             saveData.CompanionState = CompanionProgressionRules.Normalize(profile.CompanionState);
             saveData.DesktopCompanionSettings = CloneDesktopCompanionSettings(profile.DesktopCompanionSettings);
+            RecordTimelineEvent(
+                saveData,
+                createdProfile ? "repository_connected" : reconnectingArchivedProfile ? "repository_reconnected" : "active_repository_changed",
+                createdProfile ? "Repository connected" : reconnectingArchivedProfile ? "Repository reconnected" : "Active repository changed",
+                safeAlias + " is now the active repository companion.",
+                profile.RepositoryHash,
+                safeAlias,
+                "repository");
             UnityEngine.Debug.Log("INFO [CompanionProfile][SAVE] repo=" + hash + " stage=" + saveData.CompanionState.Stage + " level=" + Math.Max(1, saveData.CompanionState.Level) + " xp=" + Math.Max(0, saveData.CompanionState.CurrentXp));
             return Result<RepositoryCompanionProfile>.Success(profile);
         }
@@ -882,9 +1104,38 @@ namespace TokenForge.Client.Domain
             profile.LastApprovedActivityBucket = LastActivityBucket(session);
             profile.UpdatedAtUtc = DateTimeOffset.UtcNow;
             IncrementProviderMix(profile, SafeProvider(session));
+            var coinsBefore = Math.Max(0, profile.TokenShop?.CurrencyBalance ?? 0);
             ApplyTokenShopCurrency(profile, repositorySessions);
+            var coinsAfter = Math.Max(0, profile.TokenShop?.CurrencyBalance ?? 0);
             saveData.CompanionState = CompanionProgressionRules.Normalize(profile.CompanionState);
             saveData.DesktopCompanionSettings = CloneDesktopCompanionSettings(profile.DesktopCompanionSettings);
+            if (xpDelta > 0)
+            {
+                RecordTimelineEvent(
+                    saveData,
+                    "xp_applied",
+                    "XP applied",
+                    "Approved Git growth was applied to the repository mascot.",
+                    profile.RepositoryHash,
+                    profile.SafeRepositoryAlias,
+                    "growth_review",
+                    xpDelta);
+            }
+
+            if (coinsAfter > coinsBefore)
+            {
+                RecordTimelineEvent(
+                    saveData,
+                    "repository_coins_earned",
+                    "Repository coins earned",
+                    "AI token usage attributed to this repository earned cosmetic coins.",
+                    profile.RepositoryHash,
+                    profile.SafeRepositoryAlias,
+                    "token_usage",
+                    0,
+                    coinsAfter - coinsBefore);
+            }
+
             UnityEngine.Debug.Log("INFO [GrowthApply] repositoryId=" + profile.RepositoryHash + " lifetimeGrowthXP=" + saveData.CompanionState.TotalLifetimeXp + " appliedGitSessions=" + gitSessions.Count + " tokenCurrency=" + profile.TokenShop.CurrencyBalance);
             return profile;
         }
@@ -943,6 +1194,8 @@ namespace TokenForge.Client.Domain
             return (saveData.ConnectedProjects ?? new List<ConnectedProject>())
                 .Any(project => project != null &&
                                 !project.IsArchived &&
+                                project.ApprovedAt != null &&
+                                !IsStaleFallbackProject(project) &&
                                 (string.Equals(project.Id, repositoryHash, StringComparison.Ordinal) ||
                                  string.Equals(project.PathHash, repositoryHash, StringComparison.Ordinal) ||
                                  string.Equals(project.ProjectPathHash, repositoryHash, StringComparison.Ordinal)));
@@ -1153,7 +1406,10 @@ namespace TokenForge.Client.Domain
         private static HashSet<string> ConnectedRepositoryIds(SaveData saveData)
         {
             return new HashSet<string>((saveData.ConnectedProjects ?? new List<ConnectedProject>())
-                .Where(project => project != null && !project.IsArchived)
+                .Where(project => project != null &&
+                                  !project.IsArchived &&
+                                  project.ApprovedAt != null &&
+                                  !IsStaleFallbackProject(project))
                 .Select(project => FirstNonEmpty(project.Id, project.PathHash, project.ProjectPathHash))
                 .Where(id => !string.IsNullOrWhiteSpace(id)), StringComparer.Ordinal);
         }
@@ -1167,7 +1423,10 @@ namespace TokenForge.Client.Domain
                     continue;
                 }
 
-                project.IsActive = !project.IsArchived && !string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash) &&
+                project.IsActive = !project.IsArchived &&
+                                   project.ApprovedAt != null &&
+                                   !IsStaleFallbackProject(project) &&
+                                   !string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash) &&
                                    (string.Equals(project.Id, saveData.SelectedRepositoryHash, StringComparison.Ordinal) ||
                                     string.Equals(project.PathHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal) ||
                                     string.Equals(project.ProjectPathHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal));
@@ -1288,7 +1547,8 @@ namespace TokenForge.Client.Domain
                 LastOverlayPositionX = settings.LastOverlayPositionX,
                 LastOverlayPositionY = settings.LastOverlayPositionY,
                 HasSavedOverlayPosition = settings.HasSavedOverlayPosition && settings.LastOverlayPositionX >= 0f && settings.LastOverlayPositionY >= 0f,
-                VisualThemeId = CompanionSkinCatalog.Normalize(settings.VisualThemeId)
+                VisualThemeId = CompanionSkinCatalog.Normalize(settings.VisualThemeId),
+                ZodiacTypeId = NormalizeZodiacTypeId(settings.ZodiacTypeId, "repository")
             };
         }
 
@@ -1323,15 +1583,15 @@ namespace TokenForge.Client.Domain
 
         private static Result<TokenShopTargetContext> ResolveTokenShopTarget(SaveData saveData, ShopTargetType targetType, string targetId, bool targetConnected)
         {
-            var profile = GetSelectedProfile(saveData);
-            if (profile == null || !IsConnectedRepository(saveData, profile.RepositoryHash))
-            {
-                return Result<TokenShopTargetContext>.Failure("no_active_repository", "Connect an active repository before using the Token Shop.");
-            }
-
-            profile.TokenShop = NormalizeTokenShop(profile.TokenShop);
             if (targetType == ShopTargetType.RepositoryCompanion)
             {
+                var profile = GetSelectedProfile(saveData);
+                if (profile == null || !IsConnectedRepository(saveData, profile.RepositoryHash))
+                {
+                    return Result<TokenShopTargetContext>.Failure("no_active_repository", "Connect a repository first.");
+                }
+
+                profile.TokenShop = NormalizeTokenShop(profile.TokenShop);
                 return Result<TokenShopTargetContext>.Success(new TokenShopTargetContext
                 {
                     TargetType = ShopTargetType.RepositoryCompanion,
@@ -1360,7 +1620,7 @@ namespace TokenForge.Client.Domain
                 TargetId = agentId,
                 OwnershipShop = agentState.TokenShop,
                 WalletShop = agentState.TokenShop,
-                RepositoryProfile = profile,
+                RepositoryProfile = GetSelectedProfile(saveData),
                 AgentShopState = agentState
             });
         }
@@ -1444,8 +1704,8 @@ namespace TokenForge.Client.Domain
             switch (NormalizeAgentShopId(agentId))
             {
                 case "codex": return "Codex";
-                case "claudeCode": return "Claude";
-                case "geminiCli": return "Gemini";
+                case "claudeCode": return "Claude Code";
+                case "geminiCli": return "Gemini CLI";
                 case "cursor": return "Cursor";
                 case "githubCopilot": return "GitHub Copilot";
                 case "manual": return "Other Agent";
@@ -1475,6 +1735,7 @@ namespace TokenForge.Client.Domain
                 case "cursor": return "tiger";
                 case "githubCopilot": return "rooster";
                 case "manual": return "dog";
+                case "repository": return "rat";
                 default:
                     var zodiac = ZodiacCompanionTypes;
                     var hash = (seed ?? string.Empty).GetHashCode() & int.MaxValue;
@@ -1599,7 +1860,7 @@ namespace TokenForge.Client.Domain
 
         private static bool IsSameEquipSlot(string equippedItemId, ShopItemCategory category)
         {
-            var equipped = TokenShopItems.FirstOrDefault(item => string.Equals(item.ItemId, equippedItemId, StringComparison.Ordinal));
+            var equipped = FullTokenShopCatalog().FirstOrDefault(item => string.Equals(item.ItemId, equippedItemId, StringComparison.Ordinal));
             return equipped != null && equipped.Category == category;
         }
 
@@ -1613,6 +1874,7 @@ namespace TokenForge.Client.Domain
             switch (category)
             {
                 case ShopItemCategory.Skins: return "skins";
+                case ShopItemCategory.Outfits: return "outfits";
                 case ShopItemCategory.Accessories: return "accessories";
                 case ShopItemCategory.Effects: return "effects";
                 case ShopItemCategory.Motions: return "motions";
@@ -1741,6 +2003,13 @@ namespace TokenForge.Client.Domain
             }
 
             return string.IsNullOrWhiteSpace(session.SourceProvider) ? "UNKNOWN" : session.SourceProvider.Trim();
+        }
+
+        private static string SafeTimelineText(string value, string fallback, int maxLength)
+        {
+            value = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+            value = value.Replace('\n', ' ').Replace('\r', ' ');
+            return value.Length <= maxLength ? value : value.Substring(0, maxLength);
         }
 
         private static void IncrementProviderMix(RepositoryCompanionProfile profile, string provider)

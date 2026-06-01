@@ -102,10 +102,11 @@ namespace TokenForge.Client.Domain
         {
             switch (stage)
             {
-                case CompanionStage.Hatching: return "Junior";
-                case CompanionStage.Baby: return "Junior";
-                case CompanionStage.Junior: return "Adept";
-                case CompanionStage.Adult: return "Mythic";
+                case CompanionStage.Hatchling: return "Child";
+                case CompanionStage.Child: return "Teen";
+                case CompanionStage.Teen: return "Adult";
+                case CompanionStage.Adult: return "Legendary";
+                case CompanionStage.Legendary: return "Legendary";
                 default: return "Hatchling";
             }
         }

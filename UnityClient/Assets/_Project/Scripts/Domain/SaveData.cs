@@ -172,6 +172,26 @@ namespace TokenForge.Client.Domain
     }
 
     [Serializable]
+    public sealed class RepositoryTimelineEvent
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+        public DateTimeOffset TimestampUtc { get; set; } = DateTimeOffset.UtcNow;
+        public string RepositoryId { get; set; } = string.Empty;
+        public string RepositoryAlias { get; set; } = string.Empty;
+        public string EventType { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Summary { get; set; } = string.Empty;
+        public string Source { get; set; } = "local";
+        public int DeltaXp { get; set; }
+        public int DeltaCoins { get; set; }
+        public string AiAgentId { get; set; } = string.Empty;
+        public string ItemId { get; set; } = string.Empty;
+        public string ZodiacId { get; set; } = string.Empty;
+        public string Severity { get; set; } = "info";
+        public string MetadataJson { get; set; } = string.Empty;
+    }
+
+    [Serializable]
     public sealed class SaveData
     {
         public const int CurrentSchemaVersion = 1;
@@ -192,11 +212,13 @@ namespace TokenForge.Client.Domain
         public PendingNativeActivityReview PendingNativeActivityReview { get; set; }
         public List<ActivityReview> ActivityReviews { get; set; } = new List<ActivityReview>();
         public List<NativeAnalysisRunRecord> RecentNativeAnalysisRuns { get; set; } = new List<NativeAnalysisRunRecord>();
+        public List<RepositoryTimelineEvent> RepositoryTimelineEvents { get; set; } = new List<RepositoryTimelineEvent>();
         public List<ConnectedProject> ConnectedProjects { get; set; } = new List<ConnectedProject>();
         public List<ProviderSettings> ProviderSettings { get; set; } = new List<ProviderSettings>();
         public SyncState SyncState { get; set; } = new SyncState();
         public PrivacyPreferences PrivacyPreferences { get; set; } = new PrivacyPreferences();
         public UserSettings UserSettings { get; set; } = new UserSettings();
+        public OnboardingPreferences OnboardingPreferences { get; set; } = new OnboardingPreferences();
         public DailyProgress DailyProgress { get; set; } = new DailyProgress();
         public List<MiniGameSession> MiniGameHistory { get; set; } = new List<MiniGameSession>();
         public List<AchievementProgress> Achievements { get; set; } = new List<AchievementProgress>();

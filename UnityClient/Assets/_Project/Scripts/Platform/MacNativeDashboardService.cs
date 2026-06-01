@@ -375,6 +375,22 @@ namespace TokenForge.Client.Platform
                 case "shop.open":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.TokenShop, rawAction, value);
                     return true;
+                case "wardrobe":
+                case "wardrobe.open":
+                case "dress_up":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.Wardrobe, rawAction, value);
+                    return true;
+                case "onboarding":
+                case "onboarding.open":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.Onboarding, rawAction, value);
+                    return true;
+                case "onboarding.done":
+                case "onboarding.skip":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.CompleteOnboarding, rawAction, value);
+                    return true;
+                case "onboarding.reset":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.ResetOnboarding, rawAction, value);
+                    return true;
                 case "purchaseTokenShopItem":
                 case "purchase_token_shop_item":
                 case "shop.purchase":
@@ -459,6 +475,9 @@ namespace TokenForge.Client.Platform
                 case "changeCompanionSkin":
                 case "change_companion_skin":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ChangeCompanionSkin, rawAction, value);
+                    return true;
+                case "settings.zodiac":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.SelectRepositoryZodiacMascot, rawAction, value);
                     return true;
                 case "setLaunchAtLogin":
                 case "set_launch_at_login":

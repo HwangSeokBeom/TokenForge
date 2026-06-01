@@ -34,12 +34,29 @@ namespace TokenForge.Client.Tests
         [Test]
         public void StageThresholds_AreDeterministic()
         {
-            Assert.AreEqual(CompanionStage.Egg, CompanionProgressionRules.StageForXp(249));
-            Assert.AreEqual(CompanionStage.Hatching, CompanionProgressionRules.StageForXp(250));
-            Assert.AreEqual(CompanionStage.Baby, CompanionProgressionRules.StageForXp(500));
-            Assert.AreEqual(CompanionStage.Junior, CompanionProgressionRules.StageForXp(1200));
-            Assert.AreEqual(CompanionStage.Adult, CompanionProgressionRules.StageForXp(2600));
-            Assert.AreEqual(0, CompanionProgressionRules.XpToNextStage(2600));
+            Assert.AreEqual(CompanionStage.Egg, CompanionProgressionRules.StageForXp(499));
+            Assert.AreEqual(CompanionStage.Hatchling, CompanionProgressionRules.StageForXp(500));
+            Assert.AreEqual(CompanionStage.Child, CompanionProgressionRules.StageForXp(1500));
+            Assert.AreEqual(CompanionStage.Teen, CompanionProgressionRules.StageForXp(3000));
+            Assert.AreEqual(CompanionStage.Adult, CompanionProgressionRules.StageForXp(5000));
+            Assert.AreEqual(CompanionStage.Legendary, CompanionProgressionRules.StageForXp(9500));
+            Assert.AreEqual(0, CompanionProgressionRules.XpToNextStage(9500));
+        }
+
+        [Test]
+        public void StageMapping_UsesLevelAndKeepsLevelFourOutOfEgg()
+        {
+            Assert.AreEqual(CompanionStage.Egg, CompanionProgressionRules.StageForLevel(1));
+            Assert.AreEqual(CompanionStage.Hatchling, CompanionProgressionRules.StageForLevel(2));
+            Assert.AreEqual(CompanionStage.Child, CompanionProgressionRules.StageForLevel(4));
+            Assert.AreEqual(CompanionStage.Teen, CompanionProgressionRules.StageForLevel(7));
+            Assert.AreEqual(CompanionStage.Adult, CompanionProgressionRules.StageForLevel(11));
+            Assert.AreEqual(CompanionStage.Legendary, CompanionProgressionRules.StageForLevel(20));
+
+            var normalized = CompanionProgressionRules.Normalize(new CompanionState { Level = 4, Stage = CompanionStage.Egg, CurrentXp = 0, TotalLifetimeXp = 0 });
+
+            Assert.AreEqual(4, normalized.Level);
+            Assert.AreEqual(CompanionStage.Child, normalized.Stage);
         }
 
         [TestCase(CompanionArchetype.Builder)]

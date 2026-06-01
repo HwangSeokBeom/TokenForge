@@ -7,10 +7,12 @@ namespace TokenForge.Client.Domain
     public sealed class CompanionProgressionRules
     {
         public const int SchemaVersion = 1;
-        public const int HatchingXp = 250;
-        public const int BabyXp = 500;
-        public const int JuniorXp = 1200;
-        public const int AdultXp = 2600;
+        public const int HatchingXp = 500;
+        public const int BabyXp = 1500;
+        public const int JuniorXp = 3000;
+        public const int AdultXp = 5000;
+        public const int LegendaryXp = 9500;
+        public const int LegendaryLevel = 20;
         private const int XpPerCompanionLevel = 500;
         private const int BaseLevelXp = 250;
         private const int LevelXpStep = 169;
@@ -28,7 +30,6 @@ namespace TokenForge.Client.Domain
             }
 
             state.SchemaVersion = SchemaVersion;
-            state.Level = Math.Max(1, state.Level);
             state.TotalXp = Math.Max(0, state.TotalXp);
             if (state.TotalLifetimeXp <= 0 && state.TotalXp > 0)
             {
@@ -36,6 +37,7 @@ namespace TokenForge.Client.Domain
             }
 
             state.TotalLifetimeXp = Math.Max(0, state.TotalLifetimeXp);
+            state.Level = Math.Max(Math.Max(1, state.Level), LevelForXp(state.TotalLifetimeXp));
             if (state.CurrentXp <= 0 && state.TotalXp > 0)
             {
                 state.CurrentXp = state.TotalXp;
@@ -56,7 +58,7 @@ namespace TokenForge.Client.Domain
                 state.LastGrowthReasonIds.Add(state.TotalXp <= 0 ? CompanionGrowthReasonIds.NoApprovedGrowthYet : CompanionGrowthReasonIds.ApprovedAggregateGrowth);
             }
 
-            state.Stage = StageForXp(state.TotalLifetimeXp);
+            state.Stage = StageForLevel(state.Level);
             state.XpToNextStage = XpToNextStage(state.TotalLifetimeXp);
             state.TotalXp = state.TotalLifetimeXp;
             state.EvolutionBias = CompanionEvolutionPathResolver.Resolve(state.Stats, state.Stage);
@@ -87,7 +89,7 @@ namespace TokenForge.Client.Domain
                 SchemaVersion = SchemaVersion,
                 Stage = StageForXp(totalXp),
                 Archetype = archetype,
-                Level = Math.Max(1, totalXp / XpPerCompanionLevel + 1),
+                Level = LevelForXp(totalXp),
                 TotalXp = totalXp,
                 CurrentXp = totalXp,
                 TotalLifetimeXp = totalXp,
@@ -128,21 +130,40 @@ namespace TokenForge.Client.Domain
 
         public static CompanionStage StageForXp(int totalXp)
         {
-            if (totalXp >= AdultXp) return CompanionStage.Adult;
-            if (totalXp >= JuniorXp) return CompanionStage.Junior;
-            if (totalXp >= BabyXp) return CompanionStage.Baby;
-            if (totalXp >= HatchingXp) return CompanionStage.Hatching;
+            return StageForLevel(LevelForXp(totalXp));
+        }
+
+        public static int LevelForXp(int totalXp)
+        {
+            return Math.Max(1, Math.Max(0, totalXp) / XpPerCompanionLevel + 1);
+        }
+
+        public static CompanionStage StageForLevel(int level)
+        {
+            level = Math.Max(1, level);
+            if (level >= LegendaryLevel) return CompanionStage.Legendary;
+            if (level >= 11) return CompanionStage.Adult;
+            if (level >= 7) return CompanionStage.Teen;
+            if (level >= 4) return CompanionStage.Child;
+            if (level >= 2) return CompanionStage.Hatchling;
             return CompanionStage.Egg;
         }
 
         public static int XpToNextStage(int totalXp)
         {
             totalXp = Math.Max(0, totalXp);
-            if (totalXp < HatchingXp) return HatchingXp - totalXp;
-            if (totalXp < BabyXp) return BabyXp - totalXp;
-            if (totalXp < JuniorXp) return JuniorXp - totalXp;
-            if (totalXp < AdultXp) return AdultXp - totalXp;
+            var level = LevelForXp(totalXp);
+            if (level < 2) return XpForLevelFloor(2) - totalXp;
+            if (level < 4) return XpForLevelFloor(4) - totalXp;
+            if (level < 7) return XpForLevelFloor(7) - totalXp;
+            if (level < 11) return XpForLevelFloor(11) - totalXp;
+            if (level < LegendaryLevel) return XpForLevelFloor(LegendaryLevel) - totalXp;
             return 0;
+        }
+
+        private static int XpForLevelFloor(int level)
+        {
+            return Math.Max(0, Math.Max(1, level) - 1) * XpPerCompanionLevel;
         }
 
         private static CompanionGrowthProfile BuildProfile(

@@ -1,0 +1,21 @@
+final status: TESTS_FAILED
+artifact dir: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/TestResults/codex-onepass-20260601-040740
+Unity path: /Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/MacOS/Unity
+project path: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient
+-quit used: NO
+external timeout used: YES
+reset mode: YES
+smoke attempts: 1
+smoke XML existence: YES
+smoke history:
+  nunit-discovery-smoke-attempt-1: exit=0 xml_exists=YES
+test status:
+  nunit-discovery-smoke-attempt-1: total=1 passed=1 failed=0 inconclusive=0 skipped=0
+  native-dashboard-bridge: total=40 passed=40 failed=0 inconclusive=0 skipped=0
+touched-file git diff --check status: not_run
+native symbol status: not_run
+build status: not_run
+hash status: not_run
+runtime status: not_run
+manual checks: Inspect Unity test log and rerun onepass
+exact licensing lines: none

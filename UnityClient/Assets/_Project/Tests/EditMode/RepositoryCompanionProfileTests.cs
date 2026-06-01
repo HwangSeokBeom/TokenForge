@@ -1,10 +1,14 @@
 using System;
+using System.Collections;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using TokenForge.Client.Domain;
+using TokenForge.Client.Persistence;
 using TokenForge.Client.Privacy;
 using TokenForge.Client.Sync;
+using TokenForge.Client.UI;
 
 namespace TokenForge.Client.Tests
 {
@@ -50,6 +54,19 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(1, saveData.ConnectedProjects.Count(project => !project.IsArchived));
             Assert.IsTrue(saveData.ConnectedProjects.Single().IsActive);
             Assert.AreEqual(result.Value.RepositoryHash, saveData.ConnectedProjects.Single().Id);
+        }
+
+        [Test]
+        public void ConnectingRepositoryCreatesTimelineEvent()
+        {
+            var saveData = SaveData.CreateDefault();
+            var result = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, CreateGitRepository("TimelineRepo"));
+
+            Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
+            Assert.IsTrue(saveData.RepositoryTimelineEvents.Any(item =>
+                item.EventType == "repository_connected" &&
+                item.RepositoryId == result.Value.RepositoryHash &&
+                item.RepositoryAlias == "TimelineRepo"));
         }
 
         [Test]
@@ -100,6 +117,79 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void ApprovedLegacyProfileWithoutConnectedProjectIsHistoryOnly()
+        {
+            var saveData = SaveData.CreateDefault();
+            saveData.SelectedRepositoryHash = "legacy-approved-repo";
+            saveData.RepositoryCompanionProfiles.Add(new RepositoryCompanionProfile
+            {
+                RepositoryHash = "legacy-approved-repo",
+                SafeRepositoryAlias = "TokenForge",
+                ConnectionSource = "userSelected",
+                ApprovedAtUtc = DateTimeOffset.UtcNow,
+                CompanionState = new CompanionState { TotalLifetimeXp = 1200, CurrentXp = 420, Level = 3 }
+            });
+
+            RepositoryCompanionProfileService.Normalize(saveData);
+
+            Assert.IsNull(RepositoryCompanionProfileService.GetSelectedProfile(saveData));
+            Assert.IsFalse(RepositoryCompanionProfileService.IsConnectedRepository(saveData, "legacy-approved-repo"));
+            Assert.IsTrue(string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash));
+            Assert.AreEqual(0, saveData.CompanionState.TotalLifetimeXp);
+        }
+
+        [Test]
+        public void NoRepositoryStateSuppressesLegacyTokenForgeCompanion()
+        {
+            var saveData = SaveData.CreateDefault();
+            saveData.SelectedRepositoryHash = "legacy-tokenforge";
+            saveData.RepositoryCompanionProfiles.Add(new RepositoryCompanionProfile
+            {
+                RepositoryHash = "legacy-tokenforge",
+                SafeRepositoryAlias = "TokenForge",
+                ConnectionSource = "userSelected",
+                ApprovedAtUtc = DateTimeOffset.UtcNow,
+                CompanionState = new CompanionState { Level = 3, CurrentXp = 193, TotalLifetimeXp = 193 }
+            });
+
+            RepositoryCompanionProfileService.Normalize(saveData);
+            var projectedItems = InvokeRepositoryCompanionDisplayItems(saveData);
+
+            Assert.IsTrue(string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash));
+            Assert.IsNull(RepositoryCompanionProfileService.GetSelectedProfile(saveData));
+            Assert.AreEqual(0, projectedItems.Count);
+            Assert.AreEqual(0, saveData.CompanionState.TotalLifetimeXp);
+        }
+
+        [Test]
+        public void RepositoryTabDoesNotRenderArchivedOrLegacyProfileAsActive()
+        {
+            var saveData = SaveData.CreateDefault();
+            saveData.RepositoryCompanionProfiles.Add(new RepositoryCompanionProfile
+            {
+                RepositoryHash = "archived-tokenforge",
+                SafeRepositoryAlias = "TokenForge",
+                ConnectionSource = "userSelected",
+                ApprovedAtUtc = DateTimeOffset.UtcNow,
+                ArchivedAtUtc = DateTimeOffset.UtcNow
+            });
+            saveData.ConnectedProjects.Add(new ConnectedProject
+            {
+                Id = "legacy-local",
+                DisplayName = "Local Repository",
+                ConnectionSource = "debugFallback",
+                ApprovedAt = DateTimeOffset.UtcNow,
+                IsActive = true
+            });
+
+            RepositoryCompanionProfileService.Normalize(saveData);
+            var projectedItems = InvokeRepositoryCompanionDisplayItems(saveData);
+
+            Assert.AreEqual(0, projectedItems.Count);
+            Assert.IsTrue(saveData.ConnectedProjects.All(project => project.IsArchived || !project.IsActive));
+        }
+
+        [Test]
         public void SameRepositorySelectsExistingProfileAndDifferentRepositoryCreatesDifferentProfile()
         {
             var saveData = SaveData.CreateDefault();
@@ -123,7 +213,7 @@ namespace TokenForge.Client.Tests
             var first = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repository).Value;
             first.CompanionState = CompanionProgressionRules.Normalize(new CompanionState
             {
-                Stage = CompanionStage.Junior,
+                Stage = CompanionStage.Child,
                 Level = 4,
                 CurrentXp = 420,
                 TotalXp = 1200,
@@ -136,7 +226,7 @@ namespace TokenForge.Client.Tests
 
             Assert.AreEqual(first.RepositoryHash, restored.RepositoryHash);
             Assert.AreEqual(1, saveData.RepositoryCompanionProfiles.Count);
-            Assert.AreEqual(CompanionStage.Junior, restored.CompanionState.Stage);
+            Assert.AreEqual(CompanionStage.Child, restored.CompanionState.Stage);
             Assert.AreEqual(4, restored.CompanionState.Level);
             Assert.Greater(restored.CompanionState.CurrentXp, 0);
         }
@@ -157,7 +247,7 @@ namespace TokenForge.Client.Tests
                 ConnectionSource = "userSelected",
                 CompanionState = new CompanionState
                 {
-                    Stage = CompanionStage.Junior,
+                    Stage = CompanionStage.Child,
                     Level = 4,
                     CurrentXp = 420,
                     TotalXp = 1200,
@@ -169,7 +259,7 @@ namespace TokenForge.Client.Tests
 
             Assert.AreEqual(RepositoryCompanionProfileService.HashRepositoryPath(repository), restored.RepositoryHash);
             Assert.AreEqual(1, saveData.RepositoryCompanionProfiles.Count);
-            Assert.AreEqual(CompanionStage.Junior, restored.CompanionState.Stage);
+            Assert.AreEqual(CompanionStage.Child, restored.CompanionState.Stage);
             Assert.AreEqual(4, restored.CompanionState.Level);
             Assert.AreEqual(restored.RepositoryHash, saveData.SelectedRepositoryHash);
             Assert.IsTrue(RepositoryCompanionProfileService.IsConnectedRepository(saveData, restored.RepositoryHash));
@@ -393,6 +483,7 @@ namespace TokenForge.Client.Tests
             var catalog = RepositoryCompanionProfileService.GetTokenShopCatalog();
 
             CollectionAssert.Contains(catalog.Select(item => item.Category).ToArray(), ShopItemCategory.Skins);
+            CollectionAssert.Contains(catalog.Select(item => item.Category).ToArray(), ShopItemCategory.Outfits);
             CollectionAssert.Contains(catalog.Select(item => item.Category).ToArray(), ShopItemCategory.Accessories);
             CollectionAssert.Contains(catalog.Select(item => item.Category).ToArray(), ShopItemCategory.Effects);
             CollectionAssert.Contains(catalog.Select(item => item.Category).ToArray(), ShopItemCategory.Motions);
@@ -406,6 +497,21 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void NoRepositoryLocksRepositoryShopAndWardrobe()
+        {
+            var saveData = SaveData.CreateDefault();
+
+            var purchase = RepositoryCompanionProfileService.PurchaseTokenShopItem(saveData, ShopTargetType.RepositoryCompanion, string.Empty, "skin_white_cat", true);
+            var equip = RepositoryCompanionProfileService.EquipTokenShopItem(saveData, ShopTargetType.RepositoryCompanion, string.Empty, "skin_white_cat", true);
+
+            Assert.IsFalse(purchase.IsSuccess);
+            Assert.AreEqual("no_active_repository", purchase.ErrorCode);
+            Assert.IsFalse(equip.IsSuccess);
+            Assert.AreEqual("no_active_repository", equip.ErrorCode);
+            Assert.IsNull(RepositoryCompanionProfileService.GetSelectedProfile(saveData));
+        }
+
+        [Test]
         public void TokenShopCatalogContainsTwelveZodiacTypesWithExclusiveItems()
         {
             var zodiacs = RepositoryCompanionProfileService.GetZodiacCompanionTypes();
@@ -415,10 +521,55 @@ namespace TokenForge.Client.Tests
             CollectionAssert.AreEquivalent(new[] { "rat", "ox", "tiger", "rabbit", "dragon", "snake", "horse", "goat", "monkey", "rooster", "dog", "pig" }, zodiacs.Select(item => item.Id).ToArray());
             foreach (var zodiac in zodiacs)
             {
-                Assert.IsTrue(catalog.Any(item => string.Equals(item.ZodiacTypeId, zodiac.Id, StringComparison.Ordinal)), zodiac.Id);
+                Assert.GreaterOrEqual(catalog.Count(item => string.Equals(item.ZodiacTypeId, zodiac.Id, StringComparison.Ordinal)), 2, zodiac.Id);
                 Assert.IsFalse(string.IsNullOrWhiteSpace(zodiac.KoreanName), zodiac.Id);
+                Assert.IsFalse(string.IsNullOrWhiteSpace(zodiac.DisplayName), zodiac.Id);
+                Assert.IsFalse(string.IsNullOrWhiteSpace(zodiac.ShortDescription), zodiac.Id);
+                Assert.IsFalse(string.IsNullOrWhiteSpace(zodiac.VisualTheme), zodiac.Id);
+                Assert.IsFalse(string.IsNullOrWhiteSpace(zodiac.PlayStyleHint), zodiac.Id);
                 Assert.IsFalse(string.IsNullOrWhiteSpace(zodiac.SilhouetteHint), zodiac.Id);
+                Assert.AreEqual(6, zodiac.Stages.Count, zodiac.Id);
+                CollectionAssert.AreEqual(new[] { "egg", "hatchling", "child", "teen", "adult", "legendary" }, zodiac.Stages.Select(stage => stage.StageId).ToArray(), zodiac.Id);
+                Assert.IsTrue(zodiac.Stages.All(stage => !string.IsNullOrWhiteSpace(stage.ArtVariantKey)), zodiac.Id);
+                Assert.IsTrue(zodiac.Stages.All(stage => !string.IsNullOrWhiteSpace(stage.LevelRange)), zodiac.Id);
+                Assert.IsTrue(zodiac.Stages.All(stage => !string.IsNullOrWhiteSpace(stage.SilhouetteTrait)), zodiac.Id);
             }
+        }
+
+        [Test]
+        public void TokenShopCatalogMeetsMinimumGameShopContentCounts()
+        {
+            var catalog = RepositoryCompanionProfileService.GetTokenShopCatalog();
+            var commonAgentItems = catalog.Where(item => item.TargetType == ShopTargetType.AiAgent && string.IsNullOrWhiteSpace(item.ZodiacTypeId) && (item.CompatibleAgentIds?.Count ?? 0) > 1).ToList();
+
+            Assert.GreaterOrEqual(commonAgentItems.Count(item => item.Category == ShopItemCategory.Skins), 6);
+            Assert.GreaterOrEqual(commonAgentItems.Count(item => item.Category == ShopItemCategory.Outfits), 4);
+            Assert.GreaterOrEqual(commonAgentItems.Count(item => item.Category == ShopItemCategory.Accessories), 6);
+            Assert.GreaterOrEqual(commonAgentItems.Count(item => item.Category == ShopItemCategory.Effects), 6);
+            Assert.GreaterOrEqual(commonAgentItems.Count(item => item.Category == ShopItemCategory.Motions), 4);
+            Assert.GreaterOrEqual(commonAgentItems.Count(item => item.Category == ShopItemCategory.Themes), 4);
+            Assert.GreaterOrEqual(commonAgentItems.Count(item => item.Category == ShopItemCategory.Badges), 4);
+            foreach (var agentId in new[] { "codex", "claudeCode", "cursor", "githubCopilot", "geminiCli" })
+            {
+                Assert.GreaterOrEqual(catalog.Count(item => item.CompatibleAgentIds.Count == 1 && item.CompatibleAgentIds.Contains(agentId)), 2, agentId);
+            }
+        }
+
+        [Test]
+        public void ExtendedCatalogItemsCanBePurchasedAndEquipped()
+        {
+            var saveData = SaveData.CreateDefault();
+            RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, CreateGitRepository());
+            var codexShop = RepositoryCompanionProfileService.GetOrCreateAgentShopState(saveData, "codex").TokenShop;
+            codexShop.CurrencyBalance = 20;
+
+            var purchase = RepositoryCompanionProfileService.PurchaseTokenShopItem(saveData, ShopTargetType.AiAgent, "codex", "agent_codex_terminal_crown", true);
+            var equip = RepositoryCompanionProfileService.EquipTokenShopItem(saveData, ShopTargetType.AiAgent, "codex", "agent_codex_terminal_crown", true);
+
+            Assert.IsTrue(purchase.IsSuccess, purchase.ErrorMessage);
+            Assert.IsTrue(equip.IsSuccess, equip.ErrorMessage);
+            CollectionAssert.Contains(codexShop.PurchasedItemIds, "agent_codex_terminal_crown");
+            CollectionAssert.Contains(codexShop.EquippedItemIds, "agent_codex_terminal_crown");
         }
 
         [Test]
@@ -460,6 +611,22 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void TokenShopPurchaseAndEquipCreateTimelineEvents()
+        {
+            var saveData = SaveData.CreateDefault();
+            var profile = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, CreateGitRepository()).Value;
+            profile.TokenShop.CurrencyBalance = 12;
+
+            var purchase = RepositoryCompanionProfileService.PurchaseTokenShopItem(saveData, "skin_white_cat");
+            var equip = RepositoryCompanionProfileService.EquipTokenShopItem(saveData, ShopTargetType.RepositoryCompanion, string.Empty, "skin_white_cat", true);
+
+            Assert.IsTrue(purchase.IsSuccess, purchase.ErrorMessage);
+            Assert.IsTrue(equip.IsSuccess, equip.ErrorMessage);
+            Assert.IsTrue(saveData.RepositoryTimelineEvents.Any(item => item.EventType == "shop_item_purchased" && item.ItemId == "skin_white_cat"));
+            Assert.IsTrue(saveData.RepositoryTimelineEvents.Any(item => item.EventType == "wardrobe_item_equipped" && item.ItemId == "skin_white_cat"));
+        }
+
+        [Test]
         public void TokenShopAgentPurchaseDebitsOnlySelectedAgentCurrency()
         {
             var saveData = SaveData.CreateDefault();
@@ -474,6 +641,93 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(9, RepositoryCompanionProfileService.GetAgentTokenShopState(saveData, "claudeCode").CurrencyBalance);
             Assert.AreEqual(50, RepositoryCompanionProfileService.GetSelectedProfile(saveData).TokenShop.CurrencyBalance);
             CollectionAssert.DoesNotContain(RepositoryCompanionProfileService.GetAgentTokenShopState(saveData, "claudeCode").PurchasedItemIds, "agent_skin_codex_terminal");
+        }
+
+        [Test]
+        public void CodexCoinsCannotPurchaseClaudeExclusiveItem()
+        {
+            var saveData = SaveData.CreateDefault();
+            RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, CreateGitRepository());
+            RepositoryCompanionProfileService.GetOrCreateAgentShopState(saveData, "codex").TokenShop.CurrencyBalance = 50;
+
+            var result = RepositoryCompanionProfileService.PurchaseTokenShopItem(saveData, ShopTargetType.AiAgent, "codex", "agent_claude_context_scroll", true);
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.AreEqual("shop_item_not_compatible", result.ErrorCode);
+            Assert.AreEqual(50, RepositoryCompanionProfileService.GetAgentTokenShopState(saveData, "codex").CurrencyBalance);
+        }
+
+        [Test]
+        public void SettingsZodiacSelectionPersistsThroughSaveLoad()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "TokenForgeTests", Guid.NewGuid().ToString("N"));
+            var repository = new SaveDataRepository(directory);
+            var saveData = SaveData.CreateDefault();
+            RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, CreateGitRepository());
+            var settings = RepositoryCompanionProfileService.GetSelectedDesktopCompanionSettings(saveData);
+            settings.ZodiacTypeId = "dragon";
+            RepositoryCompanionProfileService.SetSelectedDesktopCompanionSettings(saveData, settings);
+            repository.SaveAsync(saveData).GetAwaiter().GetResult();
+
+            var loaded = repository.LoadAsync().GetAwaiter().GetResult();
+            var restored = RepositoryCompanionProfileService.GetSelectedDesktopCompanionSettings(loaded);
+
+            Assert.AreEqual("dragon", restored.ZodiacTypeId);
+        }
+
+        [Test]
+        public void SettingsZodiacSelectionCreatesTimelineEvent()
+        {
+            var saveData = SaveData.CreateDefault();
+            var profile = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, CreateGitRepository()).Value;
+            var settings = RepositoryCompanionProfileService.GetSelectedDesktopCompanionSettings(saveData);
+            settings.ZodiacTypeId = "dragon";
+
+            RepositoryCompanionProfileService.SetSelectedDesktopCompanionSettings(saveData, settings);
+
+            Assert.IsTrue(saveData.RepositoryTimelineEvents.Any(item =>
+                item.EventType == "zodiac_changed" &&
+                item.RepositoryId == profile.RepositoryHash &&
+                item.ZodiacId == "dragon"));
+        }
+
+        [Test]
+        public void OnboardingCompletedFlagPersistsThroughSaveLoad()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "TokenForgeTests", Guid.NewGuid().ToString("N"));
+            var repository = new SaveDataRepository(directory);
+            var saveData = SaveData.CreateDefault();
+            saveData.OnboardingPreferences.FirstRunOnboardingCompleted = true;
+            saveData.OnboardingPreferences.CompletedAtUtc = DateTimeOffset.UtcNow;
+            repository.SaveAsync(saveData).GetAwaiter().GetResult();
+
+            var loaded = repository.LoadAsync().GetAwaiter().GetResult();
+
+            Assert.IsTrue(loaded.OnboardingPreferences.FirstRunOnboardingCompleted);
+            Assert.IsNotNull(loaded.OnboardingPreferences.CompletedAtUtc);
+        }
+
+        [Test]
+        public void OnboardingFirstRunDoesNotInventRepository()
+        {
+            var saveData = SaveData.CreateDefault();
+
+            Assert.IsFalse(saveData.OnboardingPreferences.FirstRunOnboardingCompleted);
+            saveData.OnboardingPreferences.FirstRunOnboardingCompleted = true;
+            RepositoryCompanionProfileService.Normalize(saveData);
+
+            Assert.IsTrue(saveData.OnboardingPreferences.FirstRunOnboardingCompleted);
+            Assert.IsTrue(string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash));
+            Assert.AreEqual(0, saveData.RepositoryCompanionProfiles.Count(profile => profile.ArchivedAtUtc == null));
+            Assert.IsNull(RepositoryCompanionProfileService.GetSelectedProfile(saveData));
+        }
+
+        [Test]
+        public void DefaultOnboardingCompletionIsFalse()
+        {
+            var saveData = SaveData.CreateDefault();
+
+            Assert.IsFalse(saveData.OnboardingPreferences.FirstRunOnboardingCompleted);
         }
 
         [Test]
@@ -528,6 +782,79 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual("agent_not_connected", equip.ErrorCode);
             Assert.AreEqual(20, profile.TokenShop.CurrencyBalance);
             Assert.AreEqual(0, saveData.AiAgentShopStates.Count);
+        }
+
+        [Test]
+        public void TokenShopAiAgentPurchaseDoesNotRequireRepositoryConnection()
+        {
+            var saveData = SaveData.CreateDefault();
+            var codexShop = RepositoryCompanionProfileService.GetOrCreateAgentShopState(saveData, "codex").TokenShop;
+            codexShop.CurrencyBalance = 12;
+
+            var result = RepositoryCompanionProfileService.PurchaseTokenShopItem(saveData, ShopTargetType.AiAgent, "codex", "agent_skin_codex_terminal", true);
+
+            Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
+            Assert.IsTrue(string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash));
+            Assert.AreEqual(8, RepositoryCompanionProfileService.GetAgentTokenShopState(saveData, "codex").CurrencyBalance);
+            CollectionAssert.Contains(RepositoryCompanionProfileService.GetAgentTokenShopState(saveData, "codex").PurchasedItemIds, "agent_skin_codex_terminal");
+        }
+
+        [Test]
+        public void AgentShopRequiresAgentConnectionButNotRepository()
+        {
+            var saveData = SaveData.CreateDefault();
+            RepositoryCompanionProfileService.GetOrCreateAgentShopState(saveData, "codex").TokenShop.CurrencyBalance = 12;
+
+            var disconnected = RepositoryCompanionProfileService.PurchaseTokenShopItem(saveData, ShopTargetType.AiAgent, "codex", "agent_skin_codex_terminal", false);
+            var connected = RepositoryCompanionProfileService.PurchaseTokenShopItem(saveData, ShopTargetType.AiAgent, "codex", "agent_skin_codex_terminal", true);
+
+            Assert.IsFalse(disconnected.IsSuccess);
+            Assert.AreEqual("agent_not_connected", disconnected.ErrorCode);
+            Assert.IsTrue(connected.IsSuccess, connected.ErrorMessage);
+            Assert.IsTrue(string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash));
+            CollectionAssert.Contains(RepositoryCompanionProfileService.GetAgentTokenShopState(saveData, "codex").PurchasedItemIds, "agent_skin_codex_terminal");
+        }
+
+        [Test]
+        public void WardrobeEquipsOwnedItemsOnly()
+        {
+            var saveData = SaveData.CreateDefault();
+            var profile = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, CreateGitRepository("WardrobeRepo")).Value;
+            profile.TokenShop.CurrencyBalance = 12;
+
+            var unowned = RepositoryCompanionProfileService.EquipTokenShopItem(saveData, ShopTargetType.RepositoryCompanion, string.Empty, "skin_calico", true);
+            var purchase = RepositoryCompanionProfileService.PurchaseTokenShopItem(saveData, "skin_white_cat");
+            var owned = RepositoryCompanionProfileService.EquipTokenShopItem(saveData, ShopTargetType.RepositoryCompanion, string.Empty, "skin_white_cat", true);
+
+            Assert.IsFalse(unowned.IsSuccess);
+            Assert.AreEqual("shop_item_not_owned", unowned.ErrorCode);
+            Assert.IsTrue(purchase.IsSuccess, purchase.ErrorMessage);
+            Assert.IsTrue(owned.IsSuccess, owned.ErrorMessage);
+            CollectionAssert.Contains(profile.TokenShop.EquippedItemIds, "skin_white_cat");
+            CollectionAssert.DoesNotContain(profile.TokenShop.EquippedItemIds, "skin_calico");
+        }
+
+        [Test]
+        public void TokenShopPreviewUsesRealPreviewMetadata()
+        {
+            var catalog = RepositoryCompanionProfileService.GetTokenShopCatalog();
+
+            Assert.IsTrue(catalog.All(item => !string.IsNullOrWhiteSpace(item.PreviewType)));
+            Assert.IsTrue(catalog.All(item => !string.IsNullOrWhiteSpace(item.PreviewIcon)));
+            Assert.IsFalse(catalog.Any(item => item.PreviewIcon.Length == 2 && item.PreviewType == "generic"));
+            Assert.IsTrue(catalog.Any(item => item.PreviewType.StartsWith("zodiac_", StringComparison.Ordinal)));
+        }
+
+        [Test]
+        public void TokenShopRepositoryMascotPurchaseRequiresConnectedRepository()
+        {
+            var saveData = SaveData.CreateDefault();
+
+            var result = RepositoryCompanionProfileService.PurchaseTokenShopItem(saveData, ShopTargetType.RepositoryCompanion, string.Empty, "skin_white_cat", true);
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.AreEqual("no_active_repository", result.ErrorCode);
+            Assert.AreEqual(0, saveData.RepositoryCompanionProfiles.Count(profile => profile.ArchivedAtUtc == null));
         }
 
         [Test]
@@ -641,6 +968,13 @@ namespace TokenForge.Client.Tests
             var path = Path.Combine(parent, string.IsNullOrWhiteSpace(directoryName) ? "Repository" : directoryName);
             Directory.CreateDirectory(Path.Combine(path, ".git"));
             return path;
+        }
+
+        private static IList InvokeRepositoryCompanionDisplayItems(SaveData saveData)
+        {
+            return (IList)typeof(ApprovedActivityAnalysisViewModel)
+                .GetMethod("ToRepositoryCompanionDisplayItems", BindingFlags.NonPublic | BindingFlags.Static)
+                .Invoke(null, new object[] { saveData });
         }
 
         private static AgentWorkSession SessionFor(string repositoryHash, string sessionId)

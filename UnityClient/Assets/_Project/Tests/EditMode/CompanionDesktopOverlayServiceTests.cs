@@ -38,11 +38,11 @@ namespace TokenForge.Client.Tests
             service.Create();
             service.Show();
 
-            movement.Tick(0.5f, new CompanionState { Stage = CompanionStage.Baby, Archetype = CompanionArchetype.Builder, TotalXp = 600 }, settings);
+            movement.Tick(0.5f, new CompanionState { Stage = CompanionStage.Hatchling, Archetype = CompanionArchetype.Builder, TotalXp = 600 }, settings);
 
             Assert.Greater(service.MotionProfileSetCount, 0);
             Assert.Greater(service.VisualSetCount, 0);
-            Assert.AreEqual(CompanionStage.Baby, service.LastStage);
+            Assert.AreEqual(CompanionStage.Hatchling, service.LastStage);
             Assert.AreEqual(CompanionArchetype.Builder, service.LastArchetype);
             Assert.AreEqual("runner", service.LastVisualThemeId);
             Assert.IsFalse(service.LastClickThrough);
@@ -59,7 +59,7 @@ namespace TokenForge.Client.Tests
             service.Create();
             service.Show();
 
-            movement.Tick(0.5f, new CompanionState { Stage = CompanionStage.Junior, TotalXp = 1200 }, settings);
+            movement.Tick(0.5f, new CompanionState { Stage = CompanionStage.Hatchling, TotalXp = 1200 }, settings);
 
             Assert.IsNotNull(service.LastMotionProfile);
             Assert.IsFalse(service.LastMotionProfile.MotionProfile.AllowsWandering);
@@ -77,7 +77,7 @@ namespace TokenForge.Client.Tests
             service.Create();
             service.Show();
 
-            movement.Tick(0.5f, new CompanionState { Stage = CompanionStage.Junior, TotalLifetimeXp = 1200, CurrentXp = 120 }, settings, new CompanionMotionState
+            movement.Tick(0.5f, new CompanionState { Stage = CompanionStage.Teen, TotalLifetimeXp = 3000, CurrentXp = 120 }, settings, new CompanionMotionState
             {
                 MovementSpeed = 1.4f,
                 BounceAmplitude = 8f,
@@ -111,12 +111,12 @@ namespace TokenForge.Client.Tests
             var settings = DesktopCompanionSettings.CreateDefault();
             settings.IsDesktopCompanionEnabled = true;
             controller.Initialize(overlay, lifecycle);
-            controller.ApplySettings(settings, new CompanionState { Stage = CompanionStage.Baby, Archetype = CompanionArchetype.Builder, TotalXp = 600 });
+            controller.ApplySettings(settings, new CompanionState { Stage = CompanionStage.Hatchling, Archetype = CompanionArchetype.Builder, TotalXp = 600 });
 
             new MacApplicationLifecycleService().HideMainWindow();
 
             Assert.AreEqual(CompanionDesktopOverlayState.Active, overlay.State);
-            Assert.AreEqual(CompanionStage.Baby, overlay.LastStage);
+            Assert.AreEqual(CompanionStage.Hatchling, overlay.LastStage);
             Assert.AreEqual(CompanionArchetype.Builder, overlay.LastArchetype);
             UnityEngine.Object.DestroyImmediate(controllerObject);
         }
@@ -339,17 +339,18 @@ namespace TokenForge.Client.Tests
         public void StatusIconProviderReturnsStageSpecificPixelAssetKeys()
         {
             Assert.AreEqual("companion.status.egg.pixel", CompanionStatusIconProvider.AssetKeyFor(CompanionStage.Egg));
-            Assert.AreEqual("companion.status.hatching.pixel", CompanionStatusIconProvider.AssetKeyFor(CompanionStage.Hatching));
-            Assert.AreEqual("companion.status.baby.pixel", CompanionStatusIconProvider.AssetKeyFor(CompanionStage.Baby));
-            Assert.AreEqual("companion.status.junior.pixel", CompanionStatusIconProvider.AssetKeyFor(CompanionStage.Junior));
+            Assert.AreEqual("companion.status.hatchling.pixel", CompanionStatusIconProvider.AssetKeyFor(CompanionStage.Hatchling));
+            Assert.AreEqual("companion.status.child.pixel", CompanionStatusIconProvider.AssetKeyFor(CompanionStage.Child));
+            Assert.AreEqual("companion.status.teen.pixel", CompanionStatusIconProvider.AssetKeyFor(CompanionStage.Teen));
             Assert.AreEqual("companion.status.adult.pixel", CompanionStatusIconProvider.AssetKeyFor(CompanionStage.Adult));
+            Assert.AreEqual("companion.status.legendary.pixel", CompanionStatusIconProvider.AssetKeyFor(CompanionStage.Legendary));
         }
 
         [Test]
         public void StageMotionProfilesKeepEarlyStagesSlowAndAllowEnabledWandering()
         {
             var egg = CompanionVisualProfileResolver.Resolve(new CompanionState { Stage = CompanionStage.Egg }, CompanionDesktopMotionMode.Normal);
-            var baby = CompanionVisualProfileResolver.Resolve(new CompanionState { Stage = CompanionStage.Baby, TotalXp = 500 }, CompanionDesktopMotionMode.Normal);
+            var baby = CompanionVisualProfileResolver.Resolve(new CompanionState { Stage = CompanionStage.Child, TotalXp = 1500 }, CompanionDesktopMotionMode.Normal);
 
             Assert.IsTrue(egg.MotionProfile.AllowsWandering);
             Assert.LessOrEqual(egg.MotionProfile.WanderRadius, 32f);
@@ -394,7 +395,7 @@ namespace TokenForge.Client.Tests
 
             controller.ApplyFarmSettings(new[]
             {
-                RepositoryItem("repo-a", "Junior Repo", CompanionStage.Junior, 4, 1200),
+                RepositoryItem("repo-a", "Child Repo", CompanionStage.Child, 4, 1500),
                 RepositoryItem("repo-b", "Egg Repo", CompanionStage.Egg, 1, 0)
             }, settings, true, 7);
 
@@ -402,7 +403,7 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(2, overlay.LastFarmState.overlays.Length);
             var repoA = overlay.LastFarmState.overlays.Single(item => item.repositoryId == "repo-a").hydratedSnapshot;
             var repoB = overlay.LastFarmState.overlays.Single(item => item.repositoryId == "repo-b").hydratedSnapshot;
-            Assert.AreEqual((int)CompanionStage.Junior, repoA.stage);
+            Assert.AreEqual((int)CompanionStage.Child, repoA.stage);
             Assert.AreEqual(4, repoA.level);
             Assert.AreEqual((int)CompanionStage.Egg, repoB.stage);
             Assert.AreEqual(1, repoB.level);
@@ -483,7 +484,7 @@ namespace TokenForge.Client.Tests
 
             controller.ApplyFarmSettings(new[]
             {
-                RepositoryItem("repo-a", "Junior Repo", CompanionStage.Junior, 4, 1200),
+                RepositoryItem("repo-a", "Child Repo", CompanionStage.Child, 4, 1500),
                 RepositoryItem("repo-b", "Egg Repo", CompanionStage.Egg, 1, 0)
             }, settings, true, 8);
 

@@ -185,6 +185,7 @@ namespace TokenForge.Client.Platform
 
             try
             {
+                Debug.Log("INFO [AppLifecycle][QUIT_REQUESTED] source=nativeBridge traceId=managed-native");
                 NativeQuit();
             }
             catch (Exception exception)

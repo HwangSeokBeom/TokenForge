@@ -5,11 +5,16 @@ namespace TokenForge.Client.Domain
 {
     public enum CompanionStage
     {
-        Egg,
-        Hatching,
-        Baby,
-        Junior,
-        Adult
+        Egg = 0,
+        Hatchling = 1,
+        Child = 2,
+        Teen = 3,
+        Adult = 4,
+        Legendary = 5,
+
+        Hatching = Hatchling,
+        Baby = Child,
+        Junior = Teen
     }
 
     public enum CompanionArchetype
@@ -134,6 +139,7 @@ namespace TokenForge.Client.Domain
         public float LastOverlayPositionY { get; set; } = -1f;
         public bool HasSavedOverlayPosition { get; set; }
         public string VisualThemeId { get; set; } = CompanionSkinCatalog.DefaultSkinId;
+        public string ZodiacTypeId { get; set; } = "rat";
 
         public static DesktopCompanionSettings CreateDefault()
         {
@@ -407,10 +413,11 @@ namespace TokenForge.Client.Domain
         {
             switch (stage)
             {
-                case CompanionStage.Hatching: return CompanionAnimationState.HatchShake;
-                case CompanionStage.Baby:
-                case CompanionStage.Junior:
+                case CompanionStage.Hatchling: return CompanionAnimationState.HatchShake;
+                case CompanionStage.Child:
+                case CompanionStage.Teen:
                 case CompanionStage.Adult:
+                case CompanionStage.Legendary:
                     return CompanionAnimationState.Wander;
                 default:
                     return CompanionAnimationState.Idle;
@@ -435,14 +442,16 @@ namespace TokenForge.Client.Domain
             var scale = mode == CompanionDesktopMotionMode.Calm ? 0.65f : mode == CompanionDesktopMotionMode.Playful ? 1.25f : 1f;
             switch (stage)
             {
-                case CompanionStage.Hatching:
+                case CompanionStage.Hatchling:
                     return new CompanionMotionProfile { DefaultMode = CompanionMotionMode.Wandering, IdleRadius = 7f * scale, WanderRadius = 24f * scale, WanderSpeed = 7f * scale, DecisionIntervalSeconds = 2.4f, AllowsWandering = true };
-                case CompanionStage.Baby:
+                case CompanionStage.Child:
                     return new CompanionMotionProfile { DefaultMode = CompanionMotionMode.Wandering, IdleRadius = 6f * scale, WanderRadius = 64f * scale, WanderSpeed = 15f * scale, DecisionIntervalSeconds = 3.2f, AllowsWandering = true };
-                case CompanionStage.Junior:
+                case CompanionStage.Teen:
                     return new CompanionMotionProfile { DefaultMode = CompanionMotionMode.Wandering, IdleRadius = 5f * scale, WanderRadius = 140f * scale, WanderSpeed = 23f * scale, DecisionIntervalSeconds = 3.8f, AllowsWandering = true };
                 case CompanionStage.Adult:
                     return new CompanionMotionProfile { DefaultMode = CompanionMotionMode.Wandering, IdleRadius = 5f * scale, WanderRadius = 220f * scale, WanderSpeed = 30f * scale, DecisionIntervalSeconds = 4.4f, AllowsWandering = true };
+                case CompanionStage.Legendary:
+                    return new CompanionMotionProfile { DefaultMode = CompanionMotionMode.Wandering, IdleRadius = 4f * scale, WanderRadius = 260f * scale, WanderSpeed = 34f * scale, DecisionIntervalSeconds = 4.8f, AllowsWandering = true };
                 default:
                     return new CompanionMotionProfile { DefaultMode = CompanionMotionMode.Wandering, IdleRadius = 5f * scale, WanderRadius = 28f * scale, WanderSpeed = 5f * scale, DecisionIntervalSeconds = 4.6f, AllowsWandering = true };
             }
@@ -452,11 +461,12 @@ namespace TokenForge.Client.Domain
         {
             switch (stage)
             {
-                case CompanionStage.Hatching:
+                case CompanionStage.Hatchling:
                     return new CompanionReactionProfile { PrimaryClickReaction = CompanionReaction.Wake, CooldownSeconds = 1.0f, DefaultSpeech = "Something is moving inside." };
-                case CompanionStage.Baby:
-                case CompanionStage.Junior:
+                case CompanionStage.Child:
+                case CompanionStage.Teen:
                 case CompanionStage.Adult:
+                case CompanionStage.Legendary:
                     return new CompanionReactionProfile { PrimaryClickReaction = CompanionReaction.Happy, CooldownSeconds = 0.9f, DefaultSpeech = "Ready for the next safe review." };
                 default:
                     return new CompanionReactionProfile { PrimaryClickReaction = CompanionReaction.Tap, CooldownSeconds = 1.1f, DefaultSpeech = "First safe summary will start growth." };
@@ -581,6 +591,7 @@ namespace TokenForge.Client.Domain
     {
         Featured,
         Skins,
+        Outfits,
         Accessories,
         Effects,
         Motions,
@@ -664,12 +675,42 @@ namespace TokenForge.Client.Domain
     public sealed class ZodiacCompanionDefinition
     {
         public string Id { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
         public string KoreanName { get; set; } = string.Empty;
         public string EnglishName { get; set; } = string.Empty;
+        public string ShortDescription { get; set; } = string.Empty;
         public string Personality { get; set; } = string.Empty;
+        public string VisualTheme { get; set; } = string.Empty;
         public string BasePalette { get; set; } = string.Empty;
         public string SilhouetteHint { get; set; } = string.Empty;
-        public string EvolutionStageMapping { get; set; } = "egg,hatchling,companion";
+        public string PlayStyleHint { get; set; } = string.Empty;
+        public string UnlockState { get; set; } = "unlocked";
+        public bool EquippedByDefault { get; set; }
+        public List<string> ExclusiveItemIds { get; set; } = new List<string>();
+        public List<string> CompatibleCommonItemIds { get; set; } = new List<string>();
+        public string EvolutionStageMapping { get; set; } = "egg,hatchling,child,teen,adult,legendary";
+        public List<ZodiacEvolutionStageDefinition> Stages { get; set; } = new List<ZodiacEvolutionStageDefinition>();
+    }
+
+    [Serializable]
+    public sealed class ZodiacEvolutionStageDefinition
+    {
+        public string StageId { get; set; } = string.Empty;
+        public string StageName { get; set; } = string.Empty;
+        public string KoreanStageName { get; set; } = string.Empty;
+        public string LevelRange { get; set; } = string.Empty;
+        public string XpRange { get; set; } = string.Empty;
+        public string ArtVariantKey { get; set; } = string.Empty;
+        public string SilhouetteTrait { get; set; } = string.Empty;
+        public string UnlockRequirement { get; set; } = string.Empty;
+    }
+
+    [Serializable]
+    public sealed class OnboardingPreferences
+    {
+        public bool FirstRunOnboardingCompleted { get; set; }
+        public DateTimeOffset? CompletedAtUtc { get; set; }
+        public DateTimeOffset? LastOpenedAtUtc { get; set; }
     }
 
     [Serializable]

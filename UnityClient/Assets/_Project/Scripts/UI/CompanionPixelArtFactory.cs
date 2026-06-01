@@ -47,7 +47,7 @@ namespace TokenForge.Client.UI
                     Pixel(texture, 11, 9, highlight);
                     Pixel(texture, 12, 8, highlight);
                     break;
-                case CompanionStage.Hatching:
+                case CompanionStage.Hatchling:
                     Ellipse(texture, 6, 5, 17, 20, outline);
                     Ellipse(texture, 7, 6, 16, 19, body);
                     Line(texture, 10, 7, 13, 10, outline);
@@ -76,7 +76,7 @@ namespace TokenForge.Client.UI
             Pixel(texture, 14, 14, outline);
             Pixel(texture, 9, 8, highlight);
 
-            if (state.Stage == CompanionStage.Junior || state.Stage == CompanionStage.Adult)
+            if (state.Stage == CompanionStage.Teen || state.Stage == CompanionStage.Adult || state.Stage == CompanionStage.Legendary)
             {
                 Rect(texture, 5, 12, 7, 15, outline);
                 Rect(texture, 17, 12, 19, 15, outline);
@@ -84,7 +84,7 @@ namespace TokenForge.Client.UI
                 Pixel(texture, 18, 13, accent);
             }
 
-            if (state.Stage == CompanionStage.Adult)
+            if (state.Stage == CompanionStage.Adult || state.Stage == CompanionStage.Legendary)
             {
                 Rect(texture, 9, 4, 14, 6, outline);
                 Rect(texture, 10, 4, 13, 5, accent);
@@ -99,7 +99,8 @@ namespace TokenForge.Client.UI
         private static Color32 BodyFor(CompanionState state)
         {
             if (state.Stage == CompanionStage.Egg) return new Color32(244, 224, 178, 255);
-            if (state.Stage == CompanionStage.Hatching) return new Color32(255, 202, 126, 255);
+            if (state.Stage == CompanionStage.Hatchling) return new Color32(255, 202, 126, 255);
+            if (state.Stage == CompanionStage.Legendary) return new Color32(164, 225, 255, 255);
             return new Color32(142, 202, 230, 255);
         }
 

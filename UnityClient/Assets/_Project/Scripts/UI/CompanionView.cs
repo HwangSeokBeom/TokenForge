@@ -95,10 +95,11 @@ namespace TokenForge.Client.UI
         {
             switch (stage)
             {
-                case CompanionStage.Hatching: return 78f;
-                case CompanionStage.Baby: return 82f;
-                case CompanionStage.Junior: return 98f;
+                case CompanionStage.Hatchling: return 78f;
+                case CompanionStage.Child: return 82f;
+                case CompanionStage.Teen: return 98f;
                 case CompanionStage.Adult: return 118f;
+                case CompanionStage.Legendary: return 126f;
                 default: return 72f;
             }
         }

@@ -206,6 +206,11 @@ namespace TokenForge.Client.Persistence
                 .OrderByDescending(run => run.CreatedAtUtc)
                 .Take(20)
                 .ToList();
+            saveData.RepositoryTimelineEvents = (saveData.RepositoryTimelineEvents ?? new System.Collections.Generic.List<RepositoryTimelineEvent>())
+                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.EventType))
+                .OrderByDescending(item => item.TimestampUtc)
+                .Take(500)
+                .ToList();
             saveData.ConnectedProjects = saveData.ConnectedProjects ?? new System.Collections.Generic.List<ConnectedProject>();
             foreach (var project in saveData.ConnectedProjects)
             {
@@ -249,6 +254,7 @@ namespace TokenForge.Client.Persistence
             saveData.PrivacyPreferences = saveData.PrivacyPreferences ?? new PrivacyPreferences();
             saveData.UserSettings = saveData.UserSettings ?? new UserSettings();
             saveData.UserSettings.PrivacyPreferences = saveData.UserSettings.PrivacyPreferences ?? new PrivacyPreferences();
+            saveData.OnboardingPreferences = saveData.OnboardingPreferences ?? new OnboardingPreferences();
             saveData.DailyProgress = saveData.DailyProgress ?? new DailyProgress();
             saveData.MiniGameHistory = saveData.MiniGameHistory ?? new System.Collections.Generic.List<MiniGameSession>();
             saveData.Achievements = saveData.Achievements ?? new System.Collections.Generic.List<AchievementProgress>();

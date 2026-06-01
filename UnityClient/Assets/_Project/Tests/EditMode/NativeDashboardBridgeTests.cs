@@ -130,6 +130,12 @@ namespace TokenForge.Client.Tests
 
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("tokenShop", out var tokenShop));
             Assert.AreEqual(NativeDashboardAction.TokenShop, tokenShop.Action);
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("onboarding.open", out var onboarding));
+            Assert.AreEqual(NativeDashboardAction.Onboarding, onboarding.Action);
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("onboarding.done", out var onboardingDone));
+            Assert.AreEqual(NativeDashboardAction.CompleteOnboarding, onboardingDone.Action);
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("wardrobe.open", out var wardrobe));
+            Assert.AreEqual(NativeDashboardAction.Wardrobe, wardrobe.Action);
 
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("shop.purchase:skin_white_cat", out var shopPurchase));
             Assert.AreEqual(NativeDashboardAction.PurchaseTokenShopItem, shopPurchase.Action);
@@ -157,6 +163,9 @@ namespace TokenForge.Client.Tests
 
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("shop.preview:zodiac_dragon", out var shopPreview));
             Assert.AreEqual(NativeDashboardAction.PreviewTokenShopItem, shopPreview.Action);
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("settings.zodiac:dragon", out var zodiacSettings));
+            Assert.AreEqual(NativeDashboardAction.SelectRepositoryZodiacMascot, zodiacSettings.Action);
+            Assert.AreEqual("dragon", zodiacSettings.Value);
             Assert.AreEqual("zodiac_dragon", shopPreview.Value);
 
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("changeCompanionSkin:orange_cat", out var skin));
@@ -171,6 +180,61 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(NativeDashboardAction.ToggleCompanionVisible, request.Action);
             Assert.AreEqual("false", request.Value);
             Assert.IsFalse(request.BoolValue(true));
+        }
+
+        [Test]
+        public void TryParseAction_CloseNavigationAndShopRoutesDoNotMapToQuit()
+        {
+            foreach (var action in new[]
+                     {
+                         "dashboard.close",
+                         "openSettings",
+                         "onboarding.done",
+                         "shop.open",
+                         "wardrobe.open",
+                         "shop.purchase:skin_white_cat",
+                         "shop.equip:skin_white_cat",
+                         "settings.zodiac:dragon",
+                         "desktop.hide"
+                     })
+            {
+                Assert.IsTrue(MacNativeDashboardService.TryParseAction(action, out var request), action);
+                Assert.AreNotEqual(NativeDashboardAction.Quit, request.Action, action);
+            }
+
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("app.quit", out var quit));
+            Assert.AreEqual(NativeDashboardAction.Quit, quit.Action);
+        }
+
+        [Test]
+        public void NativeAppLifecycleSourceCancelsUnexpectedTerminateAttempts()
+        {
+            var sourcePath = Path.Combine(Application.dataPath, "Plugins", "macOS", "DesktopCompanionOverlay.mm");
+            var source = File.ReadAllText(sourcePath);
+
+            StringAssert.Contains("[AppLifecycle][UNEXPECTED_TERMINATE_ATTEMPT]", source);
+            StringAssert.Contains("termination cancelled reason=notExplicitUserQuit", source);
+            StringAssert.Contains("return NSTerminateCancel;", source);
+            StringAssert.Contains("[DashboardLifecycle][CLOSE_HIDE_ONLY]", source);
+            StringAssert.Contains("[WindowLifecycle][ORDER_OUT_NOT_TERMINATE]", source);
+            StringAssert.Contains("[OverlayLifecycle][KEEP_ALIVE_AFTER_DASHBOARD_CLOSE]", source);
+        }
+
+        [Test]
+        public void ExplicitQuitIsAllowedButWindowCloseIsHideOnly()
+        {
+            var sourcePath = Path.Combine(Application.dataPath, "Plugins", "macOS", "DesktopCompanionOverlay.mm");
+            var source = File.ReadAllText(sourcePath);
+
+            StringAssert.Contains("[DashboardLifecycle][CLOSE_HIDE_ONLY]", source);
+            StringAssert.Contains("[WindowLifecycle][ORDER_OUT_NOT_TERMINATE]", source);
+            StringAssert.Contains("return NSTerminateCancel;", source);
+            StringAssert.Contains("TokenForgeRequestExplicitQuit(@\"menu\")", source);
+            StringAssert.Contains("TokenForgeRequestExplicitQuit(@\"sidebar\")", source);
+            StringAssert.Contains("TokenForgeRequestExplicitQuit(@\"nativeBridge\")", source);
+            StringAssert.Contains("[AppLifecycle][QUIT_ALLOWED]", source);
+            StringAssert.Contains("[AppLifecycle][TEARDOWN_OVERLAY]", source);
+            Assert.IsFalse(source.Contains("return [self.originalAppDelegate applicationShouldTerminate:sender];"));
         }
 
         [Test]
@@ -592,6 +656,36 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void NativeDashboardInvariantClearsRepositoryCompanionsWhenNoActiveRepository()
+        {
+            var state = NativeDashboardState.CreateDefault();
+            state.hasActiveRepository = false;
+            state.repository.connected = false;
+            state.repository.statusText = "No repository connected";
+            state.repositories = new[]
+            {
+                new NativeRepositoryListItem
+                {
+                    id = "legacy-tokenforge",
+                    name = "TokenForge",
+                    companion = "Egg · Lv 1",
+                    selected = true,
+                    currentXP = 193
+                }
+            };
+            state.companionFarm.enabled = true;
+            state.companionFarm.visibleCount = 1;
+
+            InvokeNativeInvariant(state);
+
+            Assert.AreEqual(0, state.repositories.Length);
+            Assert.IsFalse(state.companionFarm.enabled);
+            Assert.AreEqual(0, state.companionFarm.visibleCount);
+            Assert.IsFalse(state.companionVisible);
+            Assert.IsTrue(string.IsNullOrWhiteSpace(state.activeRepositoryId));
+        }
+
+        [Test]
         public void NativeDashboardState_DefaultDoesNotContainSampleProductionActivity()
         {
             var json = NativeDashboardState.CreateDefault().ToJson();
@@ -879,6 +973,8 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("TokenForgeLightCardTitleLabel", source);
             StringAssert.Contains("TokenForgeSecondaryButton", source);
             StringAssert.Contains("TokenForgeShellHeaderLabel", source);
+            StringAssert.Contains("Active repository ·", source);
+            StringAssert.Contains("Desktop Settings", source);
             StringAssert.Contains("repositoryScreen", source);
             StringAssert.Contains("agentProviderRow", source);
             StringAssert.Contains("activityScreenWithActivity", source);
@@ -1240,9 +1336,17 @@ namespace TokenForge.Client.Tests
 
             StringAssert.Contains("shop-target-repository", source);
             StringAssert.Contains("shop-target-ai-agents", source);
+            StringAssert.Contains("Onboarding", source);
+            StringAssert.Contains("onboarding.done", source);
+            StringAssert.Contains("onboarding.reset", source);
+            StringAssert.Contains("Desktop Companion", source);
+            StringAssert.Contains("Connect AI Agents", source);
+            StringAssert.Contains("Zodiac Mascot Settings", source);
+            StringAssert.Contains("settings.zodiac:", source);
             StringAssert.Contains("shop.category:", source);
             StringAssert.Contains("shop.equip:", source);
             StringAssert.Contains("TokenForgeShopPreviewView", source);
+            StringAssert.Contains("NSImageInterpolationNone", source);
             StringAssert.Contains("drawZodiacMascot", source);
             StringAssert.Contains("drawCatInRect", source);
             StringAssert.Contains("zodiac", source);

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="1" result="Passed" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-05-31 18:46:09Z" end-time="2026-05-31 18:46:09Z" duration="0.1110196">
+  <test-suite type="TestSuite" id="1559" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="479" result="Passed" start-time="2026-05-31 18:46:09Z" end-time="2026-05-31 18:46:09Z" duration="0.111020" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties />
+    <test-suite type="Assembly" id="2113" name="TokenForge.Client.Tests.dll" fullname="/Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/Library/ScriptAssemblies/TokenForge.Client.Tests.dll" runstate="Runnable" testcasecount="479" result="Passed" start-time="2026-05-31 18:46:09Z" end-time="2026-05-31 18:46:09Z" duration="0.083032" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="9749" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+      </properties>
+      <test-suite type="TestSuite" id="2114" name="TokenForge" fullname="TokenForge" runstate="Runnable" testcasecount="479" result="Passed" start-time="2026-05-31 18:46:09Z" end-time="2026-05-31 18:46:09Z" duration="0.080101" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="2115" name="Client" fullname="TokenForge.Client" runstate="Runnable" testcasecount="479" result="Passed" start-time="2026-05-31 18:46:09Z" end-time="2026-05-31 18:46:09Z" duration="0.072656" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="2116" name="Tests" fullname="TokenForge.Client.Tests" runstate="Runnable" testcasecount="479" result="Passed" start-time="2026-05-31 18:46:09Z" end-time="2026-05-31 18:46:09Z" duration="0.068118" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1706" name="NativeDashboardBridgeTests" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" testcasecount="40" result="Passed" start-time="2026-05-31 18:46:09Z" end-time="2026-05-31 18:46:09Z" duration="0.033481" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1707" name="NativeDashboardBridgeNUnitDiscoverySmoke" fullname="TokenForge.Client.Tests.NativeDashboardBridgeTests.NativeDashboardBridgeNUnitDiscoverySmoke" methodname="NativeDashboardBridgeNUnitDiscoverySmoke" classname="TokenForge.Client.Tests.NativeDashboardBridgeTests" runstate="Runnable" seed="566841745" result="Passed" start-time="2026-05-31 18:46:09Z" end-time="2026-05-31 18:46:09Z" duration="0.010807" asserts="0">
+                <properties />
+                <reason>
+                  <message><![CDATA[]]></message>
+                </reason>
+                <output><![CDATA[PHASE NUnit discovery smoke
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
