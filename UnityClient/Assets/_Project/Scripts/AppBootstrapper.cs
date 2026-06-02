@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -31,7 +32,7 @@ namespace TokenForge.Client
     {
         private const string LogPrefix = "[TokenForgeBootstrap]";
         private const string HierarchyLogPrefix = "[TokenForgeHierarchy]";
-        private const string AppBootstrapperVersionMarker = "app-bootstrapper-overlay-projection-v8";
+        private const string AppBootstrapperVersionMarker = "app-bootstrapper-overlay-projection-v9";
         private const string BootstrapRootPrefabPath = "Assets/_Project/Prefabs/UI/BootstrapRoot.prefab";
         private const string StartupScenePath = "Assets/_Project/Scenes/TokenForgeMain.unity";
         private const string LegacyBootstrapScenePath = "Assets/_Project/Scenes/Bootstrap.unity";
@@ -673,7 +674,9 @@ namespace TokenForge.Client
             state.subtitle = "Track Git and AI-assisted work as companion growth.";
             state.isLocalMode = true;
             state.syncStatusText = state.sync == "connected" ? "Safe sync connected" : "Optional sync";
-            if (!(projectionSaveData?.OnboardingPreferences?.FirstRunOnboardingCompleted ?? false) &&
+            var onboardingPreferences = projectionSaveData?.OnboardingPreferences ?? new OnboardingPreferences();
+            if (!onboardingPreferences.FirstRunOnboardingCompleted &&
+                !onboardingPreferences.FirstRunOnboardingDismissedForNow &&
                 string.Equals(nativeSelectedNavItem, "dashboard", StringComparison.Ordinal))
             {
                 nativeSelectedNavItem = "onboarding";
@@ -1218,15 +1221,41 @@ namespace TokenForge.Client
         private static NativeOnboardingState BuildNativeOnboardingState(SaveData saveData)
         {
             var prefs = saveData?.OnboardingPreferences ?? new OnboardingPreferences();
+            var steps = NativeOnboardingStepTitles();
+            var stepIndex = Math.Max(0, Math.Min(steps.Length - 1, prefs.CurrentStepIndex));
             return new NativeOnboardingState
             {
                 firstRunCompleted = prefs.FirstRunOnboardingCompleted,
-                currentStep = "welcome",
+                dismissedForNow = prefs.FirstRunOnboardingDismissedForNow,
+                currentStep = "step_" + (stepIndex + 1),
+                currentStepIndex = stepIndex,
+                stepCount = steps.Length,
+                canGoBack = stepIndex > 0,
+                canGoNext = stepIndex + 1 < steps.Length,
                 statusText = prefs.FirstRunOnboardingCompleted
                     ? "Onboarding is available anytime from the sidebar."
+                    : prefs.FirstRunOnboardingDismissedForNow
+                        ? "Onboarding was skipped for now. Reopen it from the sidebar whenever you want the guide."
                     : "Welcome to TokenForge. Start here to understand repository mascots, zodiac mascots, and agent-specific coins.",
-                steps = new[] { "Welcome", "Repository Companion", "Connect Repository", "Connect AI Agents", "Growth System", "Token Shop", "Wardrobe", "Desktop Companion", "Privacy", "Finish" },
+                steps = steps,
                 zodiacIds = RepositoryCompanionProfileService.GetZodiacCompanionTypes().Select(item => item.Id).ToArray()
+            };
+        }
+
+        private static string[] NativeOnboardingStepTitles()
+        {
+            return new[]
+            {
+                "Turn repositories into companions",
+                "Analyze local Git activity",
+                "Grow through stages",
+                "Earn tokens",
+                "Customize your mascot",
+                "Choose a zodiac identity",
+                "Connect AI agents",
+                "Desktop companion mode",
+                "Privacy-first by design",
+                "Ready to begin"
             };
         }
 
@@ -2187,6 +2216,24 @@ namespace TokenForge.Client
                 return;
             }
 
+            if (!string.Equals(state.persistentStatusBarIdentifier, "TokenForge.PersistentStatusBar", StringComparison.Ordinal))
+            {
+                Debug.Log("INFO [NativeDashboard][NORMALIZE_LEGACY_ALIAS] field=persistentStatusBarIdentifier value=" + SafeNativeText(state.persistentStatusBarIdentifier, "empty") + " canonical=TokenForge.PersistentStatusBar");
+                state.persistentStatusBarIdentifier = "TokenForge.PersistentStatusBar";
+            }
+
+            if (!string.Equals(state.persistentStatusBarAccessibilityLabel, "TokenForge persistent app status bar", StringComparison.Ordinal))
+            {
+                Debug.Log("INFO [NativeDashboard][NORMALIZE_LEGACY_ALIAS] field=persistentStatusBarAccessibilityLabel value=" + SafeNativeText(state.persistentStatusBarAccessibilityLabel, "empty") + " canonical=TokenForge persistent app status bar");
+                state.persistentStatusBarAccessibilityLabel = "TokenForge persistent app status bar";
+            }
+
+            if (string.IsNullOrWhiteSpace(state.selectedNavItem))
+            {
+                Debug.Log("INFO [NativeDashboard][NORMALIZE_LEGACY_ALIAS] field=selectedNavItem value=empty canonical=dashboard");
+                state.selectedNavItem = "dashboard";
+            }
+
             var hasPendingReview = state.review != null && state.review.pending;
             state.pendingReviewCount = hasPendingReview ? 1 : 0;
             state.hasPendingReview = hasPendingReview;
@@ -2534,6 +2581,36 @@ namespace TokenForge.Client
                         await RefreshAndPublishNativeDashboardAsync();
                     }, request.RawAction);
                     OpenNativeDashboardCanonical(request.RawAction);
+                    break;
+                case NativeDashboardAction.SetOnboardingStep:
+                    nativeSelectedNavItem = "onboarding";
+                    nativeActionStatusKind = "idle";
+                    nativeActionStatusText = "Onboarding step changed.";
+                    RunNativeDashboardTask(async () =>
+                    {
+                        if (approvedActivityAnalysis != null)
+                        {
+                            var stepIndex = 0;
+                            int.TryParse(request.Value, out stepIndex);
+                            await approvedActivityAnalysis.SetFirstRunOnboardingStepAsync(stepIndex);
+                        }
+
+                        await RefreshAndPublishNativeDashboardAsync();
+                    }, request.RawAction);
+                    break;
+                case NativeDashboardAction.SkipOnboarding:
+                    nativeSelectedNavItem = "dashboard";
+                    nativeActionStatusKind = "idle";
+                    nativeActionStatusText = "Onboarding skipped for now. You can reopen it from the sidebar.";
+                    RunNativeDashboardTask(async () =>
+                    {
+                        if (approvedActivityAnalysis != null)
+                        {
+                            await approvedActivityAnalysis.DismissFirstRunOnboardingForNowAsync();
+                        }
+
+                        await RefreshAndPublishNativeDashboardAsync();
+                    }, request.RawAction);
                     break;
                 case NativeDashboardAction.CompleteOnboarding:
                     nativeSelectedNavItem = "dashboard";
@@ -4070,8 +4147,10 @@ namespace TokenForge.Client
         private void LogRuntimeBuildIdentity()
         {
             Debug.Log("INFO [RuntimeIdentity] AppBootstrapperVersionMarker=" + AppBootstrapperVersionMarker);
+            LogNativeRuntimeMarkerIfAvailable();
             Debug.Log("INFO [RuntimeIdentity] applicationVersion=" + Application.version + " unityVersion=" + Application.unityVersion + " buildGUID=" + Application.buildGUID);
             Debug.Log("INFO [RuntimeIdentity] dataPath=" + Application.dataPath + " persistentDataPath=" + Application.persistentDataPath);
+            Debug.Log("INFO [RuntimeIdentity] runtimeMode=" + (Application.isEditor ? "Editor" : "Player") + " appBundlePath=" + RuntimeAppBundlePath() + " unityProjectPath=" + RuntimeUnityProjectPath());
             try
             {
                 var assembly = typeof(AppBootstrapper).GetTypeInfo().Assembly;
@@ -4089,6 +4168,62 @@ namespace TokenForge.Client
             catch (Exception exception)
             {
                 Debug.LogWarning("WARN [RuntimeIdentity] csharpAssembly identity failed: " + exception.GetType().Name);
+            }
+        }
+
+        private static void LogNativeRuntimeMarkerIfAvailable()
+        {
+#if UNITY_STANDALONE_OSX && !UNITY_EDITOR
+            try
+            {
+                NativeLogAppBootstrapperRuntimeMarker();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning("WARN [RuntimeIdentity] native AppBootstrapper marker failed: " + exception.GetType().Name);
+            }
+#endif
+        }
+
+#if UNITY_STANDALONE_OSX && !UNITY_EDITOR
+        [DllImport("DesktopCompanionOverlay", EntryPoint = "TokenForge_LogAppBootstrapperRuntimeMarker")]
+        private static extern void NativeLogAppBootstrapperRuntimeMarker();
+#endif
+
+        private static string RuntimeAppBundlePath()
+        {
+            if (Application.isEditor)
+            {
+                return "editor";
+            }
+
+            try
+            {
+                var dataPath = Application.dataPath;
+                var contentsDirectory = Directory.GetParent(dataPath);
+                return contentsDirectory != null ? contentsDirectory.FullName : "unavailable";
+            }
+            catch (Exception exception)
+            {
+                return "unavailable:" + exception.GetType().Name;
+            }
+        }
+
+        private static string RuntimeUnityProjectPath()
+        {
+            try
+            {
+                if (Application.isEditor)
+                {
+                    var assetsDirectory = Directory.GetParent(Application.dataPath);
+                    return assetsDirectory != null ? assetsDirectory.FullName : "unavailable";
+                }
+
+                return "player-build";
+            }
+            catch (Exception exception)
+            {
+                return "unavailable:" + exception.GetType().Name;
             }
         }
 

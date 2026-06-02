@@ -292,7 +292,7 @@ namespace TokenForge.Client.Domain
                 EquippedByDefault = equippedByDefault,
                 ExclusiveItemIds = new List<string>(),
                 CompatibleCommonItemIds = new List<string>(),
-                EvolutionStageMapping = "egg:" + id + "_egg,hatchling:" + id + "_hatchling,child:" + id + "_child,teen:" + id + "_teen,adult:" + id + "_adult,legendary:" + id + "_legendary",
+                EvolutionStageMapping = "egg:zodiac_" + id + "_egg,baby:zodiac_" + id + "_baby,child:zodiac_" + id + "_child,teen:zodiac_" + id + "_teen,young_adult:zodiac_" + id + "_young_adult,adult:zodiac_" + id + "_adult",
                 Stages = BuildZodiacStages(id, silhouette)
             };
         }
@@ -301,17 +301,18 @@ namespace TokenForge.Client.Domain
         {
             return new List<ZodiacEvolutionStageDefinition>
             {
-                ZodiacStage(zodiacId, "egg", "Egg", "알", "Lv 1", "0-499 XP", silhouette + " sealed in a zodiac egg", "Connect a repository"),
-                ZodiacStage(zodiacId, "hatchling", "Hatchling", "유년기", "Lv 2-3", "500-1499 XP", silhouette + " tiny hatchling proportions", "Reach level 2"),
-                ZodiacStage(zodiacId, "child", "Child", "성장기", "Lv 4-6", "1500-2999 XP", silhouette + " clear young mascot silhouette", "Reach level 4"),
-                ZodiacStage(zodiacId, "teen", "Teen", "청소년기", "Lv 7-10", "3000-4999 XP", silhouette + " energetic teen stance", "Reach level 7"),
-                ZodiacStage(zodiacId, "adult", "Adult", "성체", "Lv 11-19", "5000-9499 XP", silhouette + " mature mascot silhouette", "Reach level 11"),
-                ZodiacStage(zodiacId, "legendary", "Legendary", "전설", "Lv 20+", "9500+ XP", silhouette + " legendary aura and signature traits", "Reach level 20")
+                ZodiacStage(zodiacId, "egg", "Egg", "알", "Lv 1", "0-499 XP", silhouette + " sealed in a zodiac egg", "quiet potential", "Connect a repository"),
+                ZodiacStage(zodiacId, "baby", "Baby", "유년기", "Lv 2-3", "500-1499 XP", silhouette + " tiny baby mascot proportions", "curious first steps", "Reach level 2"),
+                ZodiacStage(zodiacId, "child", "Child", "성장기", "Lv 4-6", "1500-2999 XP", silhouette + " clear young mascot silhouette", "playful practice", "Reach level 4"),
+                ZodiacStage(zodiacId, "teen", "Teen", "청소년기", "Lv 7-10", "3000-4999 XP", silhouette + " energetic teen stance", "confident momentum", "Reach level 7"),
+                ZodiacStage(zodiacId, "young_adult", "Young Adult", "성숙기", "Lv 11-19", "5000-9499 XP", silhouette + " mature mascot silhouette", "steady mastery", "Reach level 11"),
+                ZodiacStage(zodiacId, "adult", "Adult", "성체", "Lv 20+", "9500+ XP", silhouette + " adult signature traits and full aura", "settled presence", "Reach level 20")
             };
         }
 
-        private static ZodiacEvolutionStageDefinition ZodiacStage(string zodiacId, string stageId, string stageName, string koreanStageName, string levelRange, string xpRange, string silhouetteTrait, string unlockRequirement)
+        private static ZodiacEvolutionStageDefinition ZodiacStage(string zodiacId, string stageId, string stageName, string koreanStageName, string levelRange, string xpRange, string silhouetteTrait, string personalityTrait, string unlockRequirement)
         {
+            var previewKey = "zodiac_" + zodiacId + "_" + stageId;
             return new ZodiacEvolutionStageDefinition
             {
                 StageId = stageId,
@@ -319,8 +320,12 @@ namespace TokenForge.Client.Domain
                 KoreanStageName = koreanStageName,
                 LevelRange = levelRange,
                 XpRange = xpRange,
-                ArtVariantKey = zodiacId + "_" + stageId,
+                ArtVariantKey = previewKey,
                 SilhouetteTrait = silhouetteTrait,
+                PersonalityTrait = personalityTrait,
+                MotionProfileKey = previewKey + "_motion",
+                ShopPreviewKey = previewKey,
+                WardrobePreviewKey = previewKey + "_wardrobe",
                 UnlockRequirement = unlockRequirement
             };
         }
@@ -1966,7 +1971,17 @@ namespace TokenForge.Client.Domain
             }
 
             alias = new string(alias.Where(character => char.IsLetterOrDigit(character) || character == '-' || character == '_' || character == ' ').Take(48).ToArray()).Trim();
-            if (string.IsNullOrWhiteSpace(alias) || string.Equals(alias, "Local Repository", StringComparison.OrdinalIgnoreCase) || new ForbiddenFieldDetector().ContainsSensitiveString(alias))
+            var normalizedAlias = alias.ToLowerInvariant();
+            var sensitiveAlias =
+                normalizedAlias.Contains("secret") ||
+                normalizedAlias.Contains("token") ||
+                normalizedAlias.Contains("password") ||
+                normalizedAlias.Contains("credential") ||
+                normalizedAlias.Contains("private");
+            if (string.IsNullOrWhiteSpace(alias) ||
+                string.Equals(alias, "Local Repository", StringComparison.OrdinalIgnoreCase) ||
+                sensitiveAlias ||
+                new ForbiddenFieldDetector().ContainsSensitiveString(alias))
             {
                 alias = "Repository";
             }

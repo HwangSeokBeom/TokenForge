@@ -54,6 +54,9 @@ find "${BUILD_OUTPUT}/Contents" -type f \( -name '*.dll' -o -name '*.dylib' -o -
   | xargs -0 shasum -a 256 >> "${HASH_REPORT}" 2>/dev/null || true
 cat "${HASH_REPORT}"
 
+section "Build Artifact Freshness Gate"
+BUILD_OUTPUT="${BUILD_OUTPUT}" APP_BUNDLE_PATH="${BUILD_OUTPUT}" "${SCRIPT_DIR}/verify-macos-build-artifacts.sh"
+
 section "Prepare Verify App"
 rm -rf "${VERIFY_APP_PATH}"
 cp -R "${BUILD_OUTPUT}" "${VERIFY_APP_PATH}"

@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+UNITY_PROJECT_PATH="${UNITY_PROJECT_PATH:-${REPO_ROOT}/UnityClient}"
+BUILD_OUTPUT="${BUILD_OUTPUT:-${UNITY_PROJECT_PATH}/builds/macOS/TokenForge.app}"
+APP_BUNDLE_PATH="${APP_BUNDLE_PATH:-${BUILD_OUTPUT}}"
+SOURCE_DYLIB="${SOURCE_DYLIB:-${UNITY_PROJECT_PATH}/Assets/Plugins/macOS/libDesktopCompanionOverlay.dylib}"
+BUNDLED_DYLIB="${BUNDLED_DYLIB:-${APP_BUNDLE_PATH}/Contents/PlugIns/libDesktopCompanionOverlay.dylib}"
+PROJECT_MANAGED_DLL="${PROJECT_MANAGED_DLL:-${UNITY_PROJECT_PATH}/Library/ScriptAssemblies/TokenForge.Client.dll}"
+BUNDLED_MANAGED_DLL="${BUNDLED_MANAGED_DLL:-${APP_BUNDLE_PATH}/Contents/Resources/Data/Managed/TokenForge.Client.dll}"
+SOURCE_CS_ROOT="${SOURCE_CS_ROOT:-${UNITY_PROJECT_PATH}/Assets/_Project/Scripts}"
+RUNTIME_MARKER="${RUNTIME_MARKER:-app-bootstrapper-overlay-projection-v9}"
+UNITY_MANAGED_PATH="${UNITY_MANAGED_PATH:-/Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/Managed}"
+
+FAILED=0
+
+section() {
+  printf '\n== %s ==\n' "$1"
+}
+
+row() {
+  printf '%-32s | %-8s | %s\n' "$1" "$2" "$3"
+}
+
+fail() {
+  row "$1" "FAIL" "$2"
+  FAILED=1
+}
+
+ok() {
+  row "$1" "OK" "$2"
+}
+
+info() {
+  row "$1" "INFO" "$2"
+}
+
+sha256_for_file() {
+  shasum -a 256 "$1" | awk '{print $1}'
+}
+
+mtime_epoch() {
+  stat -f '%m' "$1"
+}
+
+mtime_display() {
+  date -r "$(mtime_epoch "$1")" -u '+%Y-%m-%dT%H:%M:%SZ'
+}
+
+latest_source_record() {
+  find "${SOURCE_CS_ROOT}" -type f -name '*.cs' -print0 \
+    | xargs -0 stat -f '%m %N' \
+    | sort -nr \
+    | head -1
+}
+
+contains_marker() {
+  local path="$1"
+  local marker="$2"
+  local monodis_path
+  local temp_il
+  local mono_path
+
+  if LC_ALL=C grep -aFq "${marker}" "${path}" 2>/dev/null; then
+    echo "raw-bytes"
+    return 0
+  fi
+
+  if strings "${path}" 2>/dev/null | grep -Fq "${marker}"; then
+    echo "strings"
+    return 0
+  fi
+
+  monodis_path="$(command -v monodis || true)"
+  if [[ -n "${monodis_path}" ]]; then
+    temp_il="$(mktemp "${TMPDIR:-/tmp}/tokenforge-managed-marker.XXXXXX.il")"
+    mono_path="${UNITY_MANAGED_PATH}:${UNITY_MANAGED_PATH}/UnityEngine"
+    if MONO_PATH="${mono_path}" "${monodis_path}" --output="${temp_il}" "${path}" >/dev/null 2>&1; then
+      if grep -Fq "${marker}" "${temp_il}"; then
+        rm -f "${temp_il}"
+        echo "monodis-il"
+        return 0
+      fi
+    fi
+    rm -f "${temp_il}"
+  fi
+
+  return 1
+}
+
+source_contains_marker() {
+  local root="$1"
+  local marker="$2"
+
+  grep -R -Fq "${marker}" "${root}" --include='*.cs'
+}
+
+managed_marker_candidates() {
+  local path="$1"
+  local monodis_path
+  local temp_il
+  local mono_path
+
+  monodis_path="$(command -v monodis || true)"
+  if [[ -z "${monodis_path}" ]]; then
+    return 0
+  fi
+
+  temp_il="$(mktemp "${TMPDIR:-/tmp}/tokenforge-managed-marker-candidates.XXXXXX.il")"
+  mono_path="${UNITY_MANAGED_PATH}:${UNITY_MANAGED_PATH}/UnityEngine"
+  if MONO_PATH="${mono_path}" "${monodis_path}" --output="${temp_il}" "${path}" >/dev/null 2>&1; then
+    grep -Eo 'app-bootstrapper-overlay-projection-v[0-9]+' "${temp_il}" | sort -u | tr '\n' ' '
+  fi
+  rm -f "${temp_il}"
+}
+
+section "Build Paths"
+info "repo root" "${REPO_ROOT}"
+info "unity project path" "${UNITY_PROJECT_PATH}"
+info "build output path" "${BUILD_OUTPUT}"
+info "app bundle path" "${APP_BUNDLE_PATH}"
+
+section "App Bundle"
+if [[ ! -d "${APP_BUNDLE_PATH}" ]]; then
+  fail "app bundle exists" "no app was produced at ${APP_BUNDLE_PATH}"
+else
+  ok "app bundle exists" "${APP_BUNDLE_PATH}"
+fi
+
+section "Native Dylib"
+if [[ ! -f "${SOURCE_DYLIB}" ]]; then
+  fail "source dylib" "missing: ${SOURCE_DYLIB}"
+else
+  SOURCE_DYLIB_HASH="$(sha256_for_file "${SOURCE_DYLIB}")"
+  ok "source dylib hash" "${SOURCE_DYLIB_HASH}"
+  info "source dylib mtime" "$(mtime_display "${SOURCE_DYLIB}")"
+fi
+
+if [[ ! -f "${BUNDLED_DYLIB}" ]]; then
+  fail "bundled dylib" "missing: ${BUNDLED_DYLIB}"
+else
+  BUNDLED_DYLIB_HASH="$(sha256_for_file "${BUNDLED_DYLIB}")"
+  ok "bundled dylib hash" "${BUNDLED_DYLIB_HASH}"
+  info "bundled dylib mtime" "$(mtime_display "${BUNDLED_DYLIB}")"
+fi
+
+if [[ -n "${SOURCE_DYLIB_HASH:-}" && -n "${BUNDLED_DYLIB_HASH:-}" ]]; then
+  if [[ "${SOURCE_DYLIB_HASH}" == "${BUNDLED_DYLIB_HASH}" ]]; then
+    ok "dylib freshness" "bundled dylib matches source dylib"
+  else
+    fail "dylib freshness" "bundled dylib hash differs from source dylib hash"
+  fi
+fi
+
+section "Managed Assembly"
+LATEST_SOURCE_RECORD="$(latest_source_record || true)"
+LATEST_SOURCE_EPOCH="${LATEST_SOURCE_RECORD%% *}"
+LATEST_SOURCE_PATH="${LATEST_SOURCE_RECORD#* }"
+if [[ -z "${LATEST_SOURCE_RECORD}" || "${LATEST_SOURCE_EPOCH}" == "${LATEST_SOURCE_RECORD}" ]]; then
+  fail "latest C# source" "no C# source files found under ${SOURCE_CS_ROOT}"
+else
+  info "latest C# source" "$(date -r "${LATEST_SOURCE_EPOCH}" -u '+%Y-%m-%dT%H:%M:%SZ') ${LATEST_SOURCE_PATH}"
+fi
+
+if source_contains_marker "${SOURCE_CS_ROOT}" "${RUNTIME_MARKER}"; then
+  ok "source marker" "${RUNTIME_MARKER}"
+else
+  fail "source marker" "${RUNTIME_MARKER} not found under ${SOURCE_CS_ROOT}"
+fi
+
+if [[ -f "${PROJECT_MANAGED_DLL}" ]]; then
+  PROJECT_MANAGED_HASH="$(sha256_for_file "${PROJECT_MANAGED_DLL}")"
+  PROJECT_MANAGED_EPOCH="$(mtime_epoch "${PROJECT_MANAGED_DLL}")"
+  ok "project managed hash" "${PROJECT_MANAGED_HASH}"
+  info "project managed path" "${PROJECT_MANAGED_DLL}"
+  info "project managed mtime" "$(mtime_display "${PROJECT_MANAGED_DLL}")"
+
+  if [[ -n "${LATEST_SOURCE_EPOCH:-}" && "${PROJECT_MANAGED_EPOCH}" -lt "${LATEST_SOURCE_EPOCH}" ]]; then
+    fail "project managed freshness" "project TokenForge.Client.dll is older than latest C# source change"
+  else
+    ok "project managed freshness" "project TokenForge.Client.dll is newer than or equal to latest C# source"
+  fi
+
+  PROJECT_MARKER_METHOD="$(contains_marker "${PROJECT_MANAGED_DLL}" "${RUNTIME_MARKER}" || true)"
+  if [[ -n "${PROJECT_MARKER_METHOD}" ]]; then
+    ok "project ScriptAssemblies marker" "${RUNTIME_MARKER} (${PROJECT_MARKER_METHOD})"
+  else
+    PROJECT_FOUND_MARKERS="$(managed_marker_candidates "${PROJECT_MANAGED_DLL}")"
+    fail "project ScriptAssemblies marker" "${RUNTIME_MARKER} not found in ${PROJECT_MANAGED_DLL}; found markers: ${PROJECT_FOUND_MARKERS:-none}"
+  fi
+else
+  fail "project managed dll" "missing: ${PROJECT_MANAGED_DLL}"
+fi
+
+if [[ ! -f "${BUNDLED_MANAGED_DLL}" ]]; then
+  fail "bundled managed dll" "missing: ${BUNDLED_MANAGED_DLL}"
+else
+  BUNDLED_MANAGED_HASH="$(sha256_for_file "${BUNDLED_MANAGED_DLL}")"
+  BUNDLED_MANAGED_EPOCH="$(mtime_epoch "${BUNDLED_MANAGED_DLL}")"
+  ok "bundled managed hash" "${BUNDLED_MANAGED_HASH}"
+  info "bundled managed path" "${BUNDLED_MANAGED_DLL}"
+  info "bundled managed mtime" "$(mtime_display "${BUNDLED_MANAGED_DLL}")"
+
+  if [[ -n "${LATEST_SOURCE_EPOCH:-}" && "${BUNDLED_MANAGED_EPOCH}" -lt "${LATEST_SOURCE_EPOCH}" ]]; then
+    fail "managed freshness" "bundled TokenForge.Client.dll is older than latest C# source change"
+  else
+    ok "managed freshness" "bundled TokenForge.Client.dll is newer than or equal to latest C# source"
+  fi
+
+  BUNDLED_MARKER_METHOD="$(contains_marker "${BUNDLED_MANAGED_DLL}" "${RUNTIME_MARKER}" || true)"
+  if [[ -n "${BUNDLED_MARKER_METHOD}" ]]; then
+    ok "Player bundled DLL marker" "${RUNTIME_MARKER} (${BUNDLED_MARKER_METHOD})"
+  else
+    BUNDLED_FOUND_MARKERS="$(managed_marker_candidates "${BUNDLED_MANAGED_DLL}")"
+    fail "Player bundled DLL marker" "${RUNTIME_MARKER} not found in bundled TokenForge.Client.dll; found markers: ${BUNDLED_FOUND_MARKERS:-none}"
+  fi
+fi
+
+section "Verdict"
+if [[ "${FAILED}" -ne 0 ]]; then
+  echo "Artifact freshness: STALE"
+  exit 1
+fi
+
+echo "Artifact freshness: FRESH"

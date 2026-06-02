@@ -101,6 +101,7 @@ namespace TokenForge.Client.Tests
         public void SafeSyncMapper_MapsSourceProviderToBackendUppercaseEnum()
         {
             var saveData = CreateSafeSaveData();
+            saveData.WorkSessionSummaries[0].AgentType = AgentType.Unknown;
             saveData.WorkSessionSummaries[0].SourceProvider = "ManualSessionProvider";
             saveData.WorkSessionSummaries[0].SourceProviders = new List<string> { "ManualSessionProvider", "CodexLogProvider" };
 

@@ -1329,13 +1329,52 @@ namespace TokenForge.Client.UI
             var saveData = await repository.LoadAsync(cancellationToken);
             saveData.OnboardingPreferences = saveData.OnboardingPreferences ?? new OnboardingPreferences();
             saveData.OnboardingPreferences.FirstRunOnboardingCompleted = true;
+            saveData.OnboardingPreferences.FirstRunOnboardingDismissedForNow = false;
+            saveData.OnboardingPreferences.CurrentStepIndex = 0;
             saveData.OnboardingPreferences.CompletedAtUtc = DateTimeOffset.UtcNow;
+            saveData.OnboardingPreferences.DismissedAtUtc = null;
             saveData.OnboardingPreferences.LastOpenedAtUtc = DateTimeOffset.UtcNow;
             RepositoryCompanionProfileService.RecordTimelineEvent(
                 saveData,
                 "onboarding_completed",
                 "Onboarding completed",
                 "First-run onboarding was completed and routed back to Dashboard.",
+                saveData.SelectedRepositoryHash,
+                string.Empty,
+                "onboarding");
+            return await repository.SaveAsync(saveData, cancellationToken);
+        }
+
+        public async Task<Result> DismissFirstRunOnboardingForNowAsync(CancellationToken cancellationToken = default)
+        {
+            var saveData = await repository.LoadAsync(cancellationToken);
+            saveData.OnboardingPreferences = saveData.OnboardingPreferences ?? new OnboardingPreferences();
+            saveData.OnboardingPreferences.FirstRunOnboardingCompleted = false;
+            saveData.OnboardingPreferences.FirstRunOnboardingDismissedForNow = true;
+            saveData.OnboardingPreferences.DismissedAtUtc = DateTimeOffset.UtcNow;
+            saveData.OnboardingPreferences.LastOpenedAtUtc = DateTimeOffset.UtcNow;
+            RepositoryCompanionProfileService.RecordTimelineEvent(
+                saveData,
+                "onboarding_dismissed_for_now",
+                "Onboarding skipped for now",
+                "First-run onboarding was dismissed without being marked complete.",
+                saveData.SelectedRepositoryHash,
+                string.Empty,
+                "onboarding");
+            return await repository.SaveAsync(saveData, cancellationToken);
+        }
+
+        public async Task<Result> SetFirstRunOnboardingStepAsync(int stepIndex, CancellationToken cancellationToken = default)
+        {
+            var saveData = await repository.LoadAsync(cancellationToken);
+            saveData.OnboardingPreferences = saveData.OnboardingPreferences ?? new OnboardingPreferences();
+            saveData.OnboardingPreferences.CurrentStepIndex = Math.Max(0, stepIndex);
+            saveData.OnboardingPreferences.LastOpenedAtUtc = DateTimeOffset.UtcNow;
+            RepositoryCompanionProfileService.RecordTimelineEvent(
+                saveData,
+                "onboarding_step_changed",
+                "Onboarding step changed",
+                "First-run onboarding moved to step " + (saveData.OnboardingPreferences.CurrentStepIndex + 1) + ".",
                 saveData.SelectedRepositoryHash,
                 string.Empty,
                 "onboarding");
@@ -1363,7 +1402,10 @@ namespace TokenForge.Client.UI
             var saveData = await repository.LoadAsync(cancellationToken);
             saveData.OnboardingPreferences = saveData.OnboardingPreferences ?? new OnboardingPreferences();
             saveData.OnboardingPreferences.FirstRunOnboardingCompleted = false;
+            saveData.OnboardingPreferences.FirstRunOnboardingDismissedForNow = false;
+            saveData.OnboardingPreferences.CurrentStepIndex = 0;
             saveData.OnboardingPreferences.CompletedAtUtc = null;
+            saveData.OnboardingPreferences.DismissedAtUtc = null;
             saveData.OnboardingPreferences.LastOpenedAtUtc = DateTimeOffset.UtcNow;
             RepositoryCompanionProfileService.RecordTimelineEvent(
                 saveData,

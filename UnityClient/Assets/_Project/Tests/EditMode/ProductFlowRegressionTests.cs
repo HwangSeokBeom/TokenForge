@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -16,16 +17,18 @@ using TokenForge.Client.Privacy;
 using TokenForge.Client.Sync;
 using TokenForge.Client.UI;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace TokenForge.Client.Tests
 {
     public sealed class ProductFlowRegressionTests
     {
-        [Test]
-        public void RunRepositoryAnalysisDoesNotBlockMainThread()
+        [UnityTest]
+        public IEnumerator RunRepositoryAnalysisDoesNotBlockMainThread()
         {
             var fixture = CreateGitFixture(new DelayedGitRunner(TimeSpan.FromMilliseconds(250)));
-            RunAsync(() => fixture.Controller.SelectLocalOnlyApprovedRepositoryPathAsyncForTest(fixture.RepositoryPath));
+            var selectTask = fixture.Controller.SelectLocalOnlyApprovedRepositoryPathAsyncForTest(fixture.RepositoryPath);
+            yield return WaitForTask(selectTask, "SelectLocalOnlyApprovedRepositoryPathAsyncForTest");
 
             var stopwatch = Stopwatch.StartNew();
             var task = fixture.Controller.AnalyzeAsync(CancellationToken.None);
@@ -34,17 +37,23 @@ namespace TokenForge.Client.Tests
             Assert.Less(elapsed, 100);
             Assert.AreEqual(GitAnalysisFlowState.Analyzing, fixture.Controller.State);
             Assert.IsFalse(task.IsCompleted);
-            Assert.IsTrue(RunAsync(() => task).IsSuccess);
+            yield return WaitForTask(task, nameof(fixture.Controller.AnalyzeAsync));
+            Assert.IsTrue(task.Result.IsSuccess);
         }
 
-        [Test]
-        public void RunRepositoryAnalysisCreatesPendingReview()
+        [UnityTest]
+        public IEnumerator RunRepositoryAnalysisCreatesPendingReview()
         {
             var fixture = CreateViewModelFixture(new SafeGitRunner());
-            RunAsync(() => fixture.ViewModel.GitFlow.SelectLocalOnlyApprovedRepositoryPathAsyncForTest(fixture.RepositoryPath));
+            var selectTask = fixture.ViewModel.GitFlow.SelectLocalOnlyApprovedRepositoryPathAsyncForTest(fixture.RepositoryPath);
+            yield return WaitForTask(selectTask, "SelectLocalOnlyApprovedRepositoryPathAsyncForTest");
 
-            var result = RunAsync(() => fixture.ViewModel.AnalyzeGitActivityAsync());
-            var saved = RunAsync(() => fixture.SaveRepository.LoadAsync());
+            var resultTask = fixture.ViewModel.AnalyzeGitActivityAsync();
+            yield return WaitForTask(resultTask, nameof(fixture.ViewModel.AnalyzeGitActivityAsync));
+            var savedTask = fixture.SaveRepository.LoadAsync();
+            yield return WaitForTask(savedTask, nameof(fixture.SaveRepository.LoadAsync));
+            var result = resultTask.Result;
+            var saved = savedTask.Result;
 
             Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
             Assert.IsNotNull(saved.PendingNativeActivityReview);
@@ -52,17 +61,21 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(0, saved.CharacterProfile.TotalExp);
         }
 
-        [Test]
-        public void RecentFailedRunStoresOnlySafeSummary()
+        [UnityTest]
+        public IEnumerator RecentFailedRunStoresOnlySafeSummary()
         {
             var fixture = CreateViewModelFixture(new SafeGitRunner());
 
-            var record = RunAsync(() => fixture.ViewModel.RecordNativeAnalysisRunAsync(
+            var recordTask = fixture.ViewModel.RecordNativeAnalysisRunAsync(
                 "repository",
                 "failed",
                 "RepositoryFolderNotFound",
-                "Repository folder not found. Reconnect required."));
-            var saved = RunAsync(() => fixture.SaveRepository.LoadAsync());
+                "Repository folder not found. Reconnect required.");
+            yield return WaitForTask(recordTask, nameof(fixture.ViewModel.RecordNativeAnalysisRunAsync));
+            var savedTask = fixture.SaveRepository.LoadAsync();
+            yield return WaitForTask(savedTask, nameof(fixture.SaveRepository.LoadAsync));
+            var record = recordTask.Result;
+            var saved = savedTask.Result;
 
             Assert.IsTrue(record.IsSuccess, record.ErrorMessage);
             Assert.AreEqual(1, saved.RecentNativeAnalysisRuns.Count);
@@ -71,13 +84,16 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(0, saved.CharacterProfile.TotalExp);
         }
 
-        [Test]
-        public void GitAnalysisTimeoutProducesFailureState()
+        [UnityTest]
+        public IEnumerator GitAnalysisTimeoutProducesFailureState()
         {
             var fixture = CreateGitFixture(new TimeoutGitRunner());
-            RunAsync(() => fixture.Controller.SelectLocalOnlyApprovedRepositoryPathAsyncForTest(fixture.RepositoryPath));
+            var selectTask = fixture.Controller.SelectLocalOnlyApprovedRepositoryPathAsyncForTest(fixture.RepositoryPath);
+            yield return WaitForTask(selectTask, "SelectLocalOnlyApprovedRepositoryPathAsyncForTest");
 
-            var result = RunAsync(() => fixture.Controller.AnalyzeAsync(CancellationToken.None));
+            var resultTask = fixture.Controller.AnalyzeAsync(CancellationToken.None);
+            yield return WaitForTask(resultTask, nameof(fixture.Controller.AnalyzeAsync));
+            var result = resultTask.Result;
 
             Assert.IsFalse(result.IsSuccess);
             Assert.AreEqual("ProcessTimeout", result.ErrorCode);
@@ -85,29 +101,33 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual("Git command timed out.", fixture.Controller.UserMessage);
         }
 
-        [Test]
-        public void GitAggregateAnalyzerUsesValidLogFormatArgument()
+        [UnityTest]
+        public IEnumerator GitAggregateAnalyzerUsesValidLogFormatArgument()
         {
             var runner = new RecordingGitRunner();
             var analyzer = new GitAggregateAnalyzer(runner, new PrivacySanitizer());
             var repositoryPath = CreateGitLikeDirectory();
 
-            var result = RunAsync(() => analyzer.AnalyzeAsync(new GitRepositoryAnalysisInput { RepositoryRootPath = repositoryPath }));
+            var resultTask = analyzer.AnalyzeAsync(new GitRepositoryAnalysisInput { RepositoryRootPath = repositoryPath });
+            yield return WaitForTask(resultTask, nameof(analyzer.AnalyzeAsync));
+            var result = resultTask.Result;
 
             Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
             Assert.That(runner.Arguments, Has.Some.Contains("log --all --numstat"));
-            var numstatLog = runner.Arguments.First(item => item.Contains("--numstat"));
+            var numstatLog = runner.Arguments.First(item => item.StartsWith("log --all --numstat", StringComparison.Ordinal));
             Assert.That(numstatLog, Does.Contain("--format=--TOKENFORGE-COMMIT--"));
             Assert.That(numstatLog, Does.Not.Contain("--format=format:"));
         }
 
-        [Test]
-        public void GitCommandRunnerReturnsPathNotFoundBeforeLaunchingGit()
+        [UnityTest]
+        public IEnumerator GitCommandRunnerReturnsPathNotFoundBeforeLaunchingGit()
         {
             var missing = Path.Combine(Path.GetTempPath(), "TokenForgeTests", Guid.NewGuid().ToString("N"), "missing");
 
-            var result = RunAsync(() => new SystemGitCommandRunner(TimeSpan.FromMilliseconds(100))
-                .RunAsync(missing, "rev-parse --show-toplevel", CancellationToken.None));
+            var resultTask = new SystemGitCommandRunner(TimeSpan.FromMilliseconds(100))
+                .RunAsync(missing, "rev-parse --show-toplevel", CancellationToken.None);
+            yield return WaitForTask(resultTask, nameof(SystemGitCommandRunner.RunAsync));
+            var result = resultTask.Result;
 
             Assert.IsFalse(result.IsSuccess);
             Assert.AreEqual("RepositoryFolderNotFound", result.ErrorCode);
@@ -120,41 +140,57 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(NativeDashboardAction.RunRepositoryAnalysis, request.Action);
         }
 
-        [Test]
-        public void CodexProviderConnectDetectAnalyzeDisconnectFlow()
+        [UnityTest]
+        public IEnumerator CodexProviderConnectDetectAnalyzeDisconnectFlow()
         {
             var fixture = CreateViewModelFixture(new SafeGitRunner(), CreateCodexLogDirectory());
 
-            var detect = RunAsync(() => fixture.ViewModel.DetectAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex));
+            var detectTask = fixture.ViewModel.DetectAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex);
+            yield return WaitForTask(detectTask, nameof(fixture.ViewModel.DetectAgentSourceForOnboardingAsync));
+            var detect = detectTask.Result;
             Assert.IsFalse(detect.IsSuccess);
             var source = fixture.ViewModel.Onboarding.AgentSources.First(item => item.SourceType == ConnectedAgentSourceType.Codex);
             Assert.AreEqual(AgentSourceSetupState.ManualImportRequired, source.State);
 
-            var choose = RunAsync(() => fixture.ViewModel.SelectManualAgentLogForOnboardingAsync(ConnectedAgentSourceType.Codex));
+            var chooseTask = fixture.ViewModel.SelectManualAgentLogForOnboardingAsync(ConnectedAgentSourceType.Codex);
+            yield return WaitForTask(chooseTask, nameof(fixture.ViewModel.SelectManualAgentLogForOnboardingAsync));
+            var choose = chooseTask.Result;
             Assert.IsTrue(choose.IsSuccess, choose.ErrorMessage);
             Assert.AreEqual(AgentSourceSetupState.ReadyToAnalyze, source.State);
 
-            var analyze = RunAsync(() => fixture.ViewModel.AnalyzeAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex));
-            var saved = RunAsync(() => fixture.SaveRepository.LoadAsync());
+            var analyzeTask = fixture.ViewModel.AnalyzeAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex);
+            yield return WaitForTask(analyzeTask, nameof(fixture.ViewModel.AnalyzeAgentSourceForOnboardingAsync));
+            var savedTask = fixture.SaveRepository.LoadAsync();
+            yield return WaitForTask(savedTask, nameof(fixture.SaveRepository.LoadAsync));
+            var analyze = analyzeTask.Result;
+            var saved = savedTask.Result;
             Assert.IsTrue(analyze.IsSuccess, analyze.ErrorMessage);
             Assert.IsNotNull(saved.PendingNativeActivityReview);
-            Assert.AreEqual("Codex", saved.PendingNativeActivityReview.SourceKind);
+            Assert.AreEqual("aiAgent", saved.PendingNativeActivityReview.SourceKind);
             Assert.AreEqual("CODEX", fixture.ViewModel.AgentFlow.PendingSessionForLocalOnlyApproval.SourceProvider);
 
-            var disconnect = RunAsync(() => fixture.ViewModel.DisconnectAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex));
-            var afterDisconnect = RunAsync(() => fixture.SaveRepository.LoadAsync());
+            var disconnectTask = fixture.ViewModel.DisconnectAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex);
+            yield return WaitForTask(disconnectTask, nameof(fixture.ViewModel.DisconnectAgentSourceForOnboardingAsync));
+            var afterDisconnectTask = fixture.SaveRepository.LoadAsync();
+            yield return WaitForTask(afterDisconnectTask, nameof(fixture.SaveRepository.LoadAsync));
+            var disconnect = disconnectTask.Result;
+            var afterDisconnect = afterDisconnectTask.Result;
             Assert.IsTrue(disconnect.IsSuccess, disconnect.ErrorMessage);
             Assert.IsFalse(source.Selected);
             Assert.IsFalse(afterDisconnect.ProviderSettings.Any(item => item.ProviderId == AgentProviderType.Codex.ToString()));
         }
 
-        [Test]
-        public void AgentAnalyzeWithoutVerifiedSourceDoesNotCreatePendingReview()
+        [UnityTest]
+        public IEnumerator AgentAnalyzeWithoutVerifiedSourceDoesNotCreatePendingReview()
         {
             var fixture = CreateViewModelFixture(new SafeGitRunner());
 
-            var analyze = RunAsync(() => fixture.ViewModel.AnalyzeAgentSourceForOnboardingAsync(ConnectedAgentSourceType.ClaudeCode));
-            var saved = RunAsync(() => fixture.SaveRepository.LoadAsync());
+            var analyzeTask = fixture.ViewModel.AnalyzeAgentSourceForOnboardingAsync(ConnectedAgentSourceType.ClaudeCode);
+            yield return WaitForTask(analyzeTask, nameof(fixture.ViewModel.AnalyzeAgentSourceForOnboardingAsync));
+            var savedTask = fixture.SaveRepository.LoadAsync();
+            yield return WaitForTask(savedTask, nameof(fixture.SaveRepository.LoadAsync));
+            var analyze = analyzeTask.Result;
+            var saved = savedTask.Result;
             var source = fixture.ViewModel.Onboarding.AgentSources.First(item => item.SourceType == ConnectedAgentSourceType.ClaudeCode);
 
             Assert.IsFalse(analyze.IsSuccess);
@@ -164,31 +200,37 @@ namespace TokenForge.Client.Tests
             Assert.IsFalse(source.Selected && source.State == AgentSourceSetupState.ReadyToAnalyze);
         }
 
-        [Test]
-        public void AutoDetectFindsCandidateButDoesNotConnectUntilApproved()
+        [UnityTest]
+        public IEnumerator AutoDetectFindsCandidateButDoesNotConnectUntilApproved()
         {
             var saveRepository = new SaveDataRepository(Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName()));
             var approvedRepository = new ApprovedLocationSettingsRepository(Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName()));
             var candidatePath = CreateCodexLogDirectory();
             var fixture = CreateViewModelFixture(new SafeGitRunner(), string.Empty, saveRepository, approvedRepository, providerType => new CandidateAgentSourceDetector(providerType, candidatePath));
 
-            var detect = RunAsync(() => fixture.ViewModel.DetectAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex));
+            var detectTask = fixture.ViewModel.DetectAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex);
+            yield return WaitForTask(detectTask, nameof(fixture.ViewModel.DetectAgentSourceForOnboardingAsync));
             var source = fixture.ViewModel.Onboarding.AgentSources.First(item => item.SourceType == ConnectedAgentSourceType.Codex);
-            var afterDetect = RunAsync(() => fixture.SaveRepository.LoadAsync());
+            var afterDetectTask = fixture.SaveRepository.LoadAsync();
+            yield return WaitForTask(afterDetectTask, nameof(fixture.SaveRepository.LoadAsync));
+            var detect = detectTask.Result;
+            var afterDetect = afterDetectTask.Result;
 
             Assert.IsTrue(detect.IsSuccess, detect.ErrorMessage);
             Assert.AreEqual(AgentSourceSetupState.LocalSourceDetected, source.State);
             Assert.IsFalse(source.Selected);
             Assert.IsFalse(afterDetect.ProviderSettings.First(item => item.ProviderId == "Codex").Selected);
 
-            var approve = RunAsync(() => fixture.ViewModel.ApproveDetectedAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex));
+            var approveTask = fixture.ViewModel.ApproveDetectedAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex);
+            yield return WaitForTask(approveTask, nameof(fixture.ViewModel.ApproveDetectedAgentSourceForOnboardingAsync));
+            var approve = approveTask.Result;
             Assert.IsTrue(approve.IsSuccess, approve.ErrorMessage);
             Assert.IsTrue(source.Selected);
             Assert.AreEqual(AgentSourceSetupState.ReadyToAnalyze, source.State);
         }
 
-        [Test]
-        public void RestoredProviderWithoutSourceHashIsNotConnectedOrReady()
+        [UnityTest]
+        public IEnumerator RestoredProviderWithoutSourceHashIsNotConnectedOrReady()
         {
             var saveRepository = new SaveDataRepository(Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName()));
             var approvedRepository = new ApprovedLocationSettingsRepository(Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName()));
@@ -201,10 +243,12 @@ namespace TokenForge.Client.Tests
                 ConnectionState = AgentSourceSetupState.ReadyToAnalyze.ToString(),
                 SafeLocationHash = string.Empty
             });
-            RunAsync(() => saveRepository.SaveAsync(saveData));
+            var saveTask = saveRepository.SaveAsync(saveData);
+            yield return WaitForTask(saveTask, nameof(saveRepository.SaveAsync));
             var fixture = CreateViewModelFixture(new SafeGitRunner(), string.Empty, saveRepository, approvedRepository);
 
-            RunAsync(() => fixture.ViewModel.RestoreLocalSelectionsFromApprovedLocationsAsync());
+            var restoreTask = fixture.ViewModel.RestoreLocalSelectionsFromApprovedLocationsAsync();
+            yield return WaitForTask(restoreTask, nameof(fixture.ViewModel.RestoreLocalSelectionsFromApprovedLocationsAsync));
             var source = fixture.ViewModel.Onboarding.AgentSources.First(item => item.SourceType == ConnectedAgentSourceType.ClaudeCode);
 
             Assert.IsFalse(source.Selected);
@@ -249,7 +293,8 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("connectAgentAction", nativeSource);
             StringAssert.Contains("runAgentAnalysis", nativeSource);
             StringAssert.Contains("connectRepository", nativeSource);
-            StringAssert.Contains("runRepositoryAnalysis", nativeSource);
+            StringAssert.Contains("Run Repository Analysis", nativeSource);
+            StringAssert.Contains("runAnalysis:", nativeSource);
             StringAssert.Contains("autoDetectAgent", nativeSource);
             StringAssert.Contains("chooseAgentFolder", nativeSource);
             StringAssert.Contains("saveGrowth", nativeSource);
@@ -281,12 +326,15 @@ namespace TokenForge.Client.Tests
             SerializerFreePrivacyDtoAssert.DoesNotContainForbiddenMembersOrValues(payload);
         }
 
-        [Test]
-        public void RepositoryAndAgentCombinedReviewDoesNotOverwrite()
+        [UnityTest]
+        public IEnumerator RepositoryAndAgentCombinedReviewDoesNotOverwrite()
         {
             var fixture = CreateViewModelFixture(new SafeGitRunner(), CreateCodexLogDirectory());
-            RunAsync(() => fixture.ViewModel.GitFlow.SelectLocalOnlyApprovedRepositoryPathAsyncForTest(fixture.RepositoryPath));
-            Assert.IsTrue(RunAsync(() => fixture.ViewModel.AnalyzeGitActivityAsync()).IsSuccess);
+            var selectTask = fixture.ViewModel.GitFlow.SelectLocalOnlyApprovedRepositoryPathAsyncForTest(fixture.RepositoryPath);
+            yield return WaitForTask(selectTask, "SelectLocalOnlyApprovedRepositoryPathAsyncForTest");
+            var analyzeGitTask = fixture.ViewModel.AnalyzeGitActivityAsync();
+            yield return WaitForTask(analyzeGitTask, nameof(fixture.ViewModel.AnalyzeGitActivityAsync));
+            Assert.IsTrue(analyzeGitTask.Result.IsSuccess);
             fixture.ViewModel.SelectedAgentProviderType = AgentProviderType.Codex;
             Assert.IsTrue(fixture.ViewModel.AgentFlow.SelectApprovedLogLocation(new AgentAnalysisInput
             {
@@ -295,9 +343,13 @@ namespace TokenForge.Client.Tests
                 SourceKind = AgentSourceKind.ManualFolder,
                 SafeSourceAlias = "Codex local activity"
             }).IsSuccess);
-            Assert.IsTrue(RunAsync(() => fixture.ViewModel.AnalyzeAgentActivityAsync()).IsSuccess);
+            var analyzeAgentTask = fixture.ViewModel.AnalyzeAgentActivityAsync();
+            yield return WaitForTask(analyzeAgentTask, nameof(fixture.ViewModel.AnalyzeAgentActivityAsync));
+            Assert.IsTrue(analyzeAgentTask.Result.IsSuccess);
 
-            var combined = RunAsync(() => fixture.ViewModel.CombinePendingNativeReviewsFromFlowsAsync());
+            var combinedTask = fixture.ViewModel.CombinePendingNativeReviewsFromFlowsAsync();
+            yield return WaitForTask(combinedTask, nameof(fixture.ViewModel.CombinePendingNativeReviewsFromFlowsAsync));
+            var combined = combinedTask.Result;
 
             Assert.IsTrue(combined.IsSuccess, combined.ErrorMessage);
             Assert.AreEqual(2, combined.Value.SafeSessions.Count);
@@ -305,18 +357,27 @@ namespace TokenForge.Client.Tests
             Assert.That(combined.Value.SafeSessions.Select(session => session.SourceProvider), Does.Contain("CODEX"));
         }
 
-        [Test]
-        public void DisconnectAgentClearsStateAndPersistence()
+        [UnityTest]
+        public IEnumerator DisconnectAgentClearsStateAndPersistence()
         {
             var fixture = CreateViewModelFixture(new SafeGitRunner(), CreateCodexLogDirectory());
-            Assert.IsTrue(RunAsync(() => fixture.ViewModel.SelectManualAgentLogForOnboardingAsync(ConnectedAgentSourceType.Codex)).IsSuccess);
-            var before = RunAsync(() => fixture.SaveRepository.LoadAsync());
+            var selectTask = fixture.ViewModel.SelectManualAgentLogForOnboardingAsync(ConnectedAgentSourceType.Codex);
+            yield return WaitForTask(selectTask, nameof(fixture.ViewModel.SelectManualAgentLogForOnboardingAsync));
+            Assert.IsTrue(selectTask.Result.IsSuccess);
+            var beforeTask = fixture.SaveRepository.LoadAsync();
+            yield return WaitForTask(beforeTask, nameof(fixture.SaveRepository.LoadAsync));
+            var before = beforeTask.Result;
             Assert.That(before.ProviderSettings, Has.Some.Matches<ProviderSettings>(item => item.ProviderId == "Codex" && item.Selected));
 
-            var disconnect = RunAsync(() => fixture.ViewModel.DisconnectAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex));
-            var after = RunAsync(() => fixture.SaveRepository.LoadAsync());
+            var disconnectTask = fixture.ViewModel.DisconnectAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex);
+            yield return WaitForTask(disconnectTask, nameof(fixture.ViewModel.DisconnectAgentSourceForOnboardingAsync));
+            var afterTask = fixture.SaveRepository.LoadAsync();
+            yield return WaitForTask(afterTask, nameof(fixture.SaveRepository.LoadAsync));
+            var disconnect = disconnectTask.Result;
+            var after = afterTask.Result;
             var reloaded = CreateViewModelFixture(new SafeGitRunner(), fixture.AgentLogPath, fixture.SaveRepository, fixture.ApprovedLocationRepository);
-            RunAsync(() => reloaded.ViewModel.RestoreLocalSelectionsFromApprovedLocationsAsync());
+            var restoreTask = reloaded.ViewModel.RestoreLocalSelectionsFromApprovedLocationsAsync();
+            yield return WaitForTask(restoreTask, nameof(reloaded.ViewModel.RestoreLocalSelectionsFromApprovedLocationsAsync));
             var source = reloaded.ViewModel.Onboarding.AgentSources.First(item => item.SourceType == ConnectedAgentSourceType.Codex);
 
             Assert.IsTrue(disconnect.IsSuccess, disconnect.ErrorMessage);
@@ -324,20 +385,28 @@ namespace TokenForge.Client.Tests
             Assert.IsFalse(source.Selected);
         }
 
-        [Test]
-        public void AddRepositoryPersistsAcrossDashboardNavigationAndRelaunchRestore()
+        [UnityTest]
+        public IEnumerator AddRepositoryPersistsAcrossDashboardNavigationAndRelaunchRestore()
         {
             var saveRepository = new SaveDataRepository(Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName()));
             var approvedRepository = new ApprovedLocationSettingsRepository(Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName()));
             var fixture = CreateViewModelFixture(new SafeGitRunner(), string.Empty, saveRepository, approvedRepository);
 
-            var add = RunAsync(() => fixture.ViewModel.SelectLocalGitRepositoryForOnboardingAsync());
-            RunAsync(() => fixture.ViewModel.RefreshDashboardAsync());
-            var afterHomeNavigation = RunAsync(() => saveRepository.LoadAsync());
+            var addTask = fixture.ViewModel.SelectLocalGitRepositoryForOnboardingAsync();
+            yield return WaitForTask(addTask, nameof(fixture.ViewModel.SelectLocalGitRepositoryForOnboardingAsync));
+            var refreshTask = fixture.ViewModel.RefreshDashboardAsync();
+            yield return WaitForTask(refreshTask, nameof(fixture.ViewModel.RefreshDashboardAsync));
+            var afterHomeNavigationTask = saveRepository.LoadAsync();
+            yield return WaitForTask(afterHomeNavigationTask, nameof(saveRepository.LoadAsync));
+            var add = addTask.Result;
+            var afterHomeNavigation = afterHomeNavigationTask.Result;
             var activeRepository = afterHomeNavigation.SelectedRepositoryHash;
             var reloaded = CreateViewModelFixture(new SafeGitRunner(), string.Empty, saveRepository, approvedRepository);
-            RunAsync(() => reloaded.ViewModel.RefreshDashboardAsync());
-            var afterRelaunch = RunAsync(() => saveRepository.LoadAsync());
+            var relaunchRefreshTask = reloaded.ViewModel.RefreshDashboardAsync();
+            yield return WaitForTask(relaunchRefreshTask, nameof(reloaded.ViewModel.RefreshDashboardAsync));
+            var afterRelaunchTask = saveRepository.LoadAsync();
+            yield return WaitForTask(afterRelaunchTask, nameof(saveRepository.LoadAsync));
+            var afterRelaunch = afterRelaunchTask.Result;
 
             Assert.IsTrue(add.IsSuccess, add.ErrorMessage);
             Assert.IsNotEmpty(activeRepository);
@@ -436,14 +505,24 @@ namespace TokenForge.Client.Tests
             return directory;
         }
 
-        private static void RunAsync(Func<Task> operation)
+        private static IEnumerator WaitForTask(Task task, string operationName)
         {
-            operation().GetAwaiter().GetResult();
-        }
+            var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
+            while (!task.IsCompleted && DateTimeOffset.UtcNow < deadline)
+            {
+                yield return null;
+            }
 
-        private static T RunAsync<T>(Func<Task<T>> operation)
-        {
-            return operation().GetAwaiter().GetResult();
+            Assert.IsTrue(task.IsCompleted, operationName + " timed out.");
+            if (task.IsFaulted)
+            {
+                throw task.Exception?.GetBaseException() ?? task.Exception;
+            }
+
+            if (task.IsCanceled)
+            {
+                Assert.Fail(operationName + " was canceled.");
+            }
         }
 
         private sealed class GitFixture

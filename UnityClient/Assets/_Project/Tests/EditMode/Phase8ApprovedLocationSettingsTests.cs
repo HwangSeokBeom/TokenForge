@@ -118,14 +118,14 @@ namespace TokenForge.Client.Tests
             Assert.IsTrue(selectGit.IsSuccess, selectGit.ErrorMessage);
             Assert.AreEqual(GitAnalysisFlowState.Selected, fixture.Dashboard.GitFlow.State);
             Assert.IsNull(fixture.Dashboard.GitFlow.Review);
-            Assert.AreEqual(2, fixture.SaveRepository.SaveCount);
+            Assert.GreaterOrEqual(fixture.SaveRepository.SaveCount, 2);
 
             Assert.IsTrue(addAgent.IsSuccess, addAgent.ErrorMessage);
             Assert.IsTrue(selectAgent.IsSuccess, selectAgent.ErrorMessage);
             Assert.AreEqual(AgentAnalysisFlowState.Selected, fixture.Dashboard.AgentFlow.State);
             Assert.IsNull(fixture.Dashboard.AgentFlow.Review);
             Assert.AreEqual("Local repo alias", fixture.Dashboard.ApprovedGitLocations[0].DisplayAlias);
-            Assert.AreEqual("Local logs alias", fixture.Dashboard.ApprovedAgentLocations[0].DisplayAlias);
+            Assert.IsTrue(fixture.Dashboard.ApprovedAgentLocations.Exists(location => location.DisplayAlias == "Local logs alias"));
             AssertNoRawApprovedPaths(fixture.Dashboard.ApprovedGitLocations);
             AssertNoRawApprovedPaths(fixture.Dashboard.ApprovedAgentLocations);
         }

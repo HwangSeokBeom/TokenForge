@@ -384,8 +384,14 @@ namespace TokenForge.Client.Platform
                 case "onboarding.open":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.Onboarding, rawAction, value);
                     return true;
-                case "onboarding.done":
+                case "onboarding.step":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.SetOnboardingStep, rawAction, value);
+                    return true;
                 case "onboarding.skip":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.SkipOnboarding, rawAction, value);
+                    return true;
+                case "onboarding.finish":
+                case "onboarding.done":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.CompleteOnboarding, rawAction, value);
                     return true;
                 case "onboarding.reset":

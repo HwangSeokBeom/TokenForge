@@ -49,6 +49,8 @@ namespace TokenForge.Client.Platform
         TokenShop,
         Wardrobe,
         Onboarding,
+        SetOnboardingStep,
+        SkipOnboarding,
         CompleteOnboarding,
         ResetOnboarding,
         PurchaseTokenShopItem,
@@ -174,6 +176,8 @@ namespace TokenForge.Client.Platform
         public string appName = "TokenForge";
         public string connection = "local";
         public string sync = "optional";
+        public string persistentStatusBarIdentifier = "TokenForge.PersistentStatusBar";
+        public string persistentStatusBarAccessibilityLabel = "TokenForge persistent app status bar";
         public NativeCompanionState companion = NativeCompanionState.CreateDefault();
         public NativeRepositoryState repository = NativeRepositoryState.CreateDefault();
         public NativeCodexAgentState codexAgent = NativeCodexAgentState.CreateDefault();
@@ -530,9 +534,14 @@ namespace TokenForge.Client.Platform
     public sealed class NativeOnboardingState
     {
         public bool firstRunCompleted;
-        public string currentStep = "welcome";
-        public string statusText = "Learn how TokenForge turns local Git and AI activity into cosmetic companion growth.";
-        public string[] steps = new[] { "Welcome", "Repository Companion", "Connect Repository", "Connect AI Agents", "Growth System", "Token Shop", "Wardrobe", "Desktop Companion", "Privacy", "Finish" };
+        public bool dismissedForNow;
+        public string currentStep = "step_1";
+        public int currentStepIndex;
+        public int stepCount = 10;
+        public bool canGoBack;
+        public bool canGoNext = true;
+        public string statusText = "Start the game-style guide: repositories grow into zodiac companions, earn coins, and unlock cosmetics.";
+        public string[] steps = new[] { "Turn repositories into companions", "Analyze local Git activity", "Grow through stages", "Earn tokens", "Customize your mascot", "Choose a zodiac identity", "Connect AI agents", "Desktop companion mode", "Privacy-first by design", "Ready to begin" };
         public string[] zodiacIds = new[] { "rat", "ox", "tiger", "rabbit", "dragon", "snake", "horse", "goat", "monkey", "rooster", "dog", "pig" };
 
         public static NativeOnboardingState CreateDefault()

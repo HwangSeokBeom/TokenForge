@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -13,6 +14,7 @@ using TokenForge.Client.Persistence;
 using TokenForge.Client.Privacy;
 using TokenForge.Client.Sync;
 using TokenForge.Client.UI;
+using UnityEngine.TestTools;
 
 namespace TokenForge.Client.Tests
 {
@@ -241,8 +243,8 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(1, fixture.Sync.PushThenPullCount);
         }
 
-        [Test]
-        public void AnalyzeAgentSourceForOnboardingCreatesPendingNativeReview()
+        [UnityTest]
+        public IEnumerator AnalyzeAgentSourceForOnboardingCreatesPendingNativeReview()
         {
             var directory = Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName());
             var repository = new SaveDataRepository(directory);
@@ -267,8 +269,13 @@ namespace TokenForge.Client.Tests
             source.SafeLocationHash = "codex-safe-location";
             agentFlow.SelectApprovedLogLocation(Input(AgentProviderType.Codex));
 
-            var result = RunAsync(() => viewModel.AnalyzeAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex));
-            var loaded = repository.LoadAsync().GetAwaiter().GetResult();
+            var resultTask = viewModel.AnalyzeAgentSourceForOnboardingAsync(ConnectedAgentSourceType.Codex);
+            yield return WaitForTask(resultTask, nameof(AnalyzeAgentSourceForOnboardingCreatesPendingNativeReview));
+            var result = resultTask.Result;
+
+            var loadTask = repository.LoadAsync();
+            yield return WaitForTask(loadTask, nameof(AnalyzeAgentSourceForOnboardingCreatesPendingNativeReview) + ".load");
+            var loaded = loadTask.Result;
 
             Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
             Assert.IsNotNull(loaded.PendingNativeActivityReview);
@@ -486,6 +493,26 @@ namespace TokenForge.Client.Tests
         private static T RunAsync<T>(Func<Task<T>> operation)
         {
             return Task.Run(operation).GetAwaiter().GetResult();
+        }
+
+        private static IEnumerator WaitForTask(Task task, string operationName)
+        {
+            var deadline = DateTimeOffset.UtcNow.AddSeconds(10);
+            while (!task.IsCompleted && DateTimeOffset.UtcNow < deadline)
+            {
+                yield return null;
+            }
+
+            Assert.IsTrue(task.IsCompleted, operationName + " timed out.");
+            if (task.IsFaulted)
+            {
+                throw task.Exception?.GetBaseException() ?? task.Exception;
+            }
+
+            if (task.IsCanceled)
+            {
+                Assert.Fail(operationName + " was canceled.");
+            }
         }
 
         private sealed class FakeReader : IAgentLogSourceReader

@@ -704,7 +704,7 @@ namespace TokenForge.Client.Domain
         public bool EquippedByDefault { get; set; }
         public List<string> ExclusiveItemIds { get; set; } = new List<string>();
         public List<string> CompatibleCommonItemIds { get; set; } = new List<string>();
-        public string EvolutionStageMapping { get; set; } = "egg,hatchling,child,teen,adult,legendary";
+        public string EvolutionStageMapping { get; set; } = "egg,baby,child,teen,young_adult,adult";
         public List<ZodiacEvolutionStageDefinition> Stages { get; set; } = new List<ZodiacEvolutionStageDefinition>();
     }
 
@@ -718,6 +718,10 @@ namespace TokenForge.Client.Domain
         public string XpRange { get; set; } = string.Empty;
         public string ArtVariantKey { get; set; } = string.Empty;
         public string SilhouetteTrait { get; set; } = string.Empty;
+        public string PersonalityTrait { get; set; } = string.Empty;
+        public string MotionProfileKey { get; set; } = string.Empty;
+        public string ShopPreviewKey { get; set; } = string.Empty;
+        public string WardrobePreviewKey { get; set; } = string.Empty;
         public string UnlockRequirement { get; set; } = string.Empty;
     }
 
@@ -725,7 +729,10 @@ namespace TokenForge.Client.Domain
     public sealed class OnboardingPreferences
     {
         public bool FirstRunOnboardingCompleted { get; set; }
+        public bool FirstRunOnboardingDismissedForNow { get; set; }
+        public int CurrentStepIndex { get; set; }
         public DateTimeOffset? CompletedAtUtc { get; set; }
+        public DateTimeOffset? DismissedAtUtc { get; set; }
         public DateTimeOffset? LastOpenedAtUtc { get; set; }
     }
 

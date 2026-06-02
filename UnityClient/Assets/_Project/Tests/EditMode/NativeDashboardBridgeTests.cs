@@ -132,8 +132,15 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(NativeDashboardAction.TokenShop, tokenShop.Action);
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("onboarding.open", out var onboarding));
             Assert.AreEqual(NativeDashboardAction.Onboarding, onboarding.Action);
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("onboarding.finish", out var onboardingFinish));
+            Assert.AreEqual(NativeDashboardAction.CompleteOnboarding, onboardingFinish.Action);
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("onboarding.done", out var onboardingDone));
             Assert.AreEqual(NativeDashboardAction.CompleteOnboarding, onboardingDone.Action);
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("onboarding.skip", out var onboardingSkip));
+            Assert.AreEqual(NativeDashboardAction.SkipOnboarding, onboardingSkip.Action);
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("onboarding.step:3", out var onboardingStep));
+            Assert.AreEqual(NativeDashboardAction.SetOnboardingStep, onboardingStep.Action);
+            Assert.AreEqual("3", onboardingStep.Value);
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("wardrobe.open", out var wardrobe));
             Assert.AreEqual(NativeDashboardAction.Wardrobe, wardrobe.Action);
 
@@ -189,6 +196,7 @@ namespace TokenForge.Client.Tests
                      {
                          "dashboard.close",
                          "openSettings",
+                         "onboarding.finish",
                          "onboarding.done",
                          "shop.open",
                          "wardrobe.open",
@@ -357,6 +365,59 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual("orange_cat", CompanionSkinCatalog.Normalize("unknown_skin"));
         }
 
+        [UnityTest]
+        public IEnumerator NativeOnboardingPreferencesPersistStepSkipAndFinish()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "TokenForgeTests", Path.GetRandomFileName());
+            var saveRepository = new SaveDataRepository(directory);
+            var viewModel = CreateNativeReviewViewModel(saveRepository);
+
+            var initial = RunAsync(() => saveRepository.LoadAsync());
+            Assert.IsFalse(initial.OnboardingPreferences.FirstRunOnboardingCompleted);
+            Assert.IsFalse(initial.OnboardingPreferences.FirstRunOnboardingDismissedForNow);
+            Assert.AreEqual(0, initial.OnboardingPreferences.CurrentStepIndex);
+
+            Result stepResult = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => viewModel.SetFirstRunOnboardingStepAsync(4, cancellationToken),
+                "onboarding step persistence",
+                10f,
+                result => stepResult = result);
+            Assert.IsTrue(stepResult.IsSuccess);
+
+            var afterStep = RunAsync(() => new SaveDataRepository(directory).LoadAsync());
+            Assert.AreEqual(4, afterStep.OnboardingPreferences.CurrentStepIndex);
+            Assert.IsFalse(afterStep.OnboardingPreferences.FirstRunOnboardingCompleted);
+
+            Result skipResult = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => viewModel.DismissFirstRunOnboardingForNowAsync(cancellationToken),
+                "onboarding skip persistence",
+                10f,
+                result => skipResult = result);
+            Assert.IsTrue(skipResult.IsSuccess);
+
+            var afterSkip = RunAsync(() => new SaveDataRepository(directory).LoadAsync());
+            Assert.IsFalse(afterSkip.OnboardingPreferences.FirstRunOnboardingCompleted);
+            Assert.IsTrue(afterSkip.OnboardingPreferences.FirstRunOnboardingDismissedForNow);
+            Assert.IsNotNull(afterSkip.OnboardingPreferences.DismissedAtUtc);
+
+            Result finishResult = null;
+            yield return RunTaskWithTimeout(
+                cancellationToken => viewModel.CompleteFirstRunOnboardingAsync(cancellationToken),
+                "onboarding finish persistence",
+                10f,
+                result => finishResult = result);
+            Assert.IsTrue(finishResult.IsSuccess);
+
+            var afterFinish = RunAsync(() => new SaveDataRepository(directory).LoadAsync());
+            Assert.IsTrue(afterFinish.OnboardingPreferences.FirstRunOnboardingCompleted);
+            Assert.IsFalse(afterFinish.OnboardingPreferences.FirstRunOnboardingDismissedForNow);
+            Assert.AreEqual(0, afterFinish.OnboardingPreferences.CurrentStepIndex);
+            Assert.IsNotNull(afterFinish.OnboardingPreferences.CompletedAtUtc);
+            Assert.IsNull(afterFinish.OnboardingPreferences.DismissedAtUtc);
+        }
+
         [Test]
         public void TryParseAction_RejectsUnknownActionWithoutThrowing()
         {
@@ -380,6 +441,11 @@ namespace TokenForge.Client.Tests
 
             StringAssert.Contains("appTitle", json);
             StringAssert.Contains("syncStatusText", json);
+            StringAssert.Contains("persistentStatusBarIdentifier", json);
+            StringAssert.Contains("TokenForge.PersistentStatusBar", json);
+            StringAssert.Contains("dismissedForNow", json);
+            StringAssert.Contains("currentStepIndex", json);
+            StringAssert.Contains("canGoNext", json);
             StringAssert.Contains("companionVisible", json);
             StringAssert.Contains("repository", json);
             StringAssert.Contains("agentProviders", json);
@@ -403,6 +469,75 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("lockedAgentReason", json);
             StringAssert.Contains("AI Agents: 0 connected", json);
             Assert.IsFalse(json.Contains("Cdx 0%"));
+        }
+
+        [Test]
+        public void NativeDashboardRendererKeepsPersistentStatusBarOutsideTabContent()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("buildPersistentShellStatusBar", source);
+            StringAssert.Contains("TokenForge.PersistentStatusBar", source);
+            StringAssert.Contains("TokenForge persistent app status bar", source);
+            StringAssert.Contains("[rightPane addArrangedSubview:[self buildPersistentShellStatusBar]]", source);
+            StringAssert.Contains("verifyPersistentStatusBarForContext", source);
+            StringAssert.Contains("[PersistentStatusBar][MISSING]", source);
+            StringAssert.Contains("[PersistentStatusBar][REPAIR]", source);
+            StringAssert.Contains("parentChain", source);
+            StringAssert.Contains("insideScrollView", source);
+            StringAssert.Contains("insideTabContent", source);
+            StringAssert.Contains("repairCount", source);
+            StringAssert.Contains("TokenForge.DashboardTabScrollView", source);
+            StringAssert.Contains("TokenForge.DashboardTabContent", source);
+            StringAssert.Contains("repositoryProjectionUpdate", source);
+            StringAssert.Contains("tabSwitch:", source);
+            StringAssert.Contains("onboardingStep:", source);
+            StringAssert.Contains("persistent-status-dashboard-action", source);
+            StringAssert.Contains("persistent-status-overlay-action", source);
+            StringAssert.Contains("persistent-status-settings-action", source);
+            StringAssert.Contains("Overlay ·", source);
+        }
+
+        [Test]
+        public void NativeOnboardingGuideContainsAppWideFlowSectionsAndControls()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+            var modelJson = NativeDashboardState.CreateDefault().ToJson();
+
+            foreach (var section in new[]
+                     {
+                         "Turn repositories into companions",
+                         "Analyze local Git activity",
+                         "Grow through stages",
+                         "Earn tokens",
+                         "Customize your mascot",
+                         "Choose a zodiac identity",
+                         "Connect AI agents",
+                         "Desktop companion mode",
+                         "Privacy-first by design",
+                         "Ready to begin"
+                     })
+            {
+                StringAssert.Contains(section, source + modelJson);
+            }
+
+            StringAssert.Contains("TokenForge.OnboardingGuide", source);
+            StringAssert.Contains("TokenForgeOnboardingVisualView", source);
+            StringAssert.Contains("Step %ld of %ld", source);
+            StringAssert.Contains("Back", source);
+            StringAssert.Contains("Next", source);
+            StringAssert.Contains("Skip for now", source);
+            StringAssert.Contains("Finish", source);
+            StringAssert.Contains("Reset Onboarding", source);
+            StringAssert.Contains("appWideGuide=true", source);
+            StringAssert.Contains("gameTutorial=true", source);
+            StringAssert.Contains("denseDocumentation=false", source);
+            StringAssert.Contains("[ZodiacPreview][PIXEL_ART]", source);
+            StringAssert.Contains("stageBased=true", source);
+            StringAssert.Contains("onboarding.step:", source);
+            StringAssert.Contains("onboarding.skip", source);
+            StringAssert.Contains("onboarding.finish", source);
+            StringAssert.Contains("dismissedForNow", modelJson);
         }
 
         [Test]
@@ -1337,7 +1472,7 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("shop-target-repository", source);
             StringAssert.Contains("shop-target-ai-agents", source);
             StringAssert.Contains("Onboarding", source);
-            StringAssert.Contains("onboarding.done", source);
+            StringAssert.Contains("onboarding.finish", source);
             StringAssert.Contains("onboarding.reset", source);
             StringAssert.Contains("Desktop Companion", source);
             StringAssert.Contains("Connect AI Agents", source);

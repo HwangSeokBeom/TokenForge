@@ -32,13 +32,13 @@ namespace TokenForge.Client.Tests
         public void ConnectingRepositoryCreatesProfileWithHashAndSafeAlias()
         {
             var saveData = SaveData.CreateDefault();
-            var repo = CreateGitRepository("TokenForgeCoreServer");
+            var repo = CreateGitRepository("CoreServer");
 
             var result = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repo);
 
             Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
             Assert.IsNotEmpty(result.Value.RepositoryHash);
-            Assert.AreEqual("TokenForgeCoreServer", result.Value.SafeRepositoryAlias);
+            Assert.AreEqual("CoreServer", result.Value.SafeRepositoryAlias);
             Assert.AreEqual(result.Value.RepositoryHash, saveData.SelectedRepositoryHash);
             Assert.IsFalse(result.Value.SafeRepositoryAlias.Contains(repo));
             Assert.IsTrue(new PrivacySanitizer().ValidateSafeSaveData(saveData).IsSuccess);
@@ -231,6 +231,31 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(1, saveData.RepositoryCompanionProfiles.Count);
             Assert.AreEqual(CompanionStage.Child, restored.CompanionState.Stage);
             Assert.AreEqual(4, restored.CompanionState.Level);
+            Assert.Greater(restored.CompanionState.CurrentXp, 0);
+        }
+
+        [Test]
+        public void ZodiacMetadataRefreshDoesNotOverwriteExistingRepositoryProgressWithDefaultEgg()
+        {
+            var saveData = SaveData.CreateDefault();
+            var repository = CreateGitRepository("TokenForgeProgress");
+            var existing = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repository).Value;
+            existing.CompanionState = CompanionProgressionRules.Normalize(new CompanionState
+            {
+                Stage = CompanionStage.Teen,
+                Level = 8,
+                CurrentXp = 900,
+                TotalXp = 3600,
+                TotalLifetimeXp = 3600
+            });
+
+            var zodiacs = RepositoryCompanionProfileService.GetZodiacCompanionTypes();
+            var restored = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repository).Value;
+
+            Assert.AreEqual(12, zodiacs.Count);
+            Assert.AreEqual(CompanionStage.Teen, restored.CompanionState.Stage);
+            Assert.AreEqual(8, restored.CompanionState.Level);
+            Assert.AreEqual(3600, restored.CompanionState.TotalLifetimeXp);
             Assert.Greater(restored.CompanionState.CurrentXp, 0);
         }
 
@@ -532,10 +557,19 @@ namespace TokenForge.Client.Tests
                 Assert.IsFalse(string.IsNullOrWhiteSpace(zodiac.PlayStyleHint), zodiac.Id);
                 Assert.IsFalse(string.IsNullOrWhiteSpace(zodiac.SilhouetteHint), zodiac.Id);
                 Assert.AreEqual(6, zodiac.Stages.Count, zodiac.Id);
-                CollectionAssert.AreEqual(new[] { "egg", "hatchling", "child", "teen", "adult", "legendary" }, zodiac.Stages.Select(stage => stage.StageId).ToArray(), zodiac.Id);
-                Assert.IsTrue(zodiac.Stages.All(stage => !string.IsNullOrWhiteSpace(stage.ArtVariantKey)), zodiac.Id);
+                CollectionAssert.AreEqual(new[] { "egg", "baby", "child", "teen", "young_adult", "adult" }, zodiac.Stages.Select(stage => stage.StageId).ToArray(), zodiac.Id);
+                StringAssert.Contains("young_adult:zodiac_" + zodiac.Id + "_young_adult", zodiac.EvolutionStageMapping);
+                Assert.IsTrue(zodiac.Stages.All(stage => stage.ArtVariantKey == "zodiac_" + zodiac.Id + "_" + stage.StageId), zodiac.Id);
                 Assert.IsTrue(zodiac.Stages.All(stage => !string.IsNullOrWhiteSpace(stage.LevelRange)), zodiac.Id);
                 Assert.IsTrue(zodiac.Stages.All(stage => !string.IsNullOrWhiteSpace(stage.SilhouetteTrait)), zodiac.Id);
+                Assert.IsTrue(zodiac.Stages.All(stage => !string.IsNullOrWhiteSpace(stage.PersonalityTrait)), zodiac.Id);
+                Assert.IsTrue(zodiac.Stages.All(stage => stage.MotionProfileKey == stage.ArtVariantKey + "_motion"), zodiac.Id);
+                Assert.IsTrue(zodiac.Stages.All(stage => stage.ShopPreviewKey == stage.ArtVariantKey), zodiac.Id);
+                Assert.IsTrue(zodiac.Stages.All(stage => stage.WardrobePreviewKey == stage.ArtVariantKey + "_wardrobe"), zodiac.Id);
+                Assert.AreEqual("유년기", zodiac.Stages.Single(stage => stage.StageId == "baby").KoreanStageName, zodiac.Id);
+                Assert.AreEqual("청소년기", zodiac.Stages.Single(stage => stage.StageId == "teen").KoreanStageName, zodiac.Id);
+                Assert.AreEqual("성숙기", zodiac.Stages.Single(stage => stage.StageId == "young_adult").KoreanStageName, zodiac.Id);
+                Assert.AreEqual("성체", zodiac.Stages.Single(stage => stage.StageId == "adult").KoreanStageName, zodiac.Id);
             }
         }
 
