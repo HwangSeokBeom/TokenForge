@@ -675,12 +675,6 @@ namespace TokenForge.Client
             state.isLocalMode = true;
             state.syncStatusText = state.sync == "connected" ? "Safe sync connected" : "Optional sync";
             var onboardingPreferences = projectionSaveData?.OnboardingPreferences ?? new OnboardingPreferences();
-            if (!onboardingPreferences.FirstRunOnboardingCompleted &&
-                !onboardingPreferences.FirstRunOnboardingDismissedForNow &&
-                string.Equals(nativeSelectedNavItem, "dashboard", StringComparison.Ordinal))
-            {
-                nativeSelectedNavItem = "onboarding";
-            }
             state.selectedNavItem = string.IsNullOrWhiteSpace(nativeSelectedNavItem) ? "dashboard" : nativeSelectedNavItem;
             state.primaryActionEnabled = true;
             state.isAnalysisRunning = nativeAnalysisInProgress;
@@ -759,7 +753,9 @@ namespace TokenForge.Client
             state.hasActiveRepository = repositoryConnected;
             state.repository.id = repositoryConnected ? dashboard.CurrentRepositoryHash ?? string.Empty : string.Empty;
             state.activeRepositoryId = state.repository.id;
-            state.repository.name = repositoryConnected ? SafeNativeText(dashboard.CurrentRepositoryAlias, "Repository") : string.Empty;
+            var activeRepositoryDisplay = connectedRepositories.FirstOrDefault(item => string.Equals(item.RepositoryHash, state.repository.id, StringComparison.Ordinal));
+            state.repository.name = repositoryConnected ? SafeNativeText(NativeRepositoryDisplayName(activeRepositoryDisplay), "Repository") : string.Empty;
+            state.repository.folderName = repositoryConnected ? SafeNativeText(activeRepositoryDisplay?.LocalFolderName, string.Empty) : string.Empty;
             state.repository.status = repositoryConnected ? "active" : "not_selected";
             state.repositoryStatus = state.repository.status;
             state.repository.connectedCount = connectedRepositories.Count;
@@ -768,6 +764,47 @@ namespace TokenForge.Client
             state.repository.hasValidSource = repositoryConnected;
             state.repository.canAnalyze = repositoryConnected && !nativeAnalysisInProgress;
             state.repository.analyzeDisabledReason = RepositoryAnalyzeDisabledReason(repositoryConnected, nativeAnalysisInProgress);
+            if (repositoryConnected)
+            {
+                Debug.Log("INFO [RepositoryIdentity][APPROVED_FOLDER] repositoryId=" + SafeNativeText(state.repository.id, "none") +
+                          " folderName=" + SafeNativeText(state.repository.folderName, "unknown") +
+                          " displayName=" + SafeNativeText(state.repository.name, "unknown"));
+                Debug.Log("INFO [RepositoryIdentity][DISPLAY_NAME] repositoryId=" + SafeNativeText(state.repository.id, "none") +
+                          " displayName=" + SafeNativeText(state.repository.name, "unknown"));
+            }
+            var activeRepositoryRuns = NativeRunsForRepository(state.repository.id).ToList();
+            var activeRepositoryHasSavedRun = activeRepositoryRuns.Any(IsSavedNativeRun);
+            var crossRepositoryRunCount = (approvedActivityAnalysis?.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>())
+                .Count(run => run != null &&
+                              !string.IsNullOrWhiteSpace(run.RepositoryId) &&
+                              !string.Equals(run.RepositoryId, state.repository.id, StringComparison.Ordinal));
+            Debug.Log("INFO [GrowthSummary][SELECTED_REPOSITORY] repositoryId=" + SafeNativeText(state.repository.id, "none") +
+                      " repositoryName=" + SafeNativeText(state.repository.name, "none") +
+                      " approved=" + repositoryConnected +
+                      " scopedRunCount=" + activeRepositoryRuns.Count +
+                      " savedRunCount=" + activeRepositoryRuns.Count(IsSavedNativeRun));
+            if (repositoryConnected && activeRepositoryRuns.Count == 0)
+            {
+                Debug.Log("INFO [GrowthSummary][NO_RUN_FOR_REPOSITORY] repositoryId=" + SafeNativeText(state.repository.id, "none"));
+            }
+            if (crossRepositoryRunCount > 0)
+            {
+                Debug.Log("INFO [GrowthSummary][CROSS_REPO_SUPPRESSED] selectedRepositoryId=" + SafeNativeText(state.repository.id, "none") +
+                          " suppressedRunCount=" + crossRepositoryRunCount);
+            }
+            state.lastRunSummary = repositoryConnected
+                ? SafeNativeText(activeRepositoryRuns.FirstOrDefault(IsSavedNativeRun)?.SafeSummary, "No analysis yet")
+                : "Connect a repository to start tracking Git growth.";
+            if (repositoryConnected && activeRepositoryHasSavedRun)
+            {
+                var displayRun = activeRepositoryRuns.FirstOrDefault(IsSavedNativeRun);
+                Debug.Log("INFO [GrowthSummary][DISPLAY_RUN] repositoryId=" + SafeNativeText(displayRun?.RepositoryId, "none") +
+                          " repositoryAlias=" + SafeNativeText(displayRun?.RepositoryAlias, state.repository.name) +
+                          " scope=" + SafeNativeText(displayRun?.AnalysisScope, "unknown") +
+                          " commitRange=" + SafeNativeText(displayRun?.CommitRange, "unknown"));
+                Debug.Log("INFO [GrowthSummary][RUN_SCOPE] repositoryId=" + SafeNativeText(displayRun?.RepositoryId, "none") +
+                          " scope=" + SafeNativeText(displayRun?.AnalysisScope, "unknown"));
+            }
             state.agentProviders = BuildNativeAgentProviderItems();
             state.codexAgent.connected = codexConnected;
             state.codexAgent.status = AgentCodexStatus();
@@ -792,19 +829,21 @@ namespace TokenForge.Client
             state.activity.debug = Math.Max(0, dashboard.Debug);
             state.activity.design = Math.Max(0, dashboard.Design);
             state.activity.sync = Math.Max(0, dashboard.Sync);
-            state.activity.recentRunsSummary = NativeRecentRunsSummary(dashboard.HasSavedRun, dashboard.ActivityLogSummary);
-            state.activity.savedReviewsSummary = SavedGrowthHistorySummary();
+            state.activity.recentRunsSummary = activeRepositoryRuns.Count > 0
+                ? SafeNativeText(activeRepositoryRuns[0].SafeSummary, activeRepositoryRuns[0].Status)
+                : (repositoryConnected ? "No analysis yet" : "No repository activity yet");
+            state.activity.savedReviewsSummary = SavedGrowthHistorySummary(state.repository.id);
             state.activity.repositoryActivitySummary = repositoryConnected
-                ? RepositoryActivitySummary()
+                ? RepositoryActivitySummary(state.repository.id)
                 : "Connect a repository to start tracking local development growth.";
             state.activity.agentActivitySummary = NativeAgentActivitySummary();
-            state.activity.hasRecentRuns = approvedActivityAnalysis?.RecentNativeAnalysisRuns?.Count > 0;
-            state.activity.hasSavedReviews = dashboard.HasSavedRun;
-            state.activity.hasRepositoryActivity = HasSavedRepositoryActivity();
+            state.activity.hasRecentRuns = activeRepositoryRuns.Count > 0;
+            state.activity.hasSavedReviews = activeRepositoryHasSavedRun;
+            state.activity.hasRepositoryActivity = HasSavedRepositoryActivity(state.repository.id) || activeRepositoryHasSavedRun;
             state.activity.hasAiAgentActivity = HasSavedAgentActivity();
             state.activity.runningJobs = BuildNativeRunningJobs();
             state.activity.pendingReviews = BuildNativePendingReviews(pendingNativeReview);
-            state.activity.recentRuns = BuildNativeRecentRuns();
+            state.activity.recentRuns = BuildNativeRecentRuns(state.repository.id);
             state.hasSavedReviews = state.activity.hasSavedReviews;
             state.hasRepositoryActivity = state.activity.hasRepositoryActivity;
             state.hasAiAgentActivity = state.activity.hasAiAgentActivity;
@@ -835,7 +874,9 @@ namespace TokenForge.Client
                 ApplyNoRepositoryNativeState(state, projectionSaveData, settings);
                 Debug.Log("INFO [DashboardEmptyState] reason=no_connected_repository");
                 Debug.Log("INFO [RepositoryProjection][NO_APPROVED_REPOSITORY_CLEAR_ACTIVE]");
+                Debug.Log("INFO [RepositoryIdentity][NO_APPROVED_REPOSITORY]");
                 Debug.Log("INFO [OverlayLifecycle][NO_REPOSITORY_HIDE_OVERLAY]");
+                Debug.Log("INFO [OverlaySuppressed] reason=noApprovedRepository");
             }
             else
             {
@@ -850,19 +891,33 @@ namespace TokenForge.Client
         private NativeRepositoryListItem[] BuildNativeRepositoryItems(CharacterDashboardSummary dashboard)
         {
             var items = approvedActivityAnalysis?.RepositoryCompanions ?? new List<RepositoryCompanionDisplayItem>();
-            return items
+            var eligibleItems = items
                 .Where(item => !string.IsNullOrWhiteSpace(item.RepositoryHash))
                 .Where(item => !string.Equals(item.RepositoryHash, RepositoryCompanionProfileService.DefaultLocalRepositoryHash, StringComparison.Ordinal))
                 .Where(item => item.ApprovedByUser && !item.Archived)
+                .ToList();
+            var displayNames = eligibleItems
+                .Select(NativeRepositoryDisplayName)
+                .GroupBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.OrdinalIgnoreCase);
+
+            return eligibleItems
                 .Select(item => new NativeRepositoryListItem
                 {
                     id = item.RepositoryHash,
-                    name = SafeNativeText(item.SafeRepositoryAlias, "Repository"),
-                    safePath = item.ApprovedByUser ? "Approved local folder" : "Local approval missing",
+                    name = NativeRepositoryProjectedName(item, displayNames),
+                    folderName = SafeNativeText(item.LocalFolderName, string.Empty),
+                    safePath = SafeNativeText(item.ShortLocalPath, item.ApprovedByUser ? "Approved local folder" : "Local approval missing"),
+                    remoteUrl = SafeNativeText(item.RemoteUrl, "No remote"),
+                    branch = SafeNativeText(item.Branch, "unknown"),
+                    repositoryId = item.RepositoryHash,
+                    lastAnalysisScope = SafeNativeText(item.LastAnalysisScope, "Not analyzed"),
                     companion = item.CanLevelUp
                         ? item.Stage + " · Lv " + Math.Max(1, item.Level) + " · Level Up Ready"
                         : item.Stage + " · Lv " + Math.Max(1, item.Level) + " · " + Math.Max(0, item.CurrentXp) + "/" + Math.Max(1, item.XpRequiredForNextLevel) + " XP",
-                    lastAnalyzed = string.IsNullOrWhiteSpace(item.LastApprovedActivityBucket) ? "Not analyzed" : item.LastApprovedActivityBucket,
+                    lastAnalyzed = item.LastAnalyzedAt == null
+                        ? (string.IsNullOrWhiteSpace(item.LastApprovedActivityBucket) ? "Not analyzed" : item.LastApprovedActivityBucket)
+                        : item.LastAnalyzedAt.Value.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss") + " UTC",
                     status = item.Archived ? "archived" : item.Selected ? "active" : "connected",
                     statusText = item.Archived ? "Archived" : item.Selected ? "Active context" : "Connected",
                     selected = item.Selected,
@@ -910,6 +965,88 @@ namespace TokenForge.Client
                 .ToArray();
         }
 
+        private static string NativeRepositoryProjectedName(RepositoryCompanionDisplayItem item, IReadOnlyDictionary<string, int> displayNames)
+        {
+            var baseName = NativeRepositoryDisplayName(item);
+            if (displayNames != null &&
+                displayNames.TryGetValue(baseName, out var duplicateCount) &&
+                duplicateCount > 1)
+            {
+                var shortId = ShortRepositoryId(item?.RepositoryHash);
+                return string.IsNullOrWhiteSpace(shortId) ? baseName : baseName + " · " + shortId;
+            }
+
+            return baseName;
+        }
+
+        private static string NativeRepositoryDisplayName(RepositoryCompanionDisplayItem item)
+        {
+            if (item == null)
+            {
+                return "Repository";
+            }
+
+            var folderName = SafeNativeText(item.LocalFolderName, string.Empty);
+            if (!IsGenericRepositoryLabel(folderName))
+            {
+                return folderName;
+            }
+
+            var alias = SafeNativeText(item.SafeRepositoryAlias, string.Empty);
+            if (!IsGenericRepositoryLabel(alias))
+            {
+                return alias;
+            }
+
+            var pathAlias = LastPathToken(SafeNativeText(item.ShortLocalPath, string.Empty));
+            if (!IsGenericRepositoryLabel(pathAlias) &&
+                !string.Equals(pathAlias, "folder", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(pathAlias, "local", StringComparison.OrdinalIgnoreCase))
+            {
+                return pathAlias;
+            }
+
+            Debug.LogWarning("WARN [RepositoryIdentity] missing approved folder basename; visible repository hash fallback suppressed.");
+            return "Unresolved approved folder";
+        }
+
+        private static bool IsGenericRepositoryLabel(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return true;
+            }
+
+            var normalized = value.Trim();
+            return string.Equals(normalized, "Repository", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(normalized, "Local Repository", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(normalized, "Approved local folder", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(normalized, "Local approval missing", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string LastPathToken(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            var trimmed = value.Trim().TrimEnd('/', '\\');
+            var lastSlash = Math.Max(trimmed.LastIndexOf('/'), trimmed.LastIndexOf('\\'));
+            return lastSlash >= 0 && lastSlash + 1 < trimmed.Length ? trimmed.Substring(lastSlash + 1) : trimmed;
+        }
+
+        private static string ShortRepositoryId(string repositoryHash)
+        {
+            if (string.IsNullOrWhiteSpace(repositoryHash))
+            {
+                return string.Empty;
+            }
+
+            var trimmed = repositoryHash.Trim();
+            return trimmed.Length <= 8 ? trimmed : trimmed.Substring(0, 8);
+        }
+
         private void ApplyNoRepositoryNativeState(NativeDashboardState state, SaveData saveData, DesktopCompanionSettings settings)
         {
             if (state == null)
@@ -930,13 +1067,14 @@ namespace TokenForge.Client
             state.repository.hasValidSource = false;
             state.repository.canAnalyze = false;
             state.repository.analyzeDisabledReason = "Connect a repository first";
+            state.primaryActionEnabled = false;
             state.repositoryStatus = "not_selected";
             state.repositories = new NativeRepositoryListItem[0];
             state.companionVisible = false;
             state.desiredVisible = false;
             state.actualVisible = false;
             state.companion = NativeCompanionState.CreateDefault();
-            state.companion.name = "TokenForge";
+            state.companion.name = "No companion";
             state.companion.stage = "None";
             state.companion.stageIndex = 0;
             state.companion.level = 0;
@@ -970,6 +1108,9 @@ namespace TokenForge.Client
             state.eggInfluenceText = "Connect a repository to start shaping a companion.";
             state.tokenCurrencyBalance = 0;
             state.lastRunSummary = "Connect a repository to start tracking Git growth.";
+            state.actionStatusText = string.Equals(state.actionStatusKind, "idle", StringComparison.Ordinal)
+                ? "Connect a repository to create your first companion."
+                : state.actionStatusText;
             state.hasSavedReviews = false;
             state.hasRepositoryActivity = false;
             state.companionFarm = BuildNativeCompanionFarmState(new NativeRepositoryListItem[0], settings);
@@ -987,6 +1128,16 @@ namespace TokenForge.Client
             state.activity.hasSavedReviews = false;
             state.activity.hasRepositoryActivity = false;
             state.activity.recentRuns = new NativeActivityItem[0];
+            state.activity.pendingReviews = new NativeActivityItem[0];
+            state.review = NativeReviewState.CreateDefault();
+            state.review.pending = false;
+            state.review.canSaveGrowth = false;
+            state.review.canDiscard = false;
+            state.review.canViewDetails = false;
+            state.hasPendingReview = false;
+            state.pendingReviewCount = 0;
+            state.canSaveGrowth = false;
+            state.canDiscardPendingReview = false;
             state.tokenShop = BuildNativeTokenShopState(null, false, saveData, state.agentProviders);
         }
 
@@ -1227,16 +1378,18 @@ namespace TokenForge.Client
             {
                 firstRunCompleted = prefs.FirstRunOnboardingCompleted,
                 dismissedForNow = prefs.FirstRunOnboardingDismissedForNow,
+                shouldPresentFirstRunGuide = !prefs.FirstRunOnboardingCompleted && !prefs.FirstRunOnboardingDismissedForNow,
+                presentationMode = "guidedTutorial",
                 currentStep = "step_" + (stepIndex + 1),
                 currentStepIndex = stepIndex,
                 stepCount = steps.Length,
                 canGoBack = stepIndex > 0,
                 canGoNext = stepIndex + 1 < steps.Length,
                 statusText = prefs.FirstRunOnboardingCompleted
-                    ? "Onboarding is available anytime from the sidebar."
+                    ? "Replay the tutorial anytime from the sidebar."
                     : prefs.FirstRunOnboardingDismissedForNow
-                        ? "Onboarding was skipped for now. Reopen it from the sidebar whenever you want the guide."
-                    : "Welcome to TokenForge. Start here to understand repository mascots, zodiac mascots, and agent-specific coins.",
+                        ? "Tutorial paused. Resume it from the sidebar when you are ready."
+                    : "Connect a repository, analyze your work, grow a mascot, and keep it on your Mac desktop.",
                 steps = steps,
                 zodiacIds = RepositoryCompanionProfileService.GetZodiacCompanionTypes().Select(item => item.Id).ToArray()
             };
@@ -1246,16 +1399,11 @@ namespace TokenForge.Client
         {
             return new[]
             {
-                "Turn repositories into companions",
-                "Analyze local Git activity",
-                "Grow through stages",
-                "Earn tokens",
-                "Customize your mascot",
-                "Choose a zodiac identity",
-                "Connect AI agents",
-                "Desktop companion mode",
-                "Privacy-first by design",
-                "Ready to begin"
+                "Pick a repository",
+                "Analyze Git history",
+                "Grow your companion",
+                "Unlock cosmetics",
+                "Bring it to the desktop"
             };
         }
 
@@ -1641,7 +1789,7 @@ namespace TokenForge.Client
 
             if (hasSavedRun)
             {
-                return "Saved growth summary";
+                return "Saved growth for selected repository";
             }
 
             if (!repositoryConnected && !agentConnected)
@@ -1717,9 +1865,29 @@ namespace TokenForge.Client
             };
         }
 
-        private NativeActivityItem[] BuildNativeRecentRuns()
+        private IEnumerable<NativeAnalysisRunRecord> NativeRunsForRepository(string repositoryId)
         {
+            if (string.IsNullOrWhiteSpace(repositoryId))
+            {
+                return Enumerable.Empty<NativeAnalysisRunRecord>();
+            }
+
             return (approvedActivityAnalysis?.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>())
+                .Where(run => run != null && string.Equals(run.RepositoryId, repositoryId, StringComparison.Ordinal))
+                .OrderByDescending(run => run.CreatedAtUtc);
+        }
+
+        private static bool IsSavedNativeRun(NativeAnalysisRunRecord run)
+        {
+            return run != null &&
+                   (string.Equals(run.Status, "saved", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(run.SourceKind, "reviewSaved", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(run.SourceKind, "levelUp", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private NativeActivityItem[] BuildNativeRecentRuns(string repositoryId)
+        {
+            return NativeRunsForRepository(repositoryId)
                 .Take(8)
                 .Select(run => new NativeActivityItem
                 {
@@ -1737,37 +1905,42 @@ namespace TokenForge.Client
                 .ToArray();
         }
 
-        private string SavedGrowthHistorySummary()
+        private string SavedGrowthHistorySummary(string repositoryId)
         {
-            var saved = (approvedActivityAnalysis?.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>())
-                .Where(run => string.Equals(run.Status, "saved", StringComparison.OrdinalIgnoreCase) ||
-                              string.Equals(run.SourceKind, "reviewSaved", StringComparison.OrdinalIgnoreCase) ||
-                              string.Equals(run.SourceKind, "levelUp", StringComparison.OrdinalIgnoreCase))
+            var saved = NativeRunsForRepository(repositoryId)
+                .Where(IsSavedNativeRun)
                 .Take(4)
                 .Select(run => run.CreatedAtUtc.UtcDateTime.ToString("yyyy-MM-dd") + " · " + SafeNativeText(run.SafeSummary, "Growth saved."))
                 .ToList();
             return saved.Count == 0 ? "No saved growth history yet." : string.Join("\n", saved);
         }
 
-        private string RepositoryActivitySummary()
+        private string RepositoryActivitySummary(string repositoryId)
         {
             var repository = approvedActivityAnalysis?.CharacterDashboard?.CurrentRepositoryAlias;
-            var latest = (approvedActivityAnalysis?.RecentSessions ?? new List<RecentSafeSessionSummary>())
-                .FirstOrDefault(summary => string.Equals(summary.SourceProvider, "GIT", StringComparison.OrdinalIgnoreCase));
+            var latest = NativeRunsForRepository(repositoryId)
+                .FirstOrDefault(run => string.Equals(run.SourceKind, "repository", StringComparison.OrdinalIgnoreCase) ||
+                                       string.Equals(run.SourceKind, "reviewSaved", StringComparison.OrdinalIgnoreCase));
             if (latest == null)
             {
-                return "Run repository analysis to review Git-based growth.";
+                return "No analysis yet for the selected repository.";
             }
 
-            return "Repository · " + SafeNativeText(repository, "Active repository") + " · +" + latest.ExpGained + " XP\n" +
-                   "Git changes were analyzed and safe aggregate growth was saved.\n" +
-                   "Implementation changes and fix/test loop signals were detected when present.";
+            return "Repository · " + SafeNativeText(repository, "Active repository") + " · " + SafeNativeText(latest.AnalysisScope, "Saved growth") + "\n" +
+                   SafeNativeText(latest.SafeSummary, "Git changes were analyzed and safe aggregate growth was saved.") + "\n" +
+                   "Recorded for this repository only.";
         }
 
-        private bool HasSavedRepositoryActivity()
+        private bool HasSavedRepositoryActivity(string repositoryId)
         {
-            return (approvedActivityAnalysis?.RecentSessions ?? new List<RecentSafeSessionSummary>())
-                .Any(summary => string.Equals(summary.SourceProvider, "GIT", StringComparison.OrdinalIgnoreCase));
+            if (string.IsNullOrWhiteSpace(repositoryId))
+            {
+                return false;
+            }
+
+            return NativeRunsForRepository(repositoryId)
+                .Any(run => string.Equals(run.SourceKind, "repository", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(run.SourceKind, "reviewSaved", StringComparison.OrdinalIgnoreCase));
         }
 
         private bool HasSavedAgentActivity()
@@ -2475,10 +2648,10 @@ namespace TokenForge.Client
                     RunNativeDashboardTask(RefreshAndPublishNativeDashboardAsync, request.RawAction);
                     break;
                 case NativeDashboardAction.RunAnalysis:
-                    RunNativeDashboardTask(() => RunNativeAnalysisAsync(), request.RawAction);
+                    RunNativeDashboardTask(() => RunNativeAnalysisAsync(requestedGitAnalysisMode: NativeGitAnalysisModeFromScope(request.Value)), request.RawAction);
                     break;
                 case NativeDashboardAction.RunRepositoryAnalysis:
-                    RunNativeDashboardTask(() => RunNativeAnalysisAsync(repositoryOnly: true), request.RawAction);
+                    RunNativeDashboardTask(() => RunNativeAnalysisAsync(repositoryOnly: true, requestedGitAnalysisMode: NativeGitAnalysisModeFromScope(request.Value)), request.RawAction);
                     break;
                 case NativeDashboardAction.RunAgentAnalysis:
                     RunNativeDashboardTask(RunNativeAgentAnalysisAsync, request.RawAction);
@@ -2508,7 +2681,7 @@ namespace TokenForge.Client
                     OpenNativeDashboardCanonical(request.RawAction);
                     break;
                 case NativeDashboardAction.AnalyzeRepository:
-                    RunNativeDashboardTask(() => RunNativeAnalysisAsync(request.Value, repositoryOnly: true), request.RawAction);
+                    RunNativeDashboardTask(() => RunNativeAnalysisAsync(request.Value, repositoryOnly: true, requestedGitAnalysisMode: NativeGitAnalysisModeFromScope(request.Value)), request.RawAction);
                     break;
                 case NativeDashboardAction.DisconnectRepository:
                     nativeSelectedNavItem = "repository";
@@ -3124,6 +3297,32 @@ namespace TokenForge.Client
                              string.Equals(item.RepositoryHash, activeHash, StringComparison.Ordinal));
         }
 
+        private static GitAnalysisMode? NativeGitAnalysisModeFromScope(string scope)
+        {
+            var normalized = (scope ?? string.Empty).Trim().Replace("-", string.Empty).Replace("_", string.Empty);
+            if (string.Equals(normalized, "full", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "fullhistory", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "fullbaseline", StringComparison.OrdinalIgnoreCase))
+            {
+                return GitAnalysisMode.FullBaseline;
+            }
+
+            if (string.Equals(normalized, "sincelast", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "incremental", StringComparison.OrdinalIgnoreCase))
+            {
+                return GitAnalysisMode.Incremental;
+            }
+
+            if (string.Equals(normalized, "recent", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "recentrange", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "recenttrend", StringComparison.OrdinalIgnoreCase))
+            {
+                return GitAnalysisMode.RecentTrend;
+            }
+
+            return null;
+        }
+
         private void SetUnsupportedNativeAction(string message)
         {
             nativeActionStatusKind = "error";
@@ -3152,7 +3351,7 @@ namespace TokenForge.Client
             await RunNativeAnalysisAsync(string.Empty, ProviderTypeForNative(ready.SourceType).ToString());
         }
 
-        private async Task RunNativeAnalysisAsync(string repositoryHash = "", string providerValue = "", bool repositoryOnly = false)
+        private async Task RunNativeAnalysisAsync(string repositoryHash = "", string providerValue = "", bool repositoryOnly = false, GitAnalysisMode? requestedGitAnalysisMode = null)
         {
             if (approvedActivityAnalysis == null)
             {
@@ -3287,7 +3486,7 @@ namespace TokenForge.Client
                     ApplyNativeShellState(showDashboardIfNeeded: false);
                     Debug.Log("INFO [Analysis] begin repositoryId=" + SafeNativeText(approvedActivityAnalysis.CharacterDashboard?.CurrentRepositoryHash, "unknown"));
                     Debug.Log("INFO [Analysis] git begin");
-                    var gitResult = await approvedActivityAnalysis.AnalyzeGitActivityAsync();
+                    var gitResult = await approvedActivityAnalysis.AnalyzeGitActivityAsync(requestedGitAnalysisMode);
                     if (gitResult.IsSuccess)
                     {
                         anySuccess = true;

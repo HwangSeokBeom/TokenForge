@@ -8,6 +8,7 @@ using TokenForge.Client.Agents;
 using TokenForge.Client.Auth;
 using TokenForge.Client.Common;
 using TokenForge.Client.Domain;
+using TokenForge.Client.Git;
 using TokenForge.Client.Persistence;
 using TokenForge.Client.Platform;
 using TokenForge.Client.Privacy;
@@ -60,12 +61,20 @@ namespace TokenForge.Client.UI
         public ApprovedLocationSourceType SourceType { get; set; } = ApprovedLocationSourceType.UnknownAuto;
         public bool Enabled { get; set; } = true;
         public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+        public string RepositoryHash { get; set; } = string.Empty;
+        public string ShortLocalPath { get; set; } = string.Empty;
     }
 
     public sealed class RepositoryCompanionDisplayItem
     {
         public string RepositoryHash { get; set; } = string.Empty;
         public string SafeRepositoryAlias { get; set; } = "Repository";
+        public string LocalFolderName { get; set; } = string.Empty;
+        public string ShortLocalPath { get; set; } = string.Empty;
+        public string RemoteUrl { get; set; } = string.Empty;
+        public string Branch { get; set; } = string.Empty;
+        public DateTimeOffset? LastAnalyzedAt { get; set; }
+        public string LastAnalysisScope { get; set; } = string.Empty;
         public CompanionStage Stage { get; set; } = CompanionStage.Egg;
         public CompanionArchetype Archetype { get; set; } = CompanionArchetype.Unknown;
         public int Level { get; set; } = 1;
@@ -233,6 +242,7 @@ namespace TokenForge.Client.UI
         private int conflictInProgress;
         private Func<CancellationToken, Task<SafeSyncResult>> pendingSafeSyncConfirmationAction;
         private readonly Dictionary<ConnectedAgentSourceType, AgentSourceCandidate> approvedAgentCandidates = new Dictionary<ConnectedAgentSourceType, AgentSourceCandidate>();
+        private readonly Dictionary<string, RepositoryLocalMetadata> approvedGitMetadataByHash = new Dictionary<string, RepositoryLocalMetadata>(StringComparer.Ordinal);
 
         public ApprovedActivityAnalysisViewModel(
             GitAnalysisFlowController gitFlow,
@@ -1090,6 +1100,9 @@ namespace TokenForge.Client.UI
             var saveData = await repository.LoadAsync(cancellationToken);
             saveData.RecentNativeAnalysisRuns = saveData.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>();
             var normalizedStatus = SafeLocalAlias(status, "failed");
+            var repositoryHash = saveData.SelectedRepositoryHash ?? string.Empty;
+            var connectedProject = (saveData.ConnectedProjects ?? new List<ConnectedProject>())
+                .FirstOrDefault(project => project != null && string.Equals(project.PathHash, repositoryHash, StringComparison.Ordinal));
             saveData.RecentNativeAnalysisRuns.Insert(0, new NativeAnalysisRunRecord
             {
                 RunId = Guid.NewGuid().ToString("N"),
@@ -1097,6 +1110,11 @@ namespace TokenForge.Client.UI
                 Status = normalizedStatus,
                 ErrorCode = SafeLocalAlias(errorCode, "unknown"),
                 SafeSummary = SafeLocalAlias(safeSummary, "Analysis failed safely."),
+                RepositoryId = repositoryHash,
+                RepositoryAlias = RepositoryAliasForHash(saveData, repositoryHash),
+                Branch = string.Empty,
+                CommitRange = connectedProject?.AnalyzedCommitRange ?? string.Empty,
+                AnalysisScope = FirstNonEmpty(connectedProject?.LastAnalysisScope, connectedProject?.LastAnalysisMode, string.Equals(sourceKind, "repository", StringComparison.OrdinalIgnoreCase) ? "Repository analysis" : SafeLocalAlias(sourceKind, "activity")),
                 CreatedAtUtc = DateTimeOffset.UtcNow
             });
             saveData.RecentNativeAnalysisRuns = saveData.RecentNativeAnalysisRuns.Take(20).ToList();
@@ -1214,9 +1232,14 @@ namespace TokenForge.Client.UI
             return Result<PendingNativeActivityReview>.Success(saveData.PendingNativeActivityReview);
         }
 
-        public async Task<Result<GitAnalysisReviewModel>> AnalyzeGitActivityAsync(CancellationToken cancellationToken = default)
+        public Task<Result<GitAnalysisReviewModel>> AnalyzeGitActivityAsync(CancellationToken cancellationToken = default)
         {
-            var result = await GitFlow.AnalyzeAsync(cancellationToken);
+            return AnalyzeGitActivityAsync(null, cancellationToken);
+        }
+
+        public async Task<Result<GitAnalysisReviewModel>> AnalyzeGitActivityAsync(GitAnalysisMode? requestedAnalysisMode, CancellationToken cancellationToken = default)
+        {
+            var result = await GitFlow.AnalyzeAsync(requestedAnalysisMode, cancellationToken);
             if (result.IsSuccess)
             {
                 var persist = await PersistPendingNativeReviewAsync(
@@ -1541,6 +1564,21 @@ namespace TokenForge.Client.UI
                                      string.Equals(session.DeduplicationKey, pendingSession.DeduplicationKey, StringComparison.Ordinal))));
             if (alreadyApplied || sessionAlreadySaved)
             {
+                if (!string.IsNullOrWhiteSpace(reviewId) &&
+                    !saveData.AppliedNativeReviewIds.Contains(reviewId, StringComparer.Ordinal))
+                {
+                    saveData.AppliedNativeReviewIds.Add(reviewId);
+                }
+
+                saveData.ActivityReviews = saveData.ActivityReviews ?? new List<ActivityReview>();
+                var existingSavedReview = saveData.ActivityReviews.FirstOrDefault(review =>
+                    string.Equals(review.Id, reviewId, StringComparison.Ordinal) &&
+                    string.Equals(review.Status, "saved", StringComparison.OrdinalIgnoreCase));
+                if (existingSavedReview == null)
+                {
+                    UpsertActivityReview(saveData, pending, "saved", DateTimeOffset.UtcNow);
+                }
+
                 saveData.PendingNativeActivityReview = null;
                 var idempotentValidation = privacySanitizer.ValidateSafeSaveData(saveData);
                 if (!idempotentValidation.IsSuccess)
@@ -1625,7 +1663,8 @@ namespace TokenForge.Client.UI
             saveData.DailyProgress = saveData.DailyProgress ?? new DailyProgress();
             saveData.DailyProgress.ExpGainedToday += pendingGrowthResults.Sum(growth => Math.Max(0, growth?.ExpGained ?? 0));
             saveData.DailyProgress.SessionsConfirmedToday += Math.Max(1, pendingSessions.Count);
-            if (!string.IsNullOrWhiteSpace(reviewId))
+            if (!string.IsNullOrWhiteSpace(reviewId) &&
+                !saveData.AppliedNativeReviewIds.Contains(reviewId, StringComparer.Ordinal))
             {
                 saveData.AppliedNativeReviewIds.Add(reviewId);
             }
@@ -1638,6 +1677,10 @@ namespace TokenForge.Client.UI
                 Status = "saved",
                 ErrorCode = string.Empty,
                 SafeSummary = "Growth saved · +" + pendingGrowthResults.Sum(growth => Math.Max(0, growth?.ExpGained ?? 0)) + " XP",
+                RepositoryId = pending.RepositoryHash ?? saveData.SelectedRepositoryHash ?? string.Empty,
+                RepositoryAlias = RepositoryAliasForHash(saveData, pending.RepositoryHash ?? saveData.SelectedRepositoryHash),
+                XpDelta = pendingGrowthResults.Sum(growth => Math.Max(0, growth?.ExpGained ?? 0)),
+                StatDeltas = pending.StatDeltas ?? CharacterStats.Zero(),
                 CreatedAtUtc = DateTimeOffset.UtcNow
             });
             saveData.PendingNativeActivityReview = null;
@@ -1698,6 +1741,8 @@ namespace TokenForge.Client.UI
                 Status = "saved",
                 ErrorCode = string.Empty,
                 SafeSummary = "Level Up · Lv " + previousLevel + " -> Lv " + saveData.CompanionState.Level + " · " + targetName,
+                RepositoryId = profile == null ? "agent-only" : profile.RepositoryHash,
+                RepositoryAlias = targetName,
                 CreatedAtUtc = DateTimeOffset.UtcNow
             });
             saveData.ActivityReviews = saveData.ActivityReviews ?? new List<ActivityReview>();
@@ -2130,6 +2175,35 @@ namespace TokenForge.Client.UI
         public async Task<Result<List<ApprovedLocationDisplayItem>>> RefreshApprovedLocationsAsync(CancellationToken cancellationToken = default)
         {
             var settings = await approvedLocationRepository.LoadAsync(cancellationToken);
+            approvedGitMetadataByHash.Clear();
+            foreach (var location in settings.Locations ?? new List<ApprovedLocationEntry>())
+            {
+                if (location == null ||
+                    !location.Enabled ||
+                    location.SourceType != ApprovedLocationSourceType.Git ||
+                    string.IsNullOrWhiteSpace(location.LocalPath))
+                {
+                    continue;
+                }
+
+                var repositoryHash = RepositoryCompanionProfileService.HashRepositoryPath(location.LocalPath);
+                if (string.IsNullOrWhiteSpace(repositoryHash))
+                {
+                    continue;
+                }
+
+                var localFolderName = RepositoryFolderName(location.LocalPath);
+                approvedGitMetadataByHash[repositoryHash] = new RepositoryLocalMetadata
+                {
+                    RepositoryHash = repositoryHash,
+                    LocalFolderName = localFolderName,
+                    ShortLocalPath = ShortLocalPath(location.LocalPath, location.DisplayAlias),
+                    RemoteUrl = GitRemoteForDisplay(location.LocalPath),
+                    Branch = GitBranchForDisplay(location.LocalPath),
+                    DisplayName = RepositoryDisplayName(localFolderName, RepositoryDisplayName(location.DisplayAlias, RepositoryCompanionProfileService.SafeRepositoryAlias(location.LocalPath)))
+                };
+            }
+
             var safeDisplayItems = (settings.Locations ?? new List<ApprovedLocationEntry>())
                 .OrderBy(item => item.SourceType)
                 .ThenBy(item => item.DisplayAlias, StringComparer.Ordinal)
@@ -3103,7 +3177,13 @@ namespace TokenForge.Client.UI
                 DisplayAlias = entry.DisplayAlias,
                 SourceType = entry.SourceType,
                 Enabled = entry.Enabled,
-                UpdatedAt = entry.UpdatedAt
+                UpdatedAt = entry.UpdatedAt,
+                RepositoryHash = entry.SourceType == ApprovedLocationSourceType.Git && !string.IsNullOrWhiteSpace(entry.LocalPath)
+                    ? RepositoryCompanionProfileService.HashRepositoryPath(entry.LocalPath)
+                    : string.Empty,
+                ShortLocalPath = entry.SourceType == ApprovedLocationSourceType.Git
+                    ? ShortLocalPath(entry.LocalPath, entry.DisplayAlias)
+                    : string.Empty
             };
         }
 
@@ -3167,7 +3247,7 @@ namespace TokenForge.Client.UI
             var growthSummary = latestGrowth == null
                 ? "No growth recorded yet."
                 : "+" + latestGrowth.ExpGained + " XP | Level " + latestGrowth.LevelBefore + " -> " + latestGrowth.LevelAfter;
-            RepositoryCompanions = ToRepositoryCompanionDisplayItems(saveData);
+            RepositoryCompanions = ToRepositoryCompanionDisplayItemsWithMetadata(saveData, approvedGitMetadataByHash);
             var previewOnlyCount = (saveData.RepositoryCompanionProfiles ?? new List<RepositoryCompanionProfile>())
                 .Count(candidate => candidate != null && !RepositoryCompanions.Any(item => string.Equals(item.RepositoryHash, candidate.RepositoryHash, StringComparison.Ordinal)));
             if (!hasConnectedRepository)
@@ -3182,6 +3262,7 @@ namespace TokenForge.Client.UI
                       " repositoriesTab=" + RepositoryCompanions.Count +
                       " sidebar=" + RepositoryCompanions.Count);
             var selectedRepositoryHash = hasConnectedRepository ? saveData.SelectedRepositoryHash : string.Empty;
+            var selectedRepositoryDisplay = RepositoryCompanions.FirstOrDefault(item => string.Equals(item.RepositoryHash, selectedRepositoryHash, StringComparison.Ordinal));
             var tokenShop = selectedRepositoryProfile?.TokenShop ?? new TokenShopState();
             var bias = CompanionEvolutionPathResolver.Resolve(companion.Stats, companion.Stage);
             var motionState = hasConnectedRepository
@@ -3203,7 +3284,7 @@ namespace TokenForge.Client.UI
                 ExpForNextLevel = Math.Max(1, companion.XpRequiredForNextLevel),
                 RankTitle = RankFor(Math.Max(1, companion.Level), profile.CurrentEvolutionType),
                 CurrentRepositoryHash = selectedRepositoryHash,
-                CurrentRepositoryAlias = hasConnectedRepository ? selectedRepositoryProfile?.SafeRepositoryAlias ?? string.Empty : string.Empty,
+                CurrentRepositoryAlias = hasConnectedRepository ? selectedRepositoryDisplay?.SafeRepositoryAlias ?? selectedRepositoryProfile?.SafeRepositoryAlias ?? string.Empty : string.Empty,
                 Code = hasConnectedRepository ? Math.Max(0, companionStats.CodeStat > 0 ? companionStats.CodeStat : stats.Logic + stats.Architecture + stats.Velocity) : 0,
                 Focus = hasConnectedRepository ? Math.Max(0, companionStats.FocusStat > 0 ? companionStats.FocusStat : stats.Efficiency + stats.Stability) : 0,
                 Debug = hasConnectedRepository ? Math.Max(0, companionStats.DebugStat > 0 ? companionStats.DebugStat : stats.Debug) : 0,
@@ -3241,6 +3322,11 @@ namespace TokenForge.Client.UI
 
         private static List<RepositoryCompanionDisplayItem> ToRepositoryCompanionDisplayItems(SaveData saveData)
         {
+            return ToRepositoryCompanionDisplayItemsWithMetadata(saveData, null);
+        }
+
+        private static List<RepositoryCompanionDisplayItem> ToRepositoryCompanionDisplayItemsWithMetadata(SaveData saveData, IReadOnlyDictionary<string, RepositoryLocalMetadata> metadataByHash)
+        {
             saveData = RepositoryCompanionProfileService.Normalize(saveData);
             var connectedProjects = (saveData.ConnectedProjects ?? new List<ConnectedProject>())
                 .Where(project => project != null &&
@@ -3258,10 +3344,24 @@ namespace TokenForge.Client.UI
                     var companion = CompanionProgressionRules.Normalize(profile.CompanionState);
                     var motionState = BuildMotionStateForRepository(saveData, profile.RepositoryHash, companion);
                     var connection = connectedProjects[profile.RepositoryHash];
+                    RepositoryLocalMetadata metadata = null;
+                    if (metadataByHash != null)
+                    {
+                        metadataByHash.TryGetValue(profile.RepositoryHash, out metadata);
+                    }
+
+                    var localFolderName = FirstNonEmpty(metadata?.LocalFolderName, string.Empty);
+                    var displayName = RepositoryDisplayName(localFolderName, RepositoryDisplayName(metadata?.DisplayName, string.IsNullOrWhiteSpace(connection.DisplayName) ? profile.SafeRepositoryAlias : connection.DisplayName));
                     return new RepositoryCompanionDisplayItem
                     {
                         RepositoryHash = profile.RepositoryHash,
-                        SafeRepositoryAlias = string.IsNullOrWhiteSpace(connection.DisplayName) ? profile.SafeRepositoryAlias : connection.DisplayName,
+                        SafeRepositoryAlias = displayName,
+                        LocalFolderName = localFolderName,
+                        ShortLocalPath = FirstNonEmpty(metadata?.ShortLocalPath, "Approved local folder"),
+                        RemoteUrl = FirstNonEmpty(metadata?.RemoteUrl, "No remote"),
+                        Branch = FirstNonEmpty(metadata?.Branch, "unknown"),
+                        LastAnalyzedAt = connection.LastAnalyzedAt,
+                        LastAnalysisScope = FirstNonEmpty(connection.LastAnalysisScope, connection.LastAnalysisMode, "Not analyzed"),
                         Stage = companion.Stage,
                         Archetype = companion.Archetype,
                         Level = companion.Level,
@@ -3300,6 +3400,174 @@ namespace TokenForge.Client.UI
                 .Where(item => !string.Equals(item.SafeRepositoryAlias, "Local Repository", StringComparison.OrdinalIgnoreCase))
                 .Where(item => item.ApprovedByUser && !item.Archived)
                 .ToList();
+        }
+
+        private sealed class RepositoryLocalMetadata
+        {
+            public string RepositoryHash { get; set; } = string.Empty;
+            public string DisplayName { get; set; } = string.Empty;
+            public string LocalFolderName { get; set; } = string.Empty;
+            public string ShortLocalPath { get; set; } = string.Empty;
+            public string RemoteUrl { get; set; } = string.Empty;
+            public string Branch { get; set; } = string.Empty;
+        }
+
+        private static string RepositoryDisplayName(string pathOrName, string fallback)
+        {
+            var value = string.IsNullOrWhiteSpace(pathOrName) ? fallback : pathOrName.Trim();
+            if (string.Equals(value, "Repository", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(value, "Git repository", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(value, "Local Repository", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.IsNullOrWhiteSpace(fallback) ? "Repository" : fallback.Trim();
+            }
+
+            return string.IsNullOrWhiteSpace(value) ? "Repository" : value;
+        }
+
+        private static string RepositoryFolderName(string localPath)
+        {
+            if (string.IsNullOrWhiteSpace(localPath))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                var canonical = RepositoryCompanionProfileService.CanonicalRepositoryPathForIdentity(localPath)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                var leaf = Path.GetFileName(canonical);
+                return string.IsNullOrWhiteSpace(leaf) ? string.Empty : leaf.Trim();
+            }
+            catch (ArgumentException)
+            {
+                return string.Empty;
+            }
+            catch (NotSupportedException)
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string ShortLocalPath(string localPath, string displayAlias = "")
+        {
+            if (string.IsNullOrWhiteSpace(localPath))
+            {
+                return string.Empty;
+            }
+
+            var path = RepositoryCompanionProfileService.CanonicalRepositoryPathForIdentity(localPath);
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (!string.IsNullOrWhiteSpace(home) && path.StartsWith(home, StringComparison.Ordinal))
+            {
+                path = "~" + path.Substring(home.Length);
+            }
+
+            var safeRepositoryAlias = RepositoryCompanionProfileService.SafeRepositoryAlias(localPath);
+            var leafName = string.Empty;
+            try
+            {
+                leafName = Path.GetFileName(RepositoryCompanionProfileService.CanonicalRepositoryPathForIdentity(localPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            }
+            catch (ArgumentException)
+            {
+                leafName = string.Empty;
+            }
+
+            var repositoryNameWasSanitized = !string.IsNullOrWhiteSpace(leafName) &&
+                !string.Equals(leafName, safeRepositoryAlias, StringComparison.OrdinalIgnoreCase);
+            if (repositoryNameWasSanitized || new ForbiddenFieldDetector().ContainsSensitiveString(path))
+            {
+                var safeAlias = SafeLocalAlias(displayAlias, safeRepositoryAlias);
+                return string.Equals(safeAlias, "Repository", StringComparison.OrdinalIgnoreCase)
+                    ? "Approved local folder"
+                    : safeAlias;
+            }
+
+            return path;
+        }
+
+        private static string GitBranchForDisplay(string localPath)
+        {
+            return SafeGitMetadata(localPath, "rev-parse --abbrev-ref HEAD", "unknown");
+        }
+
+        private static string GitRemoteForDisplay(string localPath)
+        {
+            return SafeGitMetadata(localPath, "config --get remote.origin.url", "No remote");
+        }
+
+        private static string SafeGitMetadata(string localPath, string arguments, string fallback)
+        {
+            if (string.IsNullOrWhiteSpace(localPath) || !Directory.Exists(localPath))
+            {
+                return fallback;
+            }
+
+            try
+            {
+                var startInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = File.Exists("/usr/bin/git") ? "/usr/bin/git" : "git",
+                    Arguments = arguments,
+                    WorkingDirectory = localPath,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using (var process = System.Diagnostics.Process.Start(startInfo))
+                {
+                    if (process == null)
+                    {
+                        return fallback;
+                    }
+
+                    if (!process.WaitForExit(750))
+                    {
+                        try
+                        {
+                            process.Kill();
+                        }
+                        catch (Exception)
+                        {
+                            // Best-effort cleanup for a bounded UI metadata probe.
+                        }
+
+                        return fallback;
+                    }
+
+                    if (process.ExitCode != 0)
+                    {
+                        return fallback;
+                    }
+
+                    var output = process.StandardOutput.ReadToEnd().Trim();
+                    return string.IsNullOrWhiteSpace(output) ? fallback : output;
+                }
+            }
+            catch (Exception)
+            {
+                return fallback;
+            }
+        }
+
+        private static string FirstNonEmpty(params string[] values)
+        {
+            return values?.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
+        }
+
+        private static string RepositoryAliasForHash(SaveData saveData, string repositoryHash)
+        {
+            if (saveData == null || string.IsNullOrWhiteSpace(repositoryHash))
+            {
+                return string.Empty;
+            }
+
+            RepositoryCompanionProfileService.Normalize(saveData);
+            var profile = (saveData.RepositoryCompanionProfiles ?? new List<RepositoryCompanionProfile>())
+                .FirstOrDefault(item => item != null && string.Equals(item.RepositoryHash, repositoryHash, StringComparison.Ordinal));
+            return profile == null ? string.Empty : SafeLocalAlias(profile.SafeRepositoryAlias, "Unknown repository");
         }
 
         private static int RecentXpForRepository(SaveData saveData, string repositoryHash, bool gitOnly)
@@ -3450,6 +3718,44 @@ namespace TokenForge.Client.UI
             connection.TotalCommitCount = Math.Max(0, summary.TotalCommitsAnalyzed);
             connection.AnalyzedCommitRange = (summary.AnalyzedStartCommit ?? string.Empty) + ".." + (summary.AnalyzedEndCommit ?? string.Empty);
             connection.LastAnalysisMode = summary.AnalysisMode ?? string.Empty;
+            connection.LastAnalysisScope = AnalysisScopeLabel(summary);
+        }
+
+        private static string AnalysisScopeLabel(GitChangeSummary summary)
+        {
+            if (summary == null)
+            {
+                return "Not analyzed";
+            }
+
+            var mode = NormalizedAnalysisMode(summary.AnalysisMode);
+            if (string.Equals(mode, "fullbaseline", StringComparison.OrdinalIgnoreCase))
+            {
+                var start = string.IsNullOrWhiteSpace(summary.FirstCommitAtUtc) ? "initial commit" : DateOnly(summary.FirstCommitAtUtc);
+                return "Full history · " + start + " → now";
+            }
+
+            if (string.Equals(mode, "incremental", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Since last analysis · " + Math.Max(0, summary.IncrementalCommitCount) + " commits";
+            }
+
+            return "Recent range · " + Math.Max(1, summary.AnalysisWindowDays) + " days";
+        }
+
+        private static string DateOnly(string value)
+        {
+            return DateTimeOffset.TryParse(value, out var parsed)
+                ? parsed.UtcDateTime.ToString("yyyy-MM-dd")
+                : value;
+        }
+
+        private static string NormalizedAnalysisMode(string value)
+        {
+            return (value ?? string.Empty)
+                .Replace("-", string.Empty)
+                .Replace("_", string.Empty)
+                .Trim();
         }
 
         private static string TopStatCategory(CharacterStats stats)

@@ -11,6 +11,7 @@ LOG_STREAM_FILE="${VERIFY_LOG_DIR}/tokenforge-log-stream.log"
 LOG_SHOW_FILE="${VERIFY_LOG_DIR}/tokenforge-log-show.log"
 HASH_REPORT="${VERIFY_LOG_DIR}/bundle-hashes.sha256"
 MANUAL_UI_VERIFIED="${MANUAL_UI_VERIFIED:-NO}"
+LOG_STREAM_PID=""
 
 mkdir -p "${VERIFY_LOG_DIR}"
 
@@ -28,6 +29,36 @@ require_log() {
   printf 'FAIL: %s missing (%s)\n' "${label}" "${pattern}"
   return 1
 }
+
+terminate_verify_app() {
+  local executable="${VERIFY_APP_PATH}/Contents/MacOS/TokenForge"
+  echo "INFO [RuntimeVerify] terminate_verify_app path=${VERIFY_APP_PATH}"
+  /usr/bin/osascript -e 'tell application "TokenForge" to quit' >/dev/null 2>&1 || true
+  sleep 2
+  if command -v pgrep >/dev/null 2>&1 && [[ -f "${executable}" ]]; then
+    local pids
+    pids="$(pgrep -f "${executable}" 2>/dev/null || true)"
+    if [[ -n "${pids}" ]]; then
+      echo "INFO [RuntimeVerify] terminate lingering verify app pids=$(echo "${pids}" | tr '\n' ',' | sed 's/,$//')"
+      while IFS= read -r pid; do
+        [[ -n "${pid}" ]] || continue
+        kill -TERM "${pid}" >/dev/null 2>&1 || true
+      done <<< "${pids}"
+    fi
+  fi
+}
+
+cleanup() {
+  terminate_verify_app
+  if [[ -n "${LOG_STREAM_PID}" ]] && kill -0 "${LOG_STREAM_PID}" >/dev/null 2>&1; then
+    kill "${LOG_STREAM_PID}" >/dev/null 2>&1 || true
+    wait "${LOG_STREAM_PID}" >/dev/null 2>&1 || true
+  fi
+}
+
+trap cleanup EXIT
+trap 'cleanup; exit 130' INT
+trap 'cleanup; exit 143' TERM
 
 section "Preflight"
 RUN_TOKENFORGE_OPEN_PROBE=false REQUIRE_APP_INTEGRITY=false APP_BUNDLE_PATH="${BUILD_OUTPUT}" "${SCRIPT_DIR}/preflight-runtime-environment.sh"
@@ -79,13 +110,6 @@ section "Launch Runtime Verification"
 : > "${LOG_SHOW_FILE}"
 log stream --style compact --predicate 'process CONTAINS "TokenForge"' --level debug > "${LOG_STREAM_FILE}" 2>&1 &
 LOG_STREAM_PID=$!
-cleanup() {
-  if kill -0 "${LOG_STREAM_PID}" >/dev/null 2>&1; then
-    kill "${LOG_STREAM_PID}" >/dev/null 2>&1 || true
-    wait "${LOG_STREAM_PID}" >/dev/null 2>&1 || true
-  fi
-}
-trap cleanup EXIT
 
 if ! TOKENFORGE_VERIFY_RUNTIME=1 open "${VERIFY_APP_PATH}" --args -TokenForgeVerifyRuntime YES; then
   echo "LaunchServices open failed for ${VERIFY_APP_PATH}."
@@ -95,7 +119,6 @@ fi
 sleep "${VERIFY_RUNTIME_WAIT_SECONDS:-30}"
 log show --style compact --predicate 'process CONTAINS "TokenForge"' --last 2m --debug > "${LOG_SHOW_FILE}" 2>&1 || true
 cleanup
-trap - EXIT
 
 section "Required Runtime Logs"
 MISSING=0

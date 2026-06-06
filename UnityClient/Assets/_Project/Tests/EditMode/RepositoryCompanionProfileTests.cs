@@ -1042,7 +1042,12 @@ namespace TokenForge.Client.Tests
         private static IList InvokeRepositoryCompanionDisplayItems(SaveData saveData)
         {
             return (IList)typeof(ApprovedActivityAnalysisViewModel)
-                .GetMethod("ToRepositoryCompanionDisplayItems", BindingFlags.NonPublic | BindingFlags.Static)
+                .GetMethod(
+                    "ToRepositoryCompanionDisplayItems",
+                    BindingFlags.NonPublic | BindingFlags.Static,
+                    null,
+                    new[] { typeof(SaveData) },
+                    null)
                 .Invoke(null, new object[] { saveData });
         }
 

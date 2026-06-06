@@ -15,6 +15,17 @@ UNITY_TEST_TIMEOUT_SECONDS="${UNITY_TEST_TIMEOUT_SECONDS:-300}"
 EDITMODE_FILTER="${EDITMODE_FILTER:-}"
 PLAYMODE_FILTER="${PLAYMODE_FILTER:-}"
 TIMEOUT_EXIT_CODE=124
+CLEANUP_SCRIPT="${SCRIPT_DIR}/tokenforge-clean-unity-processes.sh"
+
+cleanup_unity_test_processes() {
+  if [[ -x "${CLEANUP_SCRIPT}" ]]; then
+    TOKENFORGE_UNITY_CLEANUP_LOGS="${EDITMODE_LOG}:${PLAYMODE_LOG}" UNITY_PATH="${UNITY_PATH}" "${CLEANUP_SCRIPT}" cleanup || true
+  fi
+}
+
+trap cleanup_unity_test_processes EXIT
+trap 'cleanup_unity_test_processes; exit 130' INT
+trap 'cleanup_unity_test_processes; exit 143' TERM
 
 if [[ ! -x "${UNITY_PATH}" ]]; then
   echo "Unity executable not found or not executable: ${UNITY_PATH}" >&2
@@ -154,6 +165,9 @@ run_platform() {
   fi
 
   print_command "Unity ${platform} command" "${command[@]}"
+  if [[ -x "${CLEANUP_SCRIPT}" ]]; then
+    TOKENFORGE_UNITY_CLEANUP_LOGS="${log_path}" UNITY_PATH="${UNITY_PATH}" "${CLEANUP_SCRIPT}" preflight || true
+  fi
   if [[ -n "${test_filter}" ]]; then
     echo "Unity ${platform} filter: ${test_filter}"
   else
@@ -166,6 +180,7 @@ run_platform() {
 
   run_with_timeout "${UNITY_TEST_TIMEOUT_SECONDS}" "${command[@]}"
   local unity_exit=$?
+  cleanup_unity_test_processes
 
   echo "Unity ${platform} exit code: ${unity_exit}"
   if [[ "${unity_exit}" -eq "${TIMEOUT_EXIT_CODE}" ]]; then

@@ -153,7 +153,12 @@ namespace TokenForge.Client.UI
             return SelectLocalOnlyApprovedRepositoryPathInternalAsync(repositoryRootPath, cancellationToken);
         }
 
-        public async Task<Result<GitAnalysisReviewModel>> AnalyzeAsync(CancellationToken cancellationToken = default)
+        public Task<Result<GitAnalysisReviewModel>> AnalyzeAsync(CancellationToken cancellationToken = default)
+        {
+            return AnalyzeAsync(null, cancellationToken);
+        }
+
+        public async Task<Result<GitAnalysisReviewModel>> AnalyzeAsync(GitAnalysisMode? requestedAnalysisMode, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(selectedRepositoryRootPath))
             {
@@ -170,9 +175,9 @@ namespace TokenForge.Client.UI
             RepositoryCompanionProfileService.Normalize(saveDataBeforeAnalysis);
             var selectedRepositoryHash = RepositoryCompanionProfileService.HashRepositoryPath(selectedRepositoryRootPath);
             var connection = FindConnectedProject(saveDataBeforeAnalysis, selectedRepositoryHash);
-            var analysisMode = connection == null || string.IsNullOrWhiteSpace(connection.LastAnalyzedCommit)
+            var analysisMode = requestedAnalysisMode ?? (connection == null || string.IsNullOrWhiteSpace(connection.LastAnalyzedCommit)
                 ? GitAnalysisMode.FullBaseline
-                : GitAnalysisMode.Incremental;
+                : GitAnalysisMode.Incremental);
             var input = Settings.ToInput(selectedRepositoryRootPath, analysisMode, connection?.LastAnalyzedCommit ?? string.Empty);
             var analysisResult = await Task.Run(() => analyzer.AnalyzeAsync(input, cancellationToken), cancellationToken).ConfigureAwait(false);
             if (!analysisResult.IsSuccess)
@@ -388,6 +393,44 @@ namespace TokenForge.Client.UI
             connection.TotalCommitCount = Math.Max(0, summary.TotalCommitsAnalyzed);
             connection.AnalyzedCommitRange = (summary.AnalyzedStartCommit ?? string.Empty) + ".." + (summary.AnalyzedEndCommit ?? string.Empty);
             connection.LastAnalysisMode = summary.AnalysisMode ?? string.Empty;
+            connection.LastAnalysisScope = AnalysisScopeLabel(summary);
+        }
+
+        private static string AnalysisScopeLabel(GitChangeSummary summary)
+        {
+            if (summary == null)
+            {
+                return "Not analyzed";
+            }
+
+            var mode = NormalizedAnalysisMode(summary.AnalysisMode);
+            if (string.Equals(mode, "fullbaseline", StringComparison.OrdinalIgnoreCase))
+            {
+                var start = string.IsNullOrWhiteSpace(summary.FirstCommitAtUtc) ? "initial commit" : DateOnly(summary.FirstCommitAtUtc);
+                return "Full history · " + start + " → now";
+            }
+
+            if (string.Equals(mode, "incremental", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Since last analysis · " + Math.Max(0, summary.IncrementalCommitCount) + " commits";
+            }
+
+            return "Recent range · " + Math.Max(1, summary.AnalysisWindowDays) + " days";
+        }
+
+        private static string DateOnly(string value)
+        {
+            return DateTimeOffset.TryParse(value, out var parsed)
+                ? parsed.UtcDateTime.ToString("yyyy-MM-dd")
+                : value;
+        }
+
+        private static string NormalizedAnalysisMode(string value)
+        {
+            return (value ?? string.Empty)
+                .Replace("-", string.Empty)
+                .Replace("_", string.Empty)
+                .Trim();
         }
 
         private async Task<Result> SelectLocalOnlyApprovedRepositoryPathInternalAsync(string repositoryRootPath, CancellationToken cancellationToken)

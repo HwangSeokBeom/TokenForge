@@ -63,8 +63,12 @@ else
 fi
 
 find "${APP_PATH}" -name .DS_Store -delete
-echo "TokenForge macOS xattr audit before signing"
-xattr -lr "${APP_PATH}" 2>/dev/null || true
+if [[ "${TOKENFORGE_VERBOSE:-0}" == "1" ]]; then
+  echo "TokenForge macOS xattr audit before signing"
+  xattr -lr "${APP_PATH}" 2>/dev/null || true
+else
+  echo "TokenForge macOS xattr audit before signing: suppressed (set TOKENFORGE_VERBOSE=1 for full listing)"
+fi
 
 remove_xattr_name() {
   local name="$1"
@@ -86,8 +90,12 @@ remove_xattr_name com.apple.provenance
 
 remaining_xattrs="$(xattr -lr "${APP_PATH}" 2>/dev/null || true)"
 if [[ -n "${remaining_xattrs}" ]]; then
-  echo "TokenForge macOS xattr audit after cleanup"
-  echo "${remaining_xattrs}"
+  echo "TokenForge macOS xattr audit after cleanup: extended attributes remain"
+  if [[ "${TOKENFORGE_VERBOSE:-0}" == "1" ]]; then
+    echo "${remaining_xattrs}"
+  else
+    echo "TokenForge macOS xattr audit after cleanup: listing suppressed (set TOKENFORGE_VERBOSE=1 for full listing)"
+  fi
   if echo "${remaining_xattrs}" | grep -E 'com.apple.(quarantine|FinderInfo|ResourceFork|fileprovider)' >/dev/null; then
     echo "WARN disallowed signing xattrs remain after cleanup; codesign may reject this bundle." >&2
   fi

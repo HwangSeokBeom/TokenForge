@@ -12,6 +12,19 @@ BUILD_OUTPUT="${BUILD_OUTPUT:-/tmp/tokenforge-macos-build/TokenForge.app}"
 LOG_FILE="${LOG_FILE:-/tmp/tokenforge-macos-build.log}"
 DEVELOPMENT_BUILD="${DEVELOPMENT_BUILD:-false}"
 CLEAN_BUILD="${CLEAN_BUILD:-true}"
+UNITY_BUILD_TIMEOUT_SECONDS="${UNITY_BUILD_TIMEOUT_SECONDS:-600}"
+CLEANUP_SCRIPT="${SCRIPT_DIR}/tokenforge-clean-unity-processes.sh"
+TIMEOUT_EXIT_CODE=124
+
+cleanup_unity_build_processes() {
+  if [[ -x "${CLEANUP_SCRIPT}" ]]; then
+    TOKENFORGE_UNITY_CLEANUP_LOGS="${LOG_FILE}" UNITY_PATH="${UNITY_PATH}" "${CLEANUP_SCRIPT}" cleanup || true
+  fi
+}
+
+trap cleanup_unity_build_processes EXIT
+trap 'cleanup_unity_build_processes; exit 130' INT
+trap 'cleanup_unity_build_processes; exit 143' TERM
 
 print_summary() {
   local result="$1"
@@ -20,6 +33,38 @@ print_summary() {
   echo "Output path: ${BUILD_OUTPUT}"
   echo "Result: ${result}"
   echo "Log path: ${LOG_FILE}"
+}
+
+run_with_timeout() {
+  local timeout_seconds="$1"
+  shift
+
+  "$@" &
+  local unity_pid=$!
+  local start_epoch
+  start_epoch="$(date +%s)"
+
+  while kill -0 "${unity_pid}" >/dev/null 2>&1; do
+    local now
+    now="$(date +%s)"
+    if [[ $((now - start_epoch)) -ge "${timeout_seconds}" ]]; then
+      echo "Unity build command timed out after ${timeout_seconds}s; sending SIGTERM to pid ${unity_pid}" >&2
+      kill -TERM "${unity_pid}" >/dev/null 2>&1 || true
+      local waited=0
+      while kill -0 "${unity_pid}" >/dev/null 2>&1 && [[ "${waited}" -lt 10 ]]; do
+        sleep 1
+        waited=$((waited + 1))
+      done
+      if kill -0 "${unity_pid}" >/dev/null 2>&1; then
+        kill -KILL "${unity_pid}" >/dev/null 2>&1 || true
+      fi
+      wait "${unity_pid}" >/dev/null 2>&1 || true
+      return "${TIMEOUT_EXIT_CODE}"
+    fi
+    sleep 1
+  done
+
+  wait "${unity_pid}"
 }
 
 if [[ ! -x "${UNITY_PATH}" ]]; then
@@ -71,7 +116,12 @@ if [[ "${CLEAN_BUILD}" == "true" ]]; then
   rm -rf "${BUILD_OUTPUT}"
 fi
 
-if "${UNITY_PATH}" \
+if [[ -x "${CLEANUP_SCRIPT}" ]]; then
+  TOKENFORGE_UNITY_CLEANUP_LOGS="${LOG_FILE}" UNITY_PATH="${UNITY_PATH}" "${CLEANUP_SCRIPT}" preflight || true
+fi
+
+BUILD_COMMAND=(
+  "${UNITY_PATH}"
   -batchmode \
   -nographics \
   -projectPath "${UNITY_PROJECT_PATH}" \
@@ -81,9 +131,20 @@ if "${UNITY_PATH}" \
   -developmentBuild "${DEVELOPMENT_BUILD}" \
   -cleanBuild "${CLEAN_BUILD}" \
   -quit \
-  -logFile "${LOG_FILE}"; then
+  -logFile "${LOG_FILE}"
+)
+
+echo "Unity build timeout seconds: ${UNITY_BUILD_TIMEOUT_SECONDS}"
+if run_with_timeout "${UNITY_BUILD_TIMEOUT_SECONDS}" "${BUILD_COMMAND[@]}"; then
+  cleanup_unity_build_processes
   print_summary "success"
 else
+  build_exit=$?
+  cleanup_unity_build_processes
+  if [[ "${build_exit}" -eq "${TIMEOUT_EXIT_CODE}" ]]; then
+    print_summary "failure: timeout"
+    exit "${TIMEOUT_EXIT_CODE}"
+  fi
   print_summary "failure"
-  exit 1
+  exit "${build_exit}"
 fi

@@ -42,6 +42,7 @@ namespace TokenForge.Client.Domain
         public int TotalCommitCount { get; set; }
         public string AnalyzedCommitRange { get; set; } = string.Empty;
         public string LastAnalysisMode { get; set; } = string.Empty;
+        public string LastAnalysisScope { get; set; } = string.Empty;
         public bool AnalysisEnabled { get; set; } = true;
     }
 
@@ -168,6 +169,13 @@ namespace TokenForge.Client.Domain
         public string Status { get; set; } = string.Empty;
         public string ErrorCode { get; set; } = string.Empty;
         public string SafeSummary { get; set; } = string.Empty;
+        public string RepositoryId { get; set; } = string.Empty;
+        public string RepositoryAlias { get; set; } = string.Empty;
+        public string Branch { get; set; } = string.Empty;
+        public string CommitRange { get; set; } = string.Empty;
+        public string AnalysisScope { get; set; } = string.Empty;
+        public int XpDelta { get; set; }
+        public CharacterStats StatDeltas { get; set; } = CharacterStats.Zero();
         public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
     }
 

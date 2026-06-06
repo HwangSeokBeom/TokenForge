@@ -305,6 +305,7 @@ namespace TokenForge.Client.Platform
         public bool connected;
         public string id = string.Empty;
         public string name = string.Empty;
+        public string folderName = string.Empty;
         public string status = "not_selected";
         public string statusText = "Not selected";
         public int connectedCount;
@@ -353,7 +354,12 @@ namespace TokenForge.Client.Platform
     {
         public string id = string.Empty;
         public string name = "Repository";
+        public string folderName = string.Empty;
         public string safePath = "Approved local folder";
+        public string remoteUrl = "No remote";
+        public string branch = "unknown";
+        public string repositoryId = string.Empty;
+        public string lastAnalysisScope = "Not analyzed";
         public string companion = "Egg · Lv 1";
         public string lastAnalyzed = "Not analyzed";
         public string status = "connected";
@@ -535,13 +541,15 @@ namespace TokenForge.Client.Platform
     {
         public bool firstRunCompleted;
         public bool dismissedForNow;
+        public bool shouldPresentFirstRunGuide = true;
+        public string presentationMode = "guidedTutorial";
         public string currentStep = "step_1";
         public int currentStepIndex;
-        public int stepCount = 10;
+        public int stepCount = 5;
         public bool canGoBack;
         public bool canGoNext = true;
-        public string statusText = "Start the game-style guide: repositories grow into zodiac companions, earn coins, and unlock cosmetics.";
-        public string[] steps = new[] { "Turn repositories into companions", "Analyze local Git activity", "Grow through stages", "Earn tokens", "Customize your mascot", "Choose a zodiac identity", "Connect AI agents", "Desktop companion mode", "Privacy-first by design", "Ready to begin" };
+        public string statusText = "Connect a repository, analyze your work, grow a mascot, and keep it on your Mac desktop.";
+        public string[] steps = new[] { "Pick a repository", "Analyze Git history", "Grow your companion", "Unlock cosmetics", "Bring it to the desktop" };
         public string[] zodiacIds = new[] { "rat", "ox", "tiger", "rabbit", "dragon", "snake", "horse", "goat", "monkey", "rooster", "dog", "pig" };
 
         public static NativeOnboardingState CreateDefault()

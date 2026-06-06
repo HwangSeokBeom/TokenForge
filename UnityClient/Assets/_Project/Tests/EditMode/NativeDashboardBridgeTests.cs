@@ -73,6 +73,15 @@ namespace TokenForge.Client.Tests
 
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("runAnalysis", out var analysis));
             Assert.AreEqual(NativeDashboardAction.RunAnalysis, analysis.Action);
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("repository.runAnalysis:full", out var fullHistoryAnalysis));
+            Assert.AreEqual(NativeDashboardAction.RunRepositoryAnalysis, fullHistoryAnalysis.Action);
+            Assert.AreEqual("full", fullHistoryAnalysis.Value);
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("repository.runAnalysis:sinceLast", out var sinceLastAnalysis));
+            Assert.AreEqual(NativeDashboardAction.RunRepositoryAnalysis, sinceLastAnalysis.Action);
+            Assert.AreEqual("sinceLast", sinceLastAnalysis.Value);
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("repository.runAnalysis:recent", out var recentAnalysis));
+            Assert.AreEqual(NativeDashboardAction.RunRepositoryAnalysis, recentAnalysis.Action);
+            Assert.AreEqual("recent", recentAnalysis.Value);
 
             Assert.IsTrue(MacNativeDashboardService.TryParseAction("analyzeRepository:repo-1", out var analyzeRepository));
             Assert.AreEqual(NativeDashboardAction.AnalyzeRepository, analyzeRepository.Action);
@@ -444,12 +453,19 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("persistentStatusBarIdentifier", json);
             StringAssert.Contains("TokenForge.PersistentStatusBar", json);
             StringAssert.Contains("dismissedForNow", json);
+            StringAssert.Contains("shouldPresentFirstRunGuide", json);
+            StringAssert.Contains("presentationMode", json);
             StringAssert.Contains("currentStepIndex", json);
             StringAssert.Contains("canGoNext", json);
             StringAssert.Contains("companionVisible", json);
             StringAssert.Contains("repository", json);
             StringAssert.Contains("agentProviders", json);
             StringAssert.Contains("repositories", json);
+            StringAssert.Contains("safePath", json);
+            StringAssert.Contains("remoteUrl", json);
+            StringAssert.Contains("branch", json);
+            StringAssert.Contains("repositoryId", json);
+            StringAssert.Contains("lastAnalysisScope", json);
             StringAssert.Contains("review", json);
             StringAssert.Contains("evolveActionVisible", json);
             StringAssert.Contains("xpProgressRatio", json);
@@ -506,22 +522,21 @@ namespace TokenForge.Client.Tests
 
             foreach (var section in new[]
                      {
-                         "Turn repositories into companions",
-                         "Analyze local Git activity",
-                         "Grow through stages",
-                         "Earn tokens",
+                         "Connect repo",
+                         "Analyze Git history",
+                         "Approve growth",
                          "Customize your mascot",
-                         "Choose a zodiac identity",
-                         "Connect AI agents",
-                         "Desktop companion mode",
-                         "Privacy-first by design",
-                         "Ready to begin"
+                         "Show on desktop"
                      })
             {
                 StringAssert.Contains(section, source + modelJson);
             }
 
             StringAssert.Contains("TokenForge.OnboardingGuide", source);
+            StringAssert.Contains("TokenForge.FirstRunTutorialContent", source);
+            StringAssert.Contains("[Onboarding][FIRST_RUN_PRESENTATION]", source);
+            StringAssert.Contains("Turn your Git history into a desktop companion", source);
+            StringAssert.Contains("Connect a repository, analyze your work, grow a mascot, and keep it on your Mac desktop.", source);
             StringAssert.Contains("TokenForgeOnboardingVisualView", source);
             StringAssert.Contains("Step %ld of %ld", source);
             StringAssert.Contains("Back", source);
@@ -534,10 +549,152 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("denseDocumentation=false", source);
             StringAssert.Contains("[ZodiacPreview][PIXEL_ART]", source);
             StringAssert.Contains("stageBased=true", source);
+            StringAssert.Contains("squareCells=true", source);
+            StringAssert.Contains("nearestNeighbor=true", source);
             StringAssert.Contains("onboarding.step:", source);
             StringAssert.Contains("onboarding.skip", source);
             StringAssert.Contains("onboarding.finish", source);
             StringAssert.Contains("dismissedForNow", modelJson);
+            StringAssert.Contains("shouldPresentFirstRunGuide", modelJson);
+            StringAssert.Contains("guidedTutorial", modelJson);
+        }
+
+        [Test]
+        public void NativeDashboardProjectionDoesNotRedirectDashboardIntoOnboarding()
+        {
+            var bootstrapperSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/AppBootstrapper.cs"));
+
+            StringAssert.Contains("state.selectedNavItem = string.IsNullOrWhiteSpace(nativeSelectedNavItem) ? \"dashboard\" : nativeSelectedNavItem;", bootstrapperSource);
+            Assert.IsFalse(bootstrapperSource.Contains("state.selectedNavItem = \"onboarding\""), "Dashboard projection must not force the onboarding tab.");
+            StringAssert.Contains("shouldPresentFirstRunGuide", bootstrapperSource);
+            StringAssert.Contains("FirstRunOnboardingDismissedForNow", bootstrapperSource);
+            StringAssert.Contains("case NativeDashboardAction.Onboarding:", bootstrapperSource);
+            StringAssert.Contains("nativeSelectedNavItem = \"onboarding\";", bootstrapperSource);
+
+            var nativeSource = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+            StringAssert.Contains("firstRunGuideSuppressedByDashboardNavigation", nativeSource);
+            StringAssert.Contains("dashboardHijack=false", nativeSource);
+            StringAssert.Contains("TokenForgeShouldShowFirstRunGuide", nativeSource);
+            StringAssert.Contains("(void)selectedNavItem;", nativeSource);
+            StringAssert.Contains("[RuntimeUIPath][FirstRunTutorial]", nativeSource);
+        }
+
+        [Test]
+        public void NativeDashboardNoRepositoryStateClearsCompanionGrowthAndReviewUi()
+        {
+            var bootstrapperSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/AppBootstrapper.cs"));
+            var nativeSource = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("ApplyNoRepositoryNativeState", bootstrapperSource);
+            StringAssert.Contains("state.repository.canAnalyze = false;", bootstrapperSource);
+            StringAssert.Contains("state.primaryActionEnabled = false;", bootstrapperSource);
+            StringAssert.Contains("state.repositories = new NativeRepositoryListItem[0];", bootstrapperSource);
+            StringAssert.Contains("state.companion = NativeCompanionState.CreateDefault();", bootstrapperSource);
+            StringAssert.Contains("state.review = NativeReviewState.CreateDefault();", bootstrapperSource);
+            StringAssert.Contains("state.activity.pendingReviews = new NativeActivityItem[0];", bootstrapperSource);
+            StringAssert.Contains("state.companionFarm = BuildNativeCompanionFarmState(new NativeRepositoryListItem[0], settings);", bootstrapperSource);
+            StringAssert.Contains("Connect a repository to create your first companion.", nativeSource);
+            StringAssert.Contains("Connect your first Git repository", nativeSource);
+            StringAssert.Contains("TokenForge creates a companion from approved local Git activity.", nativeSource);
+            StringAssert.Contains("return card;", nativeSource);
+        }
+
+        [Test]
+        public void NativeRepositoryRowsExposeStableIdentityAndAnalysisScope()
+        {
+            var state = NativeDashboardState.CreateDefault();
+            state.repositories = new[]
+            {
+                new NativeRepositoryListItem
+                {
+                    id = "repo-a",
+                    name = "TokenForgeCoreServer",
+                    folderName = "TokenForgeCoreServer",
+                    safePath = "~/Documents/GitHub/TokenForgeCoreServer",
+                    remoteUrl = "git@example.com:owner/TokenForgeCoreServer.git",
+                    branch = "main",
+                    repositoryId = "repo-a",
+                    lastAnalysisScope = "Full history · 2024-01-10 → now",
+                    lastAnalyzed = "2026-06-02 00:00:00 UTC",
+                    selected = true
+                },
+                new NativeRepositoryListItem
+                {
+                    id = "repo-b",
+                    name = "TokenForge",
+                    folderName = "TokenForge",
+                    safePath = "~/Documents/GitHub/TokenForge",
+                    remoteUrl = "git@example.com:owner/TokenForge.git",
+                    branch = "feature/native-dashboard",
+                    repositoryId = "repo-b",
+                    lastAnalysisScope = "Since last analysis · 3 commits"
+                }
+            };
+
+            var json = state.ToJson();
+
+            StringAssert.Contains("TokenForgeCoreServer", json);
+            StringAssert.Contains("~/Documents/GitHub/TokenForgeCoreServer", json);
+            StringAssert.Contains("git@example.com:owner/TokenForgeCoreServer.git", json);
+            StringAssert.Contains("main", json);
+            StringAssert.Contains("repo-a", json);
+            StringAssert.Contains("Full history", json);
+            StringAssert.Contains("Since last analysis", json);
+
+            var bootstrapperSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/AppBootstrapper.cs"));
+            var nativeSource = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+            StringAssert.Contains("NativeRepositoryProjectedName", bootstrapperSource);
+            StringAssert.Contains("NativeRepositoryDisplayName", bootstrapperSource);
+            StringAssert.Contains("item.LocalFolderName", bootstrapperSource);
+            StringAssert.Contains("folderName =", bootstrapperSource);
+            StringAssert.Contains("TokenForgeDashboardString(repository, @\"folderName\"", nativeSource);
+            StringAssert.Contains("ShortRepositoryId", bootstrapperSource);
+            StringAssert.Contains("TokenForgeRepositoryDisplayName", nativeSource);
+            StringAssert.Contains("TokenForgeRunAnalysisTitle", nativeSource);
+        }
+
+        [Test]
+        public void NativeRepositoryIdentityUsesApprovedFolderBasenameAndSuppressesHashFallback()
+        {
+            var bootstrapperSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/AppBootstrapper.cs"));
+            var viewModelSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/UI/ApprovedActivityAnalysisViewModel.cs"));
+            var modelSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/Platform/NativeDashboardModels.cs"));
+            var nativeSource = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("public string LocalFolderName", viewModelSource);
+            StringAssert.Contains("RepositoryFolderName(location.LocalPath)", viewModelSource);
+            StringAssert.Contains("DisplayName = RepositoryDisplayName(localFolderName", viewModelSource);
+            StringAssert.Contains("CurrentRepositoryAlias = hasConnectedRepository ? selectedRepositoryDisplay?.SafeRepositoryAlias", viewModelSource);
+            StringAssert.Contains("public string folderName", modelSource);
+            StringAssert.Contains("state.repository.folderName", bootstrapperSource);
+            StringAssert.Contains("NativeRepositoryDisplayName(activeRepositoryDisplay)", bootstrapperSource);
+            StringAssert.Contains("var folderName = SafeNativeText(item.LocalFolderName", bootstrapperSource);
+            StringAssert.Contains("TokenForgeDashboardString(repository, @\"folderName\"", nativeSource);
+            StringAssert.Contains("return folderName;", nativeSource);
+            StringAssert.Contains("visible repository hash fallback suppressed", bootstrapperSource);
+            StringAssert.Contains("missingApprovedFolderName", nativeSource);
+            Assert.IsFalse(bootstrapperSource.Contains("\"Repository \" + shortId"), "Repository <hash> must not be used as a visible default name.");
+            Assert.IsFalse(nativeSource.Contains("stringWithFormat:@\"Repository %@\""), "Repository <hash> must not be used as a visible default name.");
+        }
+
+        [Test]
+        public void NativeRepositoryScreenExposesExplicitAnalysisScopes()
+        {
+            var nativeSource = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+            var bootstrapperSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/AppBootstrapper.cs"));
+
+            StringAssert.Contains("Run Full History Analysis", nativeSource);
+            StringAssert.Contains("Run Since Last Analysis", nativeSource);
+            StringAssert.Contains("Run Recent Analysis", nativeSource);
+            StringAssert.Contains("repository.runAnalysis:full", nativeSource);
+            StringAssert.Contains("repository.runAnalysis:sinceLast", nativeSource);
+            StringAssert.Contains("repository.runAnalysis:recent", nativeSource);
+            StringAssert.Contains("Run First Analysis", nativeSource);
+            StringAssert.Contains("Connect repository first", nativeSource);
+            StringAssert.Contains("NativeGitAnalysisModeFromScope", bootstrapperSource);
+            StringAssert.Contains("GitAnalysisMode.FullBaseline", bootstrapperSource);
+            StringAssert.Contains("GitAnalysisMode.Incremental", bootstrapperSource);
+            StringAssert.Contains("GitAnalysisMode.RecentTrend", bootstrapperSource);
         }
 
         [Test]
@@ -1178,6 +1335,9 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("constraintLessThanOrEqualToConstant:430.0", source);
             StringAssert.Contains("[AvatarPreview] sourceSize=", source);
             StringAssert.Contains("[AvatarRenderer] preset=", source);
+            StringAssert.Contains("squareCellSprite", source);
+            StringAssert.Contains("noSmoothOvalFallback=true", source);
+            StringAssert.Contains("sharedZodiacPixelSprite", source);
             StringAssert.Contains("parts=head/body/headset/legs/shadow allInsideFinalRect=", source);
             StringAssert.Contains("assetType=hero notMenuBar", source);
             StringAssert.Contains("[DashboardHero] relayout width=", source);
@@ -1517,6 +1677,86 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("[Bootstrap] uiMode=unityFallback", source);
             StringAssert.Contains("[Bootstrap] removedStaleUnityDashboardRoot count=", source);
             StringAssert.Contains("RemoveStaleUnityDashboardRoots", source);
+        }
+
+        [Test]
+        public void NativeOverlayShowAllCanCreateVisiblePanelFromSnapshots()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("[RuntimeUIPath][Overlay]", source);
+            StringAssert.Contains("[OverlayCreate]", source);
+            StringAssert.Contains("[OverlayOrderFront]", source);
+            StringAssert.Contains("[OverlayVisible]", source);
+            StringAssert.Contains("[OverlayProjection]", source);
+            StringAssert.Contains("[OverlaySuppressed]", source);
+            StringAssert.Contains("TokenForgeOverlaySnapshotsByRepositoryId.count > 0", source);
+            StringAssert.Contains("TokenForgeCreateOrReuseOverlayPanelForSnapshot(snapshot, index, safeSource)", source);
+            StringAssert.Contains("actualVisibleOverlayCount = TokenForgeVisibleOverlayFarmCount();", source);
+            StringAssert.Contains("TokenForgeMenuVisibleOverlayCount = MAX(0, actualVisibleOverlayCount);", source);
+            StringAssert.Contains("[OverlayLifecycle][KEEP_ALIVE_AFTER_DASHBOARD_CLOSE]", source);
+        }
+
+        [Test]
+        public void NativeLifecycleDisablesLateSecureRestorationCrashPath()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("applicationSupportsSecureRestorableState", source);
+            StringAssert.Contains("supportsSecureRestorableState=false reason=lateUnityDelegateInstall crashGuard=true", source);
+            StringAssert.Contains("return NO;", source);
+        }
+
+        [Test]
+        public void NativePixelSpritesUseMatrixRendererForZodiacPreviews()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+            var drawStart = source.IndexOf("+ (void)drawZodiacMascot", StringComparison.Ordinal);
+            var drawEnd = source.IndexOf("@end", drawStart, StringComparison.Ordinal);
+            var drawMethod = source.Substring(drawStart, drawEnd - drawStart);
+
+            StringAssert.Contains("pixelGrid=24x24", drawMethod);
+            StringAssert.Contains("matrixRenderer=true", drawMethod);
+            StringAssert.Contains("noSmoothOvalFallback=true", drawMethod);
+            StringAssert.Contains("nearestNeighbor=true", drawMethod);
+            foreach (var zodiac in new[] { "rat", "ox", "tiger", "rabbit", "dragon", "snake", "horse", "goat", "monkey", "rooster", "dog", "pig" })
+            {
+                StringAssert.Contains(zodiac, drawMethod);
+            }
+            foreach (var stage in new[] { "egg", "baby", "child", "teen", "young_adult", "adult" })
+            {
+                StringAssert.Contains(stage, drawMethod);
+            }
+            Assert.IsFalse(drawMethod.Contains("pixelOval:"), "Zodiac sprites must not use smooth or oval-like fallback drawing.");
+        }
+
+        [Test]
+        public void NativeDashboardScrollableTabsHaveBottomSafeInset()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("TokenForgePinSubview(content, document, 32, 44, 96, 44);", source);
+            StringAssert.Contains("TokenForgePinSubview(guideContent, guideDocument, 20, 32, 96, 32);", source);
+            StringAssert.Contains("[LayoutBounds]", source);
+            StringAssert.Contains("bottomInset=96", source);
+        }
+
+        [Test]
+        public void LocalVerifyWrapperReportsFailureKindAndSuppressesXattrSpamByDefault()
+        {
+            var root = Path.GetFullPath(Path.Combine(Application.dataPath, "..", ".."));
+            var wrapper = File.ReadAllText(Path.Combine(root, "scripts/tokenforge-local-verify-all.sh"));
+            var signer = File.ReadAllText(Path.Combine(root, "scripts/sign-macos-app.sh"));
+
+            StringAssert.Contains("TOKENFORGE_VERIFY_STATUS", wrapper);
+            StringAssert.Contains("TOKENFORGE_VERIFY_FAILURE_KIND", wrapper);
+            StringAssert.Contains("TOKENFORGE_VERIFY_NEXT_COMMAND", wrapper);
+            StringAssert.Contains("TOKENFORGE_VERIFY_XML", wrapper);
+            StringAssert.Contains("TOKENFORGE_VERIFY_RUNTIME_LOG", wrapper);
+            StringAssert.Contains("--verbose", wrapper);
+            StringAssert.Contains("TOKENFORGE_VERBOSE", wrapper);
+            StringAssert.Contains("listing suppressed", signer);
+            StringAssert.Contains("TOKENFORGE_VERBOSE:-0", signer);
         }
 
         private static ApprovedActivityAnalysisViewModel CreateNativeReviewViewModel(SaveDataRepository saveRepository)
