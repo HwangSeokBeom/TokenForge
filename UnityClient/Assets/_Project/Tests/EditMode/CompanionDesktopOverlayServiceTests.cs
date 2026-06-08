@@ -111,7 +111,7 @@ namespace TokenForge.Client.Tests
             var settings = DesktopCompanionSettings.CreateDefault();
             settings.IsDesktopCompanionEnabled = true;
             controller.Initialize(overlay, lifecycle);
-            controller.ApplySettings(settings, new CompanionState { Stage = CompanionStage.Hatchling, Archetype = CompanionArchetype.Builder, TotalXp = 600 });
+            controller.ApplySettings(settings, new CompanionState { Stage = CompanionStage.Hatchling, Archetype = CompanionArchetype.Builder, TotalXp = 600 }, null, "repo-a");
 
             new MacApplicationLifecycleService().HideMainWindow();
 
@@ -132,7 +132,7 @@ namespace TokenForge.Client.Tests
             settings.IsDesktopCompanionEnabled = true;
             settings.IsClickThroughEnabled = false;
             controller.Initialize(overlay, lifecycle);
-            controller.ApplySettings(settings, CompanionState.CreateDefault());
+            controller.ApplySettings(settings, CompanionState.CreateDefault(), null, "repo-a");
 
             overlay.RaiseClick();
 
@@ -152,7 +152,7 @@ namespace TokenForge.Client.Tests
             settings.IsDesktopCompanionEnabled = true;
             settings.IsClickThroughEnabled = false;
             controller.Initialize(overlay, lifecycle);
-            controller.ApplySettings(settings, CompanionState.CreateDefault());
+            controller.ApplySettings(settings, CompanionState.CreateDefault(), null, "repo-a");
 
             overlay.RaiseDoubleClick();
 
@@ -171,7 +171,7 @@ namespace TokenForge.Client.Tests
             settings.IsDesktopCompanionEnabled = true;
             settings.IsClickThroughEnabled = true;
             controller.Initialize(overlay, lifecycle);
-            controller.ApplySettings(settings, CompanionState.CreateDefault());
+            controller.ApplySettings(settings, CompanionState.CreateDefault(), null, "repo-a");
 
             overlay.RaiseClick();
 
@@ -191,7 +191,7 @@ namespace TokenForge.Client.Tests
             settings.IsDesktopCompanionEnabled = true;
             settings.IsClickThroughEnabled = true;
             controller.Initialize(overlay, lifecycle);
-            controller.ApplySettings(settings, CompanionState.CreateDefault());
+            controller.ApplySettings(settings, CompanionState.CreateDefault(), null, "repo-a");
 
             Assert.IsFalse(overlay.LastClickEnabled);
             UnityEngine.Object.DestroyImmediate(controllerObject);
@@ -209,7 +209,7 @@ namespace TokenForge.Client.Tests
             var settings = DesktopCompanionSettings.CreateDefault();
             settings.IsDesktopCompanionEnabled = true;
             controller.Initialize(overlay, lifecycle);
-            controller.ApplySettings(settings, CompanionState.CreateDefault());
+            controller.ApplySettings(settings, CompanionState.CreateDefault(), null, "repo-a");
 
             overlay.RaiseDragEnded(new Vector2(320f, 240f));
 
@@ -228,8 +228,8 @@ namespace TokenForge.Client.Tests
             settings.IsDesktopCompanionEnabled = true;
 
             controller.Initialize(overlay, lifecycle);
-            controller.ApplySettings(settings, CompanionState.CreateDefault());
-            controller.ApplySettings(settings, CompanionState.CreateDefault());
+            controller.ApplySettings(settings, CompanionState.CreateDefault(), null, "repo-a");
+            controller.ApplySettings(settings, CompanionState.CreateDefault(), null, "repo-a");
 
             Assert.AreEqual(1, overlay.CreateCount);
             Assert.AreEqual(CompanionDesktopOverlayState.Active, overlay.State);
@@ -248,9 +248,9 @@ namespace TokenForge.Client.Tests
             settings.IsDesktopCompanionEnabled = true;
 
             controller.Initialize(overlay, lifecycle);
-            controller.ApplySettings(settings, CompanionState.CreateDefault());
+            controller.ApplySettings(settings, CompanionState.CreateDefault(), null, "repo-a");
             settings.IsDesktopCompanionEnabled = false;
-            controller.ApplySettings(settings, CompanionState.CreateDefault());
+            controller.ApplySettings(settings, CompanionState.CreateDefault(), null, "repo-a");
 
             Assert.AreEqual(CompanionDesktopOverlayState.Disabled, overlay.State);
             Assert.GreaterOrEqual(overlay.HideCount, 1);
@@ -268,7 +268,7 @@ namespace TokenForge.Client.Tests
             settings.IsDesktopCompanionEnabled = true;
 
             controller.Initialize(overlay, lifecycle);
-            controller.ApplySettings(settings, CompanionState.CreateDefault());
+            controller.ApplySettings(settings, CompanionState.CreateDefault(), null, "repo-a");
 
             Assert.AreEqual(CompanionDesktopOverlayState.Fallback, controller.OverlayState);
             Assert.That(controller.OverlayStatusMessage, Does.Contain("EntryPointNotFoundException"));
@@ -430,6 +430,67 @@ namespace TokenForge.Client.Tests
             Assert.IsFalse(overlay.LastFarmState.enabled);
             Assert.AreEqual(CompanionDesktopOverlayState.Disabled, overlay.State);
             Assert.GreaterOrEqual(overlay.HideCount, 1);
+            UnityEngine.Object.DestroyImmediate(controllerObject);
+        }
+
+        [Test]
+        public void OverlayDoesNotShowWithoutRepository()
+        {
+            var overlay = new FakeOverlayService();
+            var lifecycle = new FakeLifecycleService();
+            var controllerObject = new GameObject("Desktop Companion Controller");
+            var controller = controllerObject.AddComponent<DesktopCompanionOverlayController>();
+            controller.Initialize(overlay, lifecycle);
+            var settings = DesktopCompanionSettings.CreateDefault();
+            settings.IsDesktopCompanionEnabled = true;
+
+            controller.ApplyFarmSettings(Enumerable.Empty<RepositoryCompanionDisplayItem>(), settings, true, 11);
+
+            Assert.IsFalse(overlay.LastFarmState.enabled);
+            Assert.AreEqual(CompanionDesktopOverlayState.Disabled, overlay.State);
+            Assert.GreaterOrEqual(overlay.HideCount, 1);
+            UnityEngine.Object.DestroyImmediate(controllerObject);
+        }
+
+        [Test]
+        public void NoRepositoryApplySettingsDoesNotCreateOrShowOverlay()
+        {
+            var overlay = new FakeOverlayService();
+            var lifecycle = new FakeLifecycleService();
+            var controllerObject = new GameObject("Desktop Companion Controller");
+            var controller = controllerObject.AddComponent<DesktopCompanionOverlayController>();
+            controller.Initialize(overlay, lifecycle);
+            var settings = DesktopCompanionSettings.CreateDefault();
+            settings.IsDesktopCompanionEnabled = true;
+
+            controller.ApplySettings(settings, CompanionState.CreateDefault(), null, string.Empty);
+
+            Assert.AreEqual(0, overlay.CreateCount);
+            Assert.AreEqual(0, overlay.ShowCount);
+            Assert.AreEqual(CompanionDesktopOverlayState.Disabled, overlay.State);
+            UnityEngine.Object.DestroyImmediate(controllerObject);
+        }
+
+        [Test]
+        public void OverlayDesiredStateSurvivesTabSwitch()
+        {
+            var overlay = new FakeOverlayService();
+            var lifecycle = new FakeLifecycleService();
+            var controllerObject = new GameObject("Desktop Companion Controller");
+            var controller = controllerObject.AddComponent<DesktopCompanionOverlayController>();
+            controller.Initialize(overlay, lifecycle);
+            var settings = DesktopCompanionSettings.CreateDefault();
+            settings.IsDesktopCompanionEnabled = true;
+
+            controller.ApplyFarmSettings(new[] { RepositoryItem("repo-a", "Repo A", CompanionStage.Child, 4, 1500) }, settings, true, 12);
+            var hideCountAfterFirstProjection = overlay.HideCount;
+            controller.ApplyFarmSettings(new[] { RepositoryItem("repo-a", "Repo A", CompanionStage.Child, 4, 1500) }, settings, true, 13);
+
+            Assert.IsTrue(overlay.LastFarmState.enabled);
+            Assert.AreEqual(1, overlay.LastFarmState.visibleCount);
+            Assert.AreEqual(CompanionDesktopOverlayState.Active, overlay.State);
+            Assert.GreaterOrEqual(overlay.ShowCount, 1);
+            Assert.AreEqual(hideCountAfterFirstProjection, overlay.HideCount);
             UnityEngine.Object.DestroyImmediate(controllerObject);
         }
 

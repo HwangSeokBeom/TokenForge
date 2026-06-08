@@ -555,6 +555,7 @@ namespace TokenForge.Client
             {
                 nativeCompanionDesiredVisible = false;
                 nativeCompanionLastProjectionSource = "noRepository";
+                Debug.Log("INFO [Overlay][Guard] ignored stale update reason=noApprovedRepository desiredForced=false");
             }
 
             if (nativeCompanionDesiredVisible && !companionSettings.IsDesktopCompanionEnabled)
@@ -563,6 +564,9 @@ namespace TokenForge.Client
             }
 
             companionSettings.IsDesktopCompanionEnabled = nativeCompanionDesiredVisible;
+            Debug.Log("INFO [Overlay][Desired] visible=" + nativeCompanionDesiredVisible +
+                      " source=" + SafeNativeText(nativeCompanionLastProjectionSource, "projection") +
+                      " repositoryFarm=" + hasRepositoryOverlayFarm);
             var dashboardSnapshot = approvedActivityAnalysis?.CharacterDashboard;
             if (nativeDesktopCompanionController != null && nativeDesktopCompanionController.IsAnyOverlayDragging())
             {
@@ -696,6 +700,9 @@ namespace TokenForge.Client
             state.weeklyDebugStat = Math.Max(0, dashboard.WeeklyDebug);
             state.weeklyDesignStat = Math.Max(0, dashboard.WeeklyDesign);
             state.weeklySyncStat = Math.Max(0, dashboard.WeeklySync);
+            state.hasGrowthAxisData = dashboard.HasGrowthAxisData;
+            state.hasLegacyGrowthAxisGap = dashboard.HasLegacyGrowthAxisGap;
+            state.growthAxisDataStatusText = SafeNativeText(dashboard.GrowthAxisDataStatusText, "No axis data recorded yet.");
             state.dominantGrowthPath = SafeNativeText(dashboard.DominantGrowthPath, "Unknown");
             state.secondaryGrowthTrait = SafeNativeText(dashboard.SecondaryGrowthTrait, "Unknown");
             state.currentEvolutionBias = SafeNativeText(dashboard.CurrentEvolutionBias, "Unknown");
@@ -773,7 +780,8 @@ namespace TokenForge.Client
                           " displayName=" + SafeNativeText(state.repository.name, "unknown"));
             }
             var activeRepositoryRuns = NativeRunsForRepository(state.repository.id).ToList();
-            var activeRepositoryHasSavedRun = activeRepositoryRuns.Any(IsSavedNativeRun);
+            var activeRepositoryTimelineEvents = TimelineEventsForRepository(state.repository.id).ToList();
+            var activeRepositoryHasSavedRun = activeRepositoryRuns.Any(IsSavedNativeRun) || activeRepositoryTimelineEvents.Any(IsSavedTimelineEvent);
             var crossRepositoryRunCount = (approvedActivityAnalysis?.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>())
                 .Count(run => run != null &&
                               !string.IsNullOrWhiteSpace(run.RepositoryId) &&
@@ -793,7 +801,7 @@ namespace TokenForge.Client
                           " suppressedRunCount=" + crossRepositoryRunCount);
             }
             state.lastRunSummary = repositoryConnected
-                ? SafeNativeText(activeRepositoryRuns.FirstOrDefault(IsSavedNativeRun)?.SafeSummary, "No analysis yet")
+                ? SafeNativeText(activeRepositoryTimelineEvents.FirstOrDefault(IsSavedTimelineEvent)?.Summary, SafeNativeText(activeRepositoryRuns.FirstOrDefault(IsSavedNativeRun)?.SafeSummary, "No analysis yet"))
                 : "Connect a repository to start tracking Git growth.";
             if (repositoryConnected && activeRepositoryHasSavedRun)
             {
@@ -810,7 +818,7 @@ namespace TokenForge.Client
             state.codexAgent.status = AgentCodexStatus();
             state.codexAgent.statusText = AgentCodexStatusText();
             state.repositories = BuildNativeRepositoryItems(dashboard);
-            state.companionFarm = BuildNativeCompanionFarmState(state.repositories, settings);
+            state.companionFarm = BuildNativeCompanionFarmState(state.repositories, settings, state.desiredVisible);
             state.tokenShop = BuildNativeTokenShopState(state.repositories.FirstOrDefault(item => item != null && item.selected), repositoryConnected, projectionSaveData, state.agentProviders);
             state.onboarding = BuildNativeOnboardingState(projectionSaveData);
             state.agents.connectedCount = state.agentProviders.Count(provider => provider.connected && provider.hasValidSource);
@@ -829,6 +837,9 @@ namespace TokenForge.Client
             state.activity.debug = Math.Max(0, dashboard.Debug);
             state.activity.design = Math.Max(0, dashboard.Design);
             state.activity.sync = Math.Max(0, dashboard.Sync);
+            state.activity.hasAxisData = dashboard.HasGrowthAxisData;
+            state.activity.hasLegacyAxisGap = dashboard.HasLegacyGrowthAxisGap;
+            state.activity.axisDataStatusText = SafeNativeText(dashboard.GrowthAxisDataStatusText, "No axis data recorded yet.");
             state.activity.recentRunsSummary = activeRepositoryRuns.Count > 0
                 ? SafeNativeText(activeRepositoryRuns[0].SafeSummary, activeRepositoryRuns[0].Status)
                 : (repositoryConnected ? "No analysis yet" : "No repository activity yet");
@@ -955,6 +966,9 @@ namespace TokenForge.Client
                     tokenCurrencyName = SafeNativeText(item.TokenCurrencyName, "Forge Coins"),
                     tokenCurrencyBalance = Math.Max(0, item.TokenCurrencyBalance),
                     purchasedTokenShopItemIds = (item.PurchasedTokenShopItemIds ?? new List<string>())
+                        .Where(id => !string.IsNullOrWhiteSpace(id))
+                        .ToArray(),
+                    equippedTokenShopItemIds = (item.EquippedTokenShopItemIds ?? new List<string>())
                         .Where(id => !string.IsNullOrWhiteSpace(id))
                         .ToArray(),
                     motionMood = SafeNativeText(item.MotionState?.Mood, "idle"),
@@ -1101,6 +1115,9 @@ namespace TokenForge.Client
             state.weeklyDebugStat = 0;
             state.weeklyDesignStat = 0;
             state.weeklySyncStat = 0;
+            state.hasGrowthAxisData = false;
+            state.hasLegacyGrowthAxisGap = false;
+            state.growthAxisDataStatusText = "No axis data recorded yet.";
             state.dominantGrowthPath = "Unknown";
             state.secondaryGrowthTrait = "Unknown";
             state.currentEvolutionBias = "Unknown";
@@ -1113,7 +1130,7 @@ namespace TokenForge.Client
                 : state.actionStatusText;
             state.hasSavedReviews = false;
             state.hasRepositoryActivity = false;
-            state.companionFarm = BuildNativeCompanionFarmState(new NativeRepositoryListItem[0], settings);
+            state.companionFarm = BuildNativeCompanionFarmState(new NativeRepositoryListItem[0], settings, false);
             state.activity.todaySummary = "No repository activity yet";
             state.activity.state = "No repository connected";
             state.activity.code = 0;
@@ -1121,6 +1138,9 @@ namespace TokenForge.Client
             state.activity.debug = 0;
             state.activity.design = 0;
             state.activity.sync = 0;
+            state.activity.hasAxisData = false;
+            state.activity.hasLegacyAxisGap = false;
+            state.activity.axisDataStatusText = "No axis data recorded yet.";
             state.activity.recentRunsSummary = "No repository activity yet";
             state.activity.savedReviewsSummary = "Connect a repository to start tracking Git growth.";
             state.activity.repositoryActivitySummary = "No repository activity yet";
@@ -1170,7 +1190,7 @@ namespace TokenForge.Client
                 : selectedRepository?.purchasedTokenShopItemIds ?? new string[0];
             var equipped = targetType == ShopTargetType.AiAgent
                 ? (agentShop.EquippedItemIds ?? new List<string>()).ToArray()
-                : (RepositoryCompanionProfileService.GetSelectedProfile(saveData)?.TokenShop?.EquippedItemIds ?? new List<string>()).ToArray();
+                : selectedRepository?.equippedTokenShopItemIds ?? new string[0];
             var category = NormalizeShopCategory(nativeShopSelectedCategory);
             nativeShopSelectedCategory = category;
             var targetReady = targetType == ShopTargetType.RepositoryCompanion ? hasActiveRepository : agentConnected;
@@ -1407,7 +1427,7 @@ namespace TokenForge.Client
             };
         }
 
-        private static DesktopCompanionFarmState BuildNativeCompanionFarmState(NativeRepositoryListItem[] repositories, DesktopCompanionSettings settings)
+        private static DesktopCompanionFarmState BuildNativeCompanionFarmState(NativeRepositoryListItem[] repositories, DesktopCompanionSettings settings, bool desiredVisible)
         {
             settings = settings ?? DesktopCompanionSettings.CreateDefault();
             repositories = repositories ?? new NativeRepositoryListItem[0];
@@ -1418,7 +1438,7 @@ namespace TokenForge.Client
                     repositoryId = item.id,
                     repositoryName = SafeNativeText(item.name, "Repository"),
                     companionId = item.id,
-                    desiredVisible = settings.IsDesktopCompanionEnabled,
+                    desiredVisible = desiredVisible && settings.IsDesktopCompanionEnabled,
                     actualVisible = false,
                     desiredPositionX = -1f,
                     desiredPositionY = -1f,
@@ -1438,7 +1458,7 @@ namespace TokenForge.Client
                         archetype = 0,
                         visualThemeId = CompanionSkinCatalog.Normalize(item.avatarSkin),
                         hydrated = true,
-                        desiredVisible = settings.IsDesktopCompanionEnabled
+                        desiredVisible = desiredVisible && settings.IsDesktopCompanionEnabled
                     }
                 })
                 .ToArray();
@@ -1450,9 +1470,9 @@ namespace TokenForge.Client
 
             return new DesktopCompanionFarmState
             {
-                enabled = settings.IsDesktopCompanionEnabled && overlays.Length > 0,
+                enabled = desiredVisible && settings.IsDesktopCompanionEnabled && overlays.Length > 0,
                 overlays = overlays,
-                visibleCount = settings.IsDesktopCompanionEnabled ? overlays.Count(item => item.desiredVisible) : 0,
+                visibleCount = desiredVisible && settings.IsDesktopCompanionEnabled ? overlays.Count(item => item.desiredVisible) : 0,
                 globalMotionEnabled = settings.MotionMode != CompanionDesktopMotionMode.Calm,
                 globalClickThroughEnabled = settings.IsClickThroughEnabled
             };
@@ -1887,21 +1907,54 @@ namespace TokenForge.Client
 
         private NativeActivityItem[] BuildNativeRecentRuns(string repositoryId)
         {
-            return NativeRunsForRepository(repositoryId)
-                .Take(8)
-                .Select(run => new NativeActivityItem
+            var items = new List<NativeActivityProjectionItem>();
+            items.AddRange(NativeRunsForRepository(repositoryId)
+                .Select(run => new NativeActivityProjectionItem
                 {
-                    id = SafeNativeText(run.RunId, "activity-run"),
-                    type = string.Equals(run.SourceKind, "agent", StringComparison.OrdinalIgnoreCase) ? "agentAnalysis" :
-                        string.Equals(run.SourceKind, "repository", StringComparison.OrdinalIgnoreCase) ? "repositoryAnalysis" :
-                        string.Equals(run.SourceKind, "reviewSaved", StringComparison.OrdinalIgnoreCase) ? "reviewSaved" : SafeNativeText(run.SourceKind, "activity"),
-                    sourceName = SafeNativeText(run.SourceKind, "activity"),
-                    status = SafeNativeText(run.Status, "completed"),
-                    createdAt = run.CreatedAtUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss"),
-                    completedAt = run.CreatedAtUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss"),
-                    summary = SafeNativeText(run.SafeSummary, "Activity recorded."),
-                    currentStep = string.Equals(run.Status, "failed", StringComparison.OrdinalIgnoreCase) ? SafeNativeText(run.ErrorCode, "Unknown") : "completed"
-                })
+                    TimestampUtc = run.CreatedAtUtc,
+                    Item = new NativeActivityItem
+                    {
+                        id = SafeNativeText(run.RunId, "activity-run"),
+                        type = string.Equals(run.SourceKind, "agent", StringComparison.OrdinalIgnoreCase) ? "agentAnalysis" :
+                            string.Equals(run.SourceKind, "repository", StringComparison.OrdinalIgnoreCase) ? "repositoryAnalysis" :
+                            string.Equals(run.SourceKind, "reviewSaved", StringComparison.OrdinalIgnoreCase) ? "reviewSaved" : SafeNativeText(run.SourceKind, "activity"),
+                        sourceName = SafeNativeText(run.SourceKind, "activity"),
+                        status = SafeNativeText(run.Status, "completed"),
+                        createdAt = run.CreatedAtUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                        completedAt = run.CreatedAtUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                        summary = SafeNativeText(run.SafeSummary, "Activity recorded."),
+                        currentStep = string.Equals(run.Status, "failed", StringComparison.OrdinalIgnoreCase) ? SafeNativeText(run.ErrorCode, "Unknown") : "completed",
+                        xpDelta = Math.Max(0, run.XpDelta),
+                        categoryBreakdown = CategoryBreakdownText(run.StatDeltas ?? CharacterStats.Zero()),
+                        target = SafeNativeText(run.RepositoryAlias, repositoryId),
+                        period = run.CreatedAtUtc.UtcDateTime.ToString("yyyy-MM-dd")
+                    }
+                }));
+            items.AddRange(TimelineEventsForRepository(repositoryId)
+                .Select(timelineEvent => new NativeActivityProjectionItem
+                {
+                    TimestampUtc = timelineEvent.TimestampUtc,
+                    Item = new NativeActivityItem
+                    {
+                        id = SafeNativeText(timelineEvent.Id, "timeline-event"),
+                        type = TimelineNativeType(timelineEvent.EventType),
+                        sourceName = SafeNativeText(timelineEvent.TimelineSource, "local"),
+                        status = SafeNativeText(timelineEvent.Severity, "info"),
+                        createdAt = timelineEvent.TimestampUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                        completedAt = timelineEvent.TimestampUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                        summary = SafeNativeText(timelineEvent.Summary, SafeNativeText(timelineEvent.Title, "Repository activity recorded.")),
+                        currentStep = SafeNativeText(timelineEvent.EventType, "timeline"),
+                        xpDelta = Math.Max(0, timelineEvent.DeltaXp),
+                        categoryBreakdown = TimelineCategoryBreakdownText(timelineEvent),
+                        target = SafeNativeText(timelineEvent.RepositoryAlias, repositoryId),
+                        period = timelineEvent.TimestampUtc.UtcDateTime.ToString("yyyy-MM-dd")
+                    }
+                }));
+
+            return items
+                .OrderByDescending(item => item.TimestampUtc)
+                .Take(8)
+                .Select(item => item.Item)
                 .ToArray();
         }
 
@@ -1909,8 +1962,21 @@ namespace TokenForge.Client
         {
             var saved = NativeRunsForRepository(repositoryId)
                 .Where(IsSavedNativeRun)
+                .Select(run => new NativeActivityProjectionItem
+                {
+                    TimestampUtc = run.CreatedAtUtc,
+                    Item = new NativeActivityItem { summary = SafeNativeText(run.SafeSummary, "Growth saved.") }
+                })
+                .Concat(TimelineEventsForRepository(repositoryId)
+                    .Where(IsSavedTimelineEvent)
+                    .Select(timelineEvent => new NativeActivityProjectionItem
+                    {
+                        TimestampUtc = timelineEvent.TimestampUtc,
+                        Item = new NativeActivityItem { summary = SafeNativeText(timelineEvent.Summary, SafeNativeText(timelineEvent.Title, "Growth saved.")) }
+                    }))
+                .OrderByDescending(item => item.TimestampUtc)
                 .Take(4)
-                .Select(run => run.CreatedAtUtc.UtcDateTime.ToString("yyyy-MM-dd") + " · " + SafeNativeText(run.SafeSummary, "Growth saved."))
+                .Select(item => item.TimestampUtc.UtcDateTime.ToString("yyyy-MM-dd") + " · " + item.Item.summary)
                 .ToList();
             return saved.Count == 0 ? "No saved growth history yet." : string.Join("\n", saved);
         }
@@ -1918,6 +1984,14 @@ namespace TokenForge.Client
         private string RepositoryActivitySummary(string repositoryId)
         {
             var repository = approvedActivityAnalysis?.CharacterDashboard?.CurrentRepositoryAlias;
+            var latestTimeline = TimelineEventsForRepository(repositoryId).FirstOrDefault(IsRepositoryActivityTimelineEvent);
+            if (latestTimeline != null)
+            {
+                return "Repository · " + SafeNativeText(repository, "Active repository") + " · " + SafeNativeText(latestTimeline.Title, latestTimeline.EventType) + "\n" +
+                       SafeNativeText(latestTimeline.Summary, "Repository timeline activity was saved.") + "\n" +
+                       "Recorded for this repository only.";
+            }
+
             var latest = NativeRunsForRepository(repositoryId)
                 .FirstOrDefault(run => string.Equals(run.SourceKind, "repository", StringComparison.OrdinalIgnoreCase) ||
                                        string.Equals(run.SourceKind, "reviewSaved", StringComparison.OrdinalIgnoreCase));
@@ -1938,9 +2012,87 @@ namespace TokenForge.Client
                 return false;
             }
 
-            return NativeRunsForRepository(repositoryId)
+            return TimelineEventsForRepository(repositoryId).Any(IsRepositoryActivityTimelineEvent) ||
+                   NativeRunsForRepository(repositoryId)
                 .Any(run => string.Equals(run.SourceKind, "repository", StringComparison.OrdinalIgnoreCase) ||
                             string.Equals(run.SourceKind, "reviewSaved", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private IEnumerable<RepositoryTimelineEvent> TimelineEventsForRepository(string repositoryId)
+        {
+            if (string.IsNullOrWhiteSpace(repositoryId))
+            {
+                return Enumerable.Empty<RepositoryTimelineEvent>();
+            }
+
+            return (approvedActivityAnalysis?.CurrentSaveData?.RepositoryTimelineEvents ?? new List<RepositoryTimelineEvent>())
+                .Where(item => item != null && string.Equals(item.RepositoryId, repositoryId, StringComparison.Ordinal))
+                .OrderByDescending(item => item.TimestampUtc);
+        }
+
+        private static bool IsSavedTimelineEvent(RepositoryTimelineEvent item)
+        {
+            return item != null &&
+                   (Math.Max(0, item.DeltaXp) > 0 ||
+                    string.Equals(item.EventType, "growth_saved", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(item.EventType, "xp_applied", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(item.EventType, "level_up", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool IsRepositoryActivityTimelineEvent(RepositoryTimelineEvent item)
+        {
+            if (item == null || string.IsNullOrWhiteSpace(item.EventType))
+            {
+                return false;
+            }
+
+            return IsSavedTimelineEvent(item) ||
+                   item.EventType.IndexOf("analysis", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   item.EventType.IndexOf("sync", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   item.EventType.IndexOf("conflict", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   item.EventType.IndexOf("merge", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static string TimelineNativeType(string eventType)
+        {
+            if (string.Equals(eventType, "level_up", StringComparison.OrdinalIgnoreCase))
+            {
+                return "levelUp";
+            }
+
+            if (string.Equals(eventType, "growth_saved", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(eventType, "xp_applied", StringComparison.OrdinalIgnoreCase))
+            {
+                return "reviewSaved";
+            }
+
+            if (!string.IsNullOrWhiteSpace(eventType) &&
+                eventType.IndexOf("sync", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "sync";
+            }
+
+            return "repositoryTimeline";
+        }
+
+        private static string TimelineCategoryBreakdownText(RepositoryTimelineEvent item)
+        {
+            if (item == null)
+            {
+                return string.Empty;
+            }
+
+            return "Code +" + Math.Max(0, item.CodeDelta) +
+                   " · Focus +" + Math.Max(0, item.FocusDelta) +
+                   " · Debug +" + Math.Max(0, item.DebugDelta) +
+                   " · Design +" + Math.Max(0, item.DesignDelta) +
+                   " · Sync +" + Math.Max(0, item.SyncDelta);
+        }
+
+        private sealed class NativeActivityProjectionItem
+        {
+            public DateTimeOffset TimestampUtc { get; set; }
+            public NativeActivityItem Item { get; set; }
         }
 
         private bool HasSavedAgentActivity()
@@ -3754,9 +3906,6 @@ namespace TokenForge.Client
                 nativeActionStatusText = SafeNativeText(result.Value?.StatusText, "Purchase saved.") +
                                          " Balance: " + Math.Max(0, result.Value?.BalanceAfter ?? 0) + " " +
                                          SafeNativeText(result.Value?.CurrencyName, "Forge Coins") + ".";
-                nativeDesktopCompanionController?.ApplySettings(
-                    approvedActivityAnalysis.CharacterDashboard?.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault(),
-                    approvedActivityAnalysis.CharacterDashboard?.CompanionState ?? CompanionState.CreateDefault());
                 Debug.Log("INFO [TokenShop][PURCHASE] itemId=" + SafeNativeText(itemId, "none") + " result=success balance=" + Math.Max(0, result.Value?.BalanceAfter ?? 0));
             }
             else
@@ -3783,9 +3932,6 @@ namespace TokenForge.Client
             if (result.IsSuccess)
             {
                 nativeActionStatusText = SafeNativeText(result.Value?.StatusText, "Item equipped.");
-                nativeDesktopCompanionController?.ApplySettings(
-                    approvedActivityAnalysis.CharacterDashboard?.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault(),
-                    approvedActivityAnalysis.CharacterDashboard?.CompanionState ?? CompanionState.CreateDefault());
                 Debug.Log("INFO [TokenShop][EQUIP] itemId=" + SafeNativeText(itemId, "none") + " result=success");
             }
             else
@@ -3879,6 +4025,7 @@ namespace TokenForge.Client
         private async Task SetCompanionVisibleFromNativeAsync(bool visible, string traceId = "none", string source = "explicitDashboardAction")
         {
             Debug.Log("INFO [OverlayTrace:" + SafeNativeText(traceId, "none") + "] AppBootstrapper route invoked target=DesktopCompanionOverlayController.SetVisible visible=" + visible);
+            Debug.Log("INFO [Overlay][Action] " + (visible ? "show" : "hide") + " source=" + SafeNativeText(source, "explicitDashboardAction") + " traceId=" + SafeNativeText(traceId, "none"));
             var oldDesired = nativeCompanionDesiredVisibleInitialized && nativeCompanionDesiredVisible;
             var oldActual = nativeDesktopCompanionController != null && nativeDesktopCompanionController.OverlayState == CompanionDesktopOverlayState.Active;
             Debug.Log("INFO [OverlayState][BEFORE_ACTION] desiredVisible=" + oldDesired + " actualVisible=" + oldActual + " source=" + SafeNativeText(source, "explicitDashboardAction"));
@@ -3894,7 +4041,32 @@ namespace TokenForge.Client
                 nativeCompanionDesiredVisibleInitialized = true;
                 nativeActionStatusKind = "warning";
                 nativeActionStatusText = "Connect a repository to enable desktop companion.";
+                var approvedRepoCount = (approvedActivityAnalysis?.RepositoryCompanions ?? new List<RepositoryCompanionDisplayItem>())
+                    .Count(item => item != null &&
+                                   !item.Archived &&
+                                   item.ApprovedByUser &&
+                                   !string.IsNullOrWhiteSpace(item.RepositoryHash) &&
+                                   !string.Equals(item.RepositoryHash, RepositoryCompanionProfileService.DefaultLocalRepositoryHash, StringComparison.Ordinal));
+                var selectedRepoHash = approvedActivityAnalysis?.CharacterDashboard?.CurrentRepositoryHash ?? string.Empty;
+                var actualVisible = nativeDesktopCompanionController != null && nativeDesktopCompanionController.OverlayState == CompanionDesktopOverlayState.Active;
+                var panelFrame = approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings?.HasSavedOverlayPosition == true
+                    ? approvedActivityAnalysis.CharacterDashboard.DesktopCompanionSettings.LastOverlayPositionX.ToString("0.#") + "," + approvedActivityAnalysis.CharacterDashboard.DesktopCompanionSettings.LastOverlayPositionY.ToString("0.#")
+                    : "none";
                 Debug.LogWarning("WARN [OverlayTrace:" + SafeNativeText(traceId, "none") + "] show_requested repoId=none source=button result=blocked_no_repository");
+                Debug.Log("INFO [Overlay][Guard] repoHash=none desiredVisible=" + visible +
+                          " actualVisible=" + actualVisible +
+                          " panelExists=" + (nativeDesktopCompanionController != null) +
+                          " panelFrame=" + SafeNativeText(panelFrame, "none") +
+                          " reason=noApprovedRepository sourceAction=" + nativeCompanionLastProjectionSource +
+                          " selectedRepoId=" + SafeNativeText(selectedRepoHash, "none") +
+                          " selectedRepoHash=" + SafeNativeText(selectedRepoHash, "none") +
+                          " approvedRepoCount=" + approvedRepoCount);
+                Debug.Log("INFO [OverlayLifecycle][NO_REPOSITORY_HIDE_OVERLAY] repoHash=none desiredVisible=false actualVisible=false panelExists=" + (nativeDesktopCompanionController != null) +
+                          " panelFrame=" + SafeNativeText(panelFrame, "none") +
+                          " reason=noApprovedRepository sourceAction=" + nativeCompanionLastProjectionSource +
+                          " selectedRepoId=" + SafeNativeText(selectedRepoHash, "none") +
+                          " selectedRepoHash=" + SafeNativeText(selectedRepoHash, "none") +
+                          " approvedRepoCount=" + approvedRepoCount);
                 nativeDesktopCompanionController?.HideLegacyOverlay(nativeCompanionLastProjectionSource);
                 nativeDashboardService?.SetCompanionVisible(false, nativeCompanionLastProjectionSource);
                 await RefreshAndPublishNativeDashboardAsync();
@@ -3923,6 +4095,11 @@ namespace TokenForge.Client
             nativeDashboardService?.SetCompanionVisible(visible, nativeCompanionLastProjectionSource);
             var actualAfterNativeCall = nativeDesktopCompanionController != null && nativeDesktopCompanionController.OverlayState == CompanionDesktopOverlayState.Active;
             Debug.Log("INFO [OverlayState][AFTER_ACTION] desiredVisible=" + nativeCompanionDesiredVisible + " actualVisible=" + actualAfterNativeCall + " source=" + nativeCompanionLastProjectionSource);
+            Debug.Log("INFO [Overlay][Actual] panelExists=" + (nativeDesktopCompanionController != null) +
+                      " visible=" + actualAfterNativeCall +
+                      " frame=" + SafeNativeText(approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings?.HasSavedOverlayPosition == true
+                          ? approvedActivityAnalysis.CharacterDashboard.DesktopCompanionSettings.LastOverlayPositionX.ToString("0.#") + "," + approvedActivityAnalysis.CharacterDashboard.DesktopCompanionSettings.LastOverlayPositionY.ToString("0.#")
+                          : "unknown", "unknown"));
             await RefreshAndPublishNativeDashboardAsync();
         }
 
@@ -3946,6 +4123,7 @@ namespace TokenForge.Client
             nativeActionStatusText = enabled
                 ? (oldVisible ? "Movement enabled." : "Movement enabled. Use Show on Desktop when you want Token visible.")
                 : "Movement paused.";
+            Debug.Log("INFO [Overlay][Action] movement enabled=" + enabled);
             Debug.Log("INFO [DashboardAction] action=desktop.movement." + (enabled ? "enable" : "pause") +
                       " repositoryId=" + SafeNativeText(approvedActivityAnalysis?.CharacterDashboard?.CurrentRepositoryHash, "none") +
                       " previousVisible=" + oldVisible +
@@ -4006,6 +4184,7 @@ namespace TokenForge.Client
             nativeActionStatusText = enabled
                 ? "Click-through enabled. Drag is disabled."
                 : "Drag enabled. Click-through disabled while repositioning.";
+            Debug.Log("INFO [Overlay][Action] clickThrough enabled=" + enabled);
             Debug.Log("INFO [DashboardAction] action=" + (enabled ? "desktop.clickThrough.enable" : "desktop.drag.enable") +
                       " repositoryId=" + SafeNativeText(approvedActivityAnalysis?.CharacterDashboard?.CurrentRepositoryHash, "none") +
                       " previousClickThrough=" + previous +

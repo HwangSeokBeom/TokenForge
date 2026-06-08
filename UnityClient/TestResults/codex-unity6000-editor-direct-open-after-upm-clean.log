@@ -1,0 +1,26 @@
+unable to open database file
+unable to open database file
+Unity Editor version:    6000.4.10f1 (feeafc12a938)
+Branch:                  6000.4/staging
+Build type:              Release
+Batch mode:              NO
+macOS version:           Version 26.4.1 (Build 25E253)
+Darwin version:          25.4.0
+Architecture:            arm64
+Running under Rosetta:   NO
+Available memory:        32768 MB
+Date:                    2026-06-08T12:30:10Z
+[Licensing::Module] Trying to connect to existing licensing client channel...
+No explicit failure code handling for error of type 1
+[Licensing::IpcConnector] Error: Failed to connect to LicenseClient-hwangseokbeom channel (error code: 0x80000000) .
+[Licensing::IpcConnector] Error: Connection to channel: "LicenseClient-hwangseokbeom" failed; code: "0x80000000"
+[Licensing::IpcConnector] Error: Failed to connect to LicenseClient-hwangseokbeom channel (error code: 0x80000000) .
+[Licensing::IpcConnector] Channel LicenseClient-hwangseokbeom-6000.4.10 doesn't exist
+Launching external process: /Applications/Unity/Hub/Editor/6000.4.10f1/Unity.app/Contents/Helpers/UnityLicensingClient.app/Contents/MacOS/Unity.Licensing.Client
+[Licensing::Module] Successfully launched the LicensingClient (PId: 29217)
+2026-06-08 21:30:10.234 Unity[29170:15426942] Failure on line 688 in function id scheduleApplicationNotification(LSNotificationCode, NSWorkspaceNotificationCenter *): noErr == _LSModifyNotification(notificationID, 1, &code, 0, NULL, NULL, NULL)
+2026-06-08 21:30:10.307 Unity[29170:15426942] Error received in message reply handler: Connection invalid
+2026-06-08 21:30:10.307 Unity[29170:15426943] Connection Invalid error for service com.apple.hiservices-xpcservice.
+[Licensing::IpcConnector] Channel LicenseClient-hwangseokbeom-6000.4.10 doesn't exist
+[Licensing::Module] Timed-out after 60.00s, waiting for channel: "LicenseClient-hwangseokbeom-6000.4.10"
+[Licensing::Module] Error: Licensing initialization failed after 74.83s

@@ -27,10 +27,23 @@ namespace TokenForge.Client.UI
         public void Render(bool reduceMotion = false)
         {
             var state = viewModel?.CharacterDashboard?.CompanionState ?? CompanionState.CreateDefault();
-            Render(state, reduceMotion);
+            var settings = viewModel?.CharacterDashboard?.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault();
+            var equippedItems = viewModel?.CharacterDashboard?.EquippedTokenShopItemIds;
+            var repositoryId = viewModel?.CharacterDashboard?.CurrentRepositoryHash ?? string.Empty;
+            Render(state, reduceMotion, settings.ZodiacTypeId, equippedItems, repositoryId, "dashboardPreview", settings.VisualThemeId);
         }
 
         public void Render(CompanionState state, bool reduceMotion)
+        {
+            Render(state, reduceMotion, "rat", null);
+        }
+
+        public void Render(CompanionState state, bool reduceMotion, string zodiacTypeId, System.Collections.Generic.IEnumerable<string> equippedItemIds)
+        {
+            Render(state, reduceMotion, zodiacTypeId, equippedItemIds, string.Empty, "legacy", string.Empty);
+        }
+
+        public void Render(CompanionState state, bool reduceMotion, string zodiacTypeId, System.Collections.Generic.IEnumerable<string> equippedItemIds, string repositoryIdentity, string previewRole, string cosmeticVariant)
         {
             state = CompanionProgressionRules.Normalize(state);
             SetText(stageLabel, StageLabel(state));
@@ -38,7 +51,7 @@ namespace TokenForge.Client.UI
             if (bodyImage != null)
             {
                 bodyImage.color = Color.white;
-                bodyImage.sprite = CompanionPixelArtFactory.GetSprite(state, walkFrame);
+                bodyImage.sprite = CompanionPixelArtFactory.GetSprite(state, walkFrame, zodiacTypeId, equippedItemIds, repositoryIdentity, previewRole, cosmeticVariant);
                 bodyImage.preserveAspect = true;
             }
 

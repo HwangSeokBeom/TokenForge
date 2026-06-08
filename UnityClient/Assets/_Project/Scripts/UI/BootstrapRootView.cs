@@ -188,7 +188,10 @@ namespace TokenForge.Client.UI
             var hasPendingReview = viewModel != null && (viewModel.GitFlow.HasPendingReview || viewModel.AgentFlow.HasPendingReview);
             desktopCompanionOverlayController?.ApplySettings(
                 dashboard.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault(),
-                dashboard.CompanionState ?? CompanionState.CreateDefault());
+                dashboard.CompanionState ?? CompanionState.CreateDefault(),
+                dashboard.MotionState,
+                dashboard.CurrentRepositoryHash,
+                dashboard.CurrentLevelExp);
             SetText(headerStatusLabel, "TokenForge");
             SetText(validationStatusLabel, PrivacyCopy);
             SetText(loginStatusSmallLabel, viewModel != null && viewModel.AuthState == AuthState.LoggedIn ? "Synced" : "Local mode");

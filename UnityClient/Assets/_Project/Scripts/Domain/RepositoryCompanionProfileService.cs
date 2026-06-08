@@ -292,7 +292,7 @@ namespace TokenForge.Client.Domain
                 EquippedByDefault = equippedByDefault,
                 ExclusiveItemIds = new List<string>(),
                 CompatibleCommonItemIds = new List<string>(),
-                EvolutionStageMapping = "egg:zodiac_" + id + "_egg,baby:zodiac_" + id + "_baby,child:zodiac_" + id + "_child,teen:zodiac_" + id + "_teen,young_adult:zodiac_" + id + "_young_adult,adult:zodiac_" + id + "_adult",
+                EvolutionStageMapping = "egg:zodiac_" + id + "_egg,baby:zodiac_" + id + "_baby,child:zodiac_" + id + "_child,junior:zodiac_" + id + "_junior,teen:zodiac_" + id + "_teen,young_adult:zodiac_" + id + "_young_adult,adult:zodiac_" + id + "_adult",
                 Stages = BuildZodiacStages(id, silhouette)
             };
         }
@@ -304,8 +304,9 @@ namespace TokenForge.Client.Domain
                 ZodiacStage(zodiacId, "egg", "Egg", "알", "Lv 1", "0-499 XP", silhouette + " sealed in a zodiac egg", "quiet potential", "Connect a repository"),
                 ZodiacStage(zodiacId, "baby", "Baby", "유년기", "Lv 2-3", "500-1499 XP", silhouette + " tiny baby mascot proportions", "curious first steps", "Reach level 2"),
                 ZodiacStage(zodiacId, "child", "Child", "성장기", "Lv 4-6", "1500-2999 XP", silhouette + " clear young mascot silhouette", "playful practice", "Reach level 4"),
-                ZodiacStage(zodiacId, "teen", "Teen", "청소년기", "Lv 7-10", "3000-4999 XP", silhouette + " energetic teen stance", "confident momentum", "Reach level 7"),
-                ZodiacStage(zodiacId, "young_adult", "Young Adult", "성숙기", "Lv 11-19", "5000-9499 XP", silhouette + " mature mascot silhouette", "steady mastery", "Reach level 11"),
+                ZodiacStage(zodiacId, "junior", "Junior", "주니어", "Lv 7-10", "3000-4999 XP", silhouette + " energetic junior stance", "confident momentum", "Reach level 7"),
+                ZodiacStage(zodiacId, "teen", "Teen", "청소년기", "Lv 11-14", "5000-6999 XP", silhouette + " taller teen mascot silhouette", "steady practice", "Reach level 11"),
+                ZodiacStage(zodiacId, "young_adult", "Young Adult", "성숙기", "Lv 15-19", "7000-9499 XP", silhouette + " mature mascot silhouette", "steady mastery", "Reach level 15"),
                 ZodiacStage(zodiacId, "adult", "Adult", "성체", "Lv 20+", "9500+ XP", silhouette + " adult signature traits and full aura", "settled presence", "Reach level 20")
             };
         }
@@ -686,7 +687,8 @@ namespace TokenForge.Client.Domain
             string itemId = "",
             string zodiacId = "",
             string severity = "info",
-            string metadataJson = "")
+            string metadataJson = "",
+            CharacterStats categoryDelta = null)
         {
             saveData = saveData ?? SaveData.CreateDefault();
             saveData.RepositoryTimelineEvents = saveData.RepositoryTimelineEvents ?? new List<RepositoryTimelineEvent>();
@@ -696,6 +698,16 @@ namespace TokenForge.Client.Domain
                     .FirstOrDefault(profile => string.Equals(profile.RepositoryHash, repositoryId, StringComparison.Ordinal))
                     ?.SafeRepositoryAlias ?? string.Empty
                 : repositoryAlias.Trim();
+            var axisDelta = TimelineAxisDelta(categoryDelta);
+            var normalizedEventType = SafeTimelineText(eventType, "system_event", 80);
+            var normalizedTitle = SafeTimelineText(title, eventType, 120);
+            var normalizedSource = SafeTimelineText(source, "local", 80);
+            var deduped = FindDuplicateTimelineActivation(saveData, repositoryId, normalizedEventType, normalizedTitle, normalizedSource);
+            if (deduped != null)
+            {
+                UnityEngine.Debug.Log("INFO [RepositoryTimeline][DEDUPE] repositoryId=" + repositoryId + " eventType=" + normalizedEventType + " source=" + normalizedSource + " action=skip_duplicate_activation");
+                return deduped;
+            }
 
             var timelineEvent = new RepositoryTimelineEvent
             {
@@ -703,12 +715,17 @@ namespace TokenForge.Client.Domain
                 TimestampUtc = DateTimeOffset.UtcNow,
                 RepositoryId = repositoryId,
                 RepositoryAlias = repositoryAlias,
-                EventType = SafeTimelineText(eventType, "system_event", 80),
-                Title = SafeTimelineText(title, eventType, 120),
+                EventType = normalizedEventType,
+                Title = normalizedTitle,
                 Summary = SafeTimelineText(summary, string.Empty, 300),
-                TimelineSource = SafeTimelineText(source, "local", 80),
+                TimelineSource = normalizedSource,
                 DeltaXp = deltaXp,
                 DeltaCoins = deltaCoins,
+                CodeDelta = axisDelta.CodeStat,
+                FocusDelta = axisDelta.FocusStat,
+                DebugDelta = axisDelta.DebugStat,
+                DesignDelta = axisDelta.DesignStat,
+                SyncDelta = axisDelta.SyncStat,
                 AiAgentId = SafeTimelineText(aiAgentId, string.Empty, 80),
                 ItemId = SafeTimelineText(itemId, string.Empty, 120),
                 ZodiacId = SafeTimelineText(zodiacId, string.Empty, 80),
@@ -721,6 +738,48 @@ namespace TokenForge.Client.Domain
                 .Take(500)
                 .ToList();
             return timelineEvent;
+        }
+
+        private static RepositoryTimelineEvent FindDuplicateTimelineActivation(SaveData saveData, string repositoryId, string eventType, string title, string source)
+        {
+            if (!string.Equals(eventType, "active_repository_changed", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(eventType, "repository_connected", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(eventType, "repository_reconnected", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var cutoff = DateTimeOffset.UtcNow.AddMinutes(-10);
+            return (saveData.RepositoryTimelineEvents ?? new List<RepositoryTimelineEvent>())
+                .Where(item => item != null &&
+                               item.TimestampUtc >= cutoff &&
+                               string.Equals(item.RepositoryId, repositoryId, StringComparison.Ordinal) &&
+                               IsRepositoryActivationTimelineType(item.EventType) &&
+                               (string.Equals(item.EventType, eventType, StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(eventType, "active_repository_changed", StringComparison.OrdinalIgnoreCase)) &&
+                               string.Equals(item.TimelineSource, source, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(item => item.TimestampUtc)
+                .FirstOrDefault();
+        }
+
+        private static bool IsRepositoryActivationTimelineType(string eventType)
+        {
+            return string.Equals(eventType, "active_repository_changed", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(eventType, "repository_connected", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(eventType, "repository_reconnected", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static CompanionStatProfile TimelineAxisDelta(CharacterStats categoryDelta)
+        {
+            categoryDelta = categoryDelta ?? CharacterStats.Zero();
+            return new CompanionStatProfile
+            {
+                CodeStat = Math.Max(0, categoryDelta.Logic + categoryDelta.Architecture + categoryDelta.Velocity),
+                FocusStat = Math.Max(0, categoryDelta.Efficiency + categoryDelta.Stability),
+                DebugStat = Math.Max(0, categoryDelta.Debug),
+                DesignStat = Math.Max(0, categoryDelta.Design + categoryDelta.Creativity),
+                SyncStat = 0
+            };
         }
 
         public static DesktopCompanionSettings GetSelectedDesktopCompanionSettings(SaveData saveData)
@@ -831,6 +890,7 @@ namespace TokenForge.Client.Domain
             if (!owned)
             {
                 ownershipShop.PurchasedItemIds.Add(item.ItemId);
+                ownershipShop.PurchasedItemIds = NormalizePurchasedItemIds(ownershipShop.PurchasedItemIds);
             }
 
             ownershipShop.PurchaseHistory.Add(new TokenShopPurchaseHistoryEntry
@@ -1126,7 +1186,12 @@ namespace TokenForge.Client.Domain
                     profile.RepositoryHash,
                     profile.SafeRepositoryAlias,
                     "growth_review",
-                    xpDelta);
+                    xpDelta,
+                    0,
+                    "",
+                    "",
+                    "",
+                    "info");
             }
 
             if (coinsAfter > coinsBefore)
@@ -1572,10 +1637,54 @@ namespace TokenForge.Client.Domain
             tokenShop.CurrencyName = string.IsNullOrWhiteSpace(tokenShop.CurrencyName) ? "Forge Coins" : tokenShop.CurrencyName.Trim();
             tokenShop.CurrencyBalance = Math.Max(0, tokenShop.CurrencyBalance);
             tokenShop.LifetimeTokenUsageScore = Math.Max(0, tokenShop.LifetimeTokenUsageScore);
-            tokenShop.PurchasedItemIds = tokenShop.PurchasedItemIds ?? new List<string>();
-            tokenShop.EquippedItemIds = tokenShop.EquippedItemIds ?? new List<string>();
+            tokenShop.PurchasedItemIds = NormalizePurchasedItemIds(tokenShop.PurchasedItemIds);
+            tokenShop.EquippedItemIds = NormalizeEquippedItemIds(tokenShop.EquippedItemIds, tokenShop.PurchasedItemIds);
             tokenShop.PurchaseHistory = tokenShop.PurchaseHistory ?? new List<TokenShopPurchaseHistoryEntry>();
             return tokenShop;
+        }
+
+        private static List<string> NormalizePurchasedItemIds(IEnumerable<string> itemIds)
+        {
+            var known = FullTokenShopCatalog()
+                .Select(item => item.ItemId)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .ToHashSet(StringComparer.Ordinal);
+            return (itemIds ?? Enumerable.Empty<string>())
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Select(id => id.Trim())
+                .Where(id => known.Contains(id))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        private static List<string> NormalizeEquippedItemIds(IEnumerable<string> itemIds, IEnumerable<string> purchasedItemIds)
+        {
+            var purchased = (purchasedItemIds ?? Enumerable.Empty<string>())
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .ToHashSet(StringComparer.Ordinal);
+            var catalog = FullTokenShopCatalog()
+                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.ItemId))
+                .GroupBy(item => item.ItemId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+            var equipped = new List<string>();
+            foreach (var id in (itemIds ?? Enumerable.Empty<string>())
+                         .Where(id => !string.IsNullOrWhiteSpace(id))
+                         .Select(id => id.Trim())
+                         .Distinct(StringComparer.Ordinal))
+            {
+                if (!purchased.Contains(id) || !catalog.TryGetValue(id, out var item))
+                {
+                    UnityEngine.Debug.LogWarning("WARN [Wardrobe][SANITIZE_ITEM] itemId=" + id + " reason=missing_or_unowned action=drop_equipped");
+                    continue;
+                }
+
+                equipped.RemoveAll(existingId =>
+                    catalog.TryGetValue(existingId, out var existing) && existing.Category == item.Category);
+                equipped.Add(id);
+            }
+
+            return equipped;
         }
 
         private sealed class TokenShopTargetContext
@@ -1745,9 +1854,24 @@ namespace TokenForge.Client.Domain
                 case "repository": return "rat";
                 default:
                     var zodiac = ZodiacCompanionTypes;
-                    var hash = (seed ?? string.Empty).GetHashCode() & int.MaxValue;
+                    var hash = StablePositiveHash(seed ?? string.Empty);
                     var index = hash % zodiac.Count;
                     return zodiac[index].Id;
+            }
+        }
+
+        private static int StablePositiveHash(string value)
+        {
+            unchecked
+            {
+                var hash = 2166136261u;
+                foreach (var character in value ?? string.Empty)
+                {
+                    hash ^= character;
+                    hash *= 16777619u;
+                }
+
+                return (int)(hash & 0x7fffffff);
             }
         }
 
@@ -1846,8 +1970,15 @@ namespace TokenForge.Client.Domain
         private static void EquipPurchasedItem(SaveData saveData, TokenShopTargetContext target, TokenShopItemDefinition item)
         {
             var tokenShop = target.OwnershipShop;
+            tokenShop.PurchasedItemIds = NormalizePurchasedItemIds(tokenShop.PurchasedItemIds);
+            if (!tokenShop.PurchasedItemIds.Any(id => string.Equals(id, item.ItemId, StringComparison.Ordinal)))
+            {
+                tokenShop.PurchasedItemIds.Add(item.ItemId);
+            }
+
             tokenShop.EquippedItemIds.RemoveAll(id => IsSameEquipSlot(id, item.Category));
             tokenShop.EquippedItemIds.Add(item.ItemId);
+            tokenShop.EquippedItemIds = NormalizeEquippedItemIds(tokenShop.EquippedItemIds, tokenShop.PurchasedItemIds);
 
             if (target.TargetType == ShopTargetType.RepositoryCompanion && target.RepositoryProfile != null && !string.IsNullOrWhiteSpace(item.VisualThemeId))
             {

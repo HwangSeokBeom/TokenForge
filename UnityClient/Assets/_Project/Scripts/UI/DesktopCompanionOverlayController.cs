@@ -22,6 +22,7 @@ namespace TokenForge.Client.UI
         private bool overlayEnabledLogged;
         private bool hasPendingDragPosition;
         private Vector2 pendingDragPosition;
+        private bool overlayCreateAttempted;
 
         public CompanionDesktopOverlayState OverlayState => overlayService?.State ?? CompanionDesktopOverlayState.Unavailable;
         public string OverlayStatusMessage => string.IsNullOrWhiteSpace(lastFailureReason)
@@ -56,6 +57,7 @@ namespace TokenForge.Client.UI
             }
 
             overlayService = service ?? CreateDefaultService();
+            overlayCreateAttempted = false;
             lifecycleService = lifecycle ?? new MacApplicationLifecycleService();
             lifecycleService.Install();
             overlayService.Clicked += OnDesktopCompanionClicked;
@@ -66,32 +68,9 @@ namespace TokenForge.Client.UI
                 macService.RepositoryDragEnded += OnRepositoryCompanionDragEnded;
             }
             movementController = new CompanionDesktopMovementController(overlayService);
-            if (!overlayService.Create() && service == null && overlayService.State != CompanionDesktopOverlayState.Fallback)
+            if (overlayService.State == CompanionDesktopOverlayState.Unavailable)
             {
                 lastFailureReason = overlayService.StatusMessage;
-                Debug.Log("INFO " + LogPrefix + " fallback companion active");
-                if (overlayService is MacDesktopCompanionOverlayService failedMacService)
-                {
-                    failedMacService.RepositoryDragEnded -= OnRepositoryCompanionDragEnded;
-                }
-                overlayService.Clicked -= OnDesktopCompanionClicked;
-                overlayService.DoubleClicked -= OnDesktopCompanionDoubleClicked;
-                overlayService.DragEnded -= OnDesktopCompanionDragEnded;
-                overlayService = new InAppCompanionOverlayFallbackService();
-                overlayService.Clicked += OnDesktopCompanionClicked;
-                overlayService.DoubleClicked += OnDesktopCompanionDoubleClicked;
-                overlayService.DragEnded += OnDesktopCompanionDragEnded;
-                overlayService.Create();
-                movementController = new CompanionDesktopMovementController(overlayService);
-            }
-            else if (overlayService.State == CompanionDesktopOverlayState.Unavailable)
-            {
-                lastFailureReason = overlayService.StatusMessage;
-            }
-
-            if (overlayService.State != CompanionDesktopOverlayState.Unavailable)
-            {
-                overlayService.HideAllRepositoryCompanions("csharp.initialize");
             }
         }
 
@@ -103,12 +82,11 @@ namespace TokenForge.Client.UI
         {
             if (overlayService == null || !overlayService.IsAvailable)
             {
+                Debug.Log("INFO [Overlay][Guard] repoHash=none desiredVisible=" + desiredVisible + " actualVisible=false panelExists=false panelFrame=none reason=serviceUnavailable sourceAction=csharp.applyFarmSettings");
                 return;
             }
 
             var settings = globalSettings ?? DesktopCompanionSettings.CreateDefault();
-            overlayService.SetClickEnabled(!settings.IsClickThroughEnabled);
-            overlayService.SetClickThrough(settings.IsClickThroughEnabled);
             var overlays = (repositories ?? Enumerable.Empty<RepositoryCompanionDisplayItem>())
                 .Where(item => item != null &&
                                !item.Archived &&
@@ -121,6 +99,10 @@ namespace TokenForge.Client.UI
                     if (isDragging)
                     {
                         Debug.Log("INFO [CSharpProjection][SKIP_TO_NATIVE] repo=" + item.RepositoryHash + " reason=overlayDragInProgress");
+                        Debug.Log("INFO [Overlay][Guard] repoHash=" + item.RepositoryHash +
+                                  " desiredVisible=" + (desiredVisible && item.DesktopCompanionEnabled) +
+                                  " actualVisible=" + (overlayService.State == CompanionDesktopOverlayState.Active) +
+                                  " panelExists=true panelFrame=farmSnapshot reason=dragInProgress sourceAction=csharp.applyFarmSettings");
                     }
 
                     return new RepositoryCompanionOverlayState
@@ -159,6 +141,7 @@ namespace TokenForge.Client.UI
                 .ToArray();
             if (overlays.Length == 0)
             {
+                BlockOverlayWithoutApprovedRepository(desiredVisible, "csharp.noConnectedRepositories", "noApprovedRepository", settings);
                 Debug.Log("INFO [FarmProjection][SKIP_PLACEHOLDER] reason=noRepository");
                 Debug.Log("INFO [FarmProjection][BUILD] connectedRepositories=0 snapshots=0");
                 overlayService.SetCompanionFarmSnapshots(new DesktopCompanionFarmState
@@ -175,6 +158,13 @@ namespace TokenForge.Client.UI
                 return;
             }
 
+            if ((!overlayCreateAttempted || overlayService.State == CompanionDesktopOverlayState.Unavailable) && !CreateOverlayOrFallback("csharp.applyFarmSettings"))
+            {
+                return;
+            }
+
+            overlayService.SetClickEnabled(!settings.IsClickThroughEnabled);
+            overlayService.SetClickThrough(settings.IsClickThroughEnabled);
             var farm = new DesktopCompanionFarmState
             {
                 enabled = desiredVisible && settings.IsDesktopCompanionEnabled,
@@ -185,6 +175,22 @@ namespace TokenForge.Client.UI
                 globalClickThroughEnabled = settings.IsClickThroughEnabled
             };
             overlayService.SetCompanionFarmSnapshots(farm);
+            if (!overlayService.IsAnyOverlayDragging())
+            {
+                if (farm.enabled && farm.visibleCount > 0)
+                {
+                    overlayService.ShowAllRepositoryCompanions("csharp.applyFarmSettings");
+                }
+                else
+                {
+                    overlayService.HideAllRepositoryCompanions("csharp.applyFarmSettings.disabled");
+                }
+            }
+
+            Debug.Log("INFO [Overlay][Actual] repoHash=" + string.Join(",", overlays.Select(item => item.repositoryId).ToArray()) +
+                      " desiredVisible=" + desiredVisible +
+                      " actualVisible=" + (farm.enabled && farm.visibleCount > 0) +
+                      " panelExists=true panelFrame=farmSnapshot reason=farmProjectionApplied sourceAction=csharp.applyFarmSettings");
         }
 
         public void HideLegacyOverlay(string source = "csharp.hideLegacy")
@@ -194,6 +200,7 @@ namespace TokenForge.Client.UI
                 return;
             }
 
+            BlockOverlayWithoutApprovedRepository(false, source, "noApprovedRepository", settings);
             overlayService.Hide();
             Debug.Log("INFO [OverlayFarm][HIDE_ALL] reason=noConnectedRepositories source=" + source);
         }
@@ -201,6 +208,7 @@ namespace TokenForge.Client.UI
         public void ApplySettings(DesktopCompanionSettings desktopSettings, CompanionState state, CompanionMotionState motion = null, string repositoryId = "", int currentXp = 0)
         {
             settings = desktopSettings ?? DesktopCompanionSettings.CreateDefault();
+            var safeRepositoryId = string.IsNullOrWhiteSpace(repositoryId) ? string.Empty : repositoryId.Trim();
             visualProfile = CompanionVisualProfileResolver.Resolve(state, settings.MotionMode);
             companionState = CompanionProgressionRules.Normalize(state);
             companionState.Stage = visualProfile.Stage;
@@ -209,6 +217,14 @@ namespace TokenForge.Client.UI
             if (overlayService == null)
             {
                 Initialize();
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(safeRepositoryId) ||
+                string.Equals(safeRepositoryId, RepositoryCompanionProfileService.DefaultLocalRepositoryHash, StringComparison.Ordinal))
+            {
+                overlayEnabledLogged = false;
+                BlockOverlayWithoutApprovedRepository(settings.IsDesktopCompanionEnabled, "csharp.applySettings", "noApprovedRepository", settings);
                 return;
             }
 
@@ -230,24 +246,8 @@ namespace TokenForge.Client.UI
                 Debug.Log("INFO " + LogPrefix + " companion overlay enabled");
             }
 
-            if (overlayService.State == CompanionDesktopOverlayState.Unavailable && !overlayService.Create())
+            if ((!overlayCreateAttempted || overlayService.State == CompanionDesktopOverlayState.Unavailable) && !CreateOverlayOrFallback("csharp.applySettings"))
             {
-                lastFailureReason = overlayService.StatusMessage;
-                overlayService.Clicked -= OnDesktopCompanionClicked;
-                overlayService.DoubleClicked -= OnDesktopCompanionDoubleClicked;
-                overlayService.DragEnded -= OnDesktopCompanionDragEnded;
-                if (overlayService is MacDesktopCompanionOverlayService unavailableMacService)
-                {
-                    unavailableMacService.RepositoryDragEnded -= OnRepositoryCompanionDragEnded;
-                }
-                Debug.Log("INFO " + LogPrefix + " fallback companion active");
-                overlayService = new InAppCompanionOverlayFallbackService();
-                overlayService.Create();
-                overlayService.Clicked += OnDesktopCompanionClicked;
-                overlayService.DoubleClicked += OnDesktopCompanionDoubleClicked;
-                overlayService.DragEnded += OnDesktopCompanionDragEnded;
-                movementController = new CompanionDesktopMovementController(overlayService);
-                overlayService.Show();
                 return;
             }
 
@@ -261,7 +261,7 @@ namespace TokenForge.Client.UI
             overlayService.SetSize(SizeFor(companionState.Stage));
             if (overlayService is MacDesktopCompanionOverlayService macOverlay)
             {
-                macOverlay.SetRenderSnapshot(repositoryId, companionState, currentXp, settings.VisualThemeId);
+                macOverlay.SetRenderSnapshot(safeRepositoryId, companionState, currentXp, settings.VisualThemeId);
             }
             overlayService.SetVisualTheme(settings.VisualThemeId);
             overlayService.SetVisualState(companionState.Stage, companionState.Archetype, visualProfile.IdleAnimation, false);
@@ -286,6 +286,72 @@ namespace TokenForge.Client.UI
             }
 
             overlayService.Show();
+        }
+
+        private bool CreateOverlayOrFallback(string sourceAction)
+        {
+            if (overlayService == null)
+            {
+                return false;
+            }
+
+            overlayCreateAttempted = true;
+            if (overlayService.Create())
+            {
+                return true;
+            }
+
+            lastFailureReason = overlayService.StatusMessage;
+            if (overlayService.State != CompanionDesktopOverlayState.Unavailable)
+            {
+                return false;
+            }
+
+            overlayService.Clicked -= OnDesktopCompanionClicked;
+            overlayService.DoubleClicked -= OnDesktopCompanionDoubleClicked;
+            overlayService.DragEnded -= OnDesktopCompanionDragEnded;
+            if (overlayService is MacDesktopCompanionOverlayService unavailableMacService)
+            {
+                unavailableMacService.RepositoryDragEnded -= OnRepositoryCompanionDragEnded;
+            }
+
+            Debug.Log("INFO " + LogPrefix + " fallback companion active sourceAction=" + sourceAction);
+            overlayService = new InAppCompanionOverlayFallbackService();
+            overlayCreateAttempted = true;
+            overlayService.Create();
+            overlayService.Clicked += OnDesktopCompanionClicked;
+            overlayService.DoubleClicked += OnDesktopCompanionDoubleClicked;
+            overlayService.DragEnded += OnDesktopCompanionDragEnded;
+            movementController = new CompanionDesktopMovementController(overlayService);
+            return true;
+        }
+
+        private void BlockOverlayWithoutApprovedRepository(bool desiredVisible, string sourceAction, string reason, DesktopCompanionSettings currentSettings)
+        {
+            var actualVisible = overlayService != null && overlayService.State == CompanionDesktopOverlayState.Active;
+            var panelExists = overlayService != null && overlayService.State != CompanionDesktopOverlayState.Unavailable;
+            var panelFrame = currentSettings != null && currentSettings.HasSavedOverlayPosition
+                ? currentSettings.LastOverlayPositionX.ToString("0.#") + "," + currentSettings.LastOverlayPositionY.ToString("0.#")
+                : "none";
+            Debug.Log("INFO [Overlay][Guard] repoHash=none desiredVisible=" + desiredVisible +
+                      " actualVisible=" + actualVisible +
+                      " panelExists=" + panelExists +
+                      " panelFrame=" + panelFrame +
+                      " reason=" + reason +
+                      " sourceAction=" + sourceAction +
+                      " selectedRepoId=none selectedRepoHash=none approvedRepoCount=0");
+            Debug.Log("INFO [OverlayLifecycle][NO_REPOSITORY_HIDE_OVERLAY] repoHash=none desiredVisible=false actualVisible=false panelExists=" + panelExists +
+                      " panelFrame=" + panelFrame +
+                      " reason=" + reason +
+                      " sourceAction=" + sourceAction +
+                      " selectedRepoId=none selectedRepoHash=none approvedRepoCount=0");
+            if (overlayService == null || !overlayService.IsAvailable)
+            {
+                return;
+            }
+
+            overlayService.HideAllRepositoryCompanions(sourceAction);
+            overlayService.Hide();
         }
 
         public void ResetPosition()

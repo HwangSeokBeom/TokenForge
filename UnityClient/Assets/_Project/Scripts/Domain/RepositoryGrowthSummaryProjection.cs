@@ -1,0 +1,443 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace TokenForge.Client.Domain
+{
+    public sealed class RepositoryGrowthSummary
+    {
+        public string RepositoryId { get; set; } = string.Empty;
+        public int Code { get; set; }
+        public int Focus { get; set; }
+        public int Debug { get; set; }
+        public int Design { get; set; }
+        public int Sync { get; set; }
+        public int WeeklyCode { get; set; }
+        public int WeeklyFocus { get; set; }
+        public int WeeklyDebug { get; set; }
+        public int WeeklyDesign { get; set; }
+        public int WeeklySync { get; set; }
+        public int TotalXp { get; set; }
+        public int WeeklyXp { get; set; }
+        public bool HasSavedGrowth { get; set; }
+        public bool HasHistoricalEvents { get; set; }
+        public bool HasStoredAxisDeltas { get; set; }
+        public bool HasLegacyAxisGap { get; set; }
+        public string ProjectionSource { get; set; } = "none";
+        public string LatestSummary { get; set; } = "No growth recorded yet.";
+        public List<RepositoryTimelineEvent> TimelineEvents { get; set; } = new List<RepositoryTimelineEvent>();
+
+        public CompanionStatProfile ToStatProfile()
+        {
+            return new CompanionStatProfile
+            {
+                CodeStat = Math.Max(0, Code),
+                FocusStat = Math.Max(0, Focus),
+                DebugStat = Math.Max(0, Debug),
+                DesignStat = Math.Max(0, Design),
+                SyncStat = Math.Max(0, Sync)
+            };
+        }
+    }
+
+    public static class RepositoryGrowthSummaryProjection
+    {
+        public static RepositoryGrowthSummary Build(SaveData saveData, string repositoryId, DateTimeOffset? nowUtc = null)
+        {
+            saveData = saveData ?? SaveData.CreateDefault();
+            repositoryId = string.IsNullOrWhiteSpace(repositoryId) ? saveData.SelectedRepositoryHash ?? string.Empty : repositoryId.Trim();
+            var now = nowUtc ?? DateTimeOffset.UtcNow;
+            var weekStart = now.AddDays(-7);
+            var summary = new RepositoryGrowthSummary { RepositoryId = repositoryId };
+            if (string.IsNullOrWhiteSpace(repositoryId))
+            {
+                return summary;
+            }
+
+            var sessions = (saveData.WorkSessionSummaries ?? new List<AgentWorkSession>())
+                .Where(session => session != null && string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), repositoryId, StringComparison.Ordinal))
+                .OrderBy(session => session.EndedAt)
+                .ToList();
+            var sessionById = sessions
+                .Where(session => !string.IsNullOrWhiteSpace(session.SessionId))
+                .GroupBy(session => session.SessionId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.OrderByDescending(session => session.EndedAt).First(), StringComparer.Ordinal);
+            var sessionIds = sessions
+                .Select(session => session.SessionId)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .ToHashSet(StringComparer.Ordinal);
+            var growthRecords = (saveData.GrowthHistory ?? new List<CharacterGrowthResult>())
+                .Where(growth => growth != null && sessionIds.Contains(growth.SessionId))
+                .ToList();
+            var savedNativeRuns = (saveData.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>())
+                .Where(run => run != null && string.Equals(run.RepositoryId, repositoryId, StringComparison.Ordinal) && IsSavedNativeRun(run))
+                .OrderByDescending(run => run.CreatedAtUtc)
+                .ToList();
+            var savedActivityReviews = (saveData.ActivityReviews ?? new List<ActivityReview>())
+                .Where(review => review != null &&
+                                 string.Equals(review.RepositoryId, repositoryId, StringComparison.Ordinal) &&
+                                 string.Equals(review.Status, "saved", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(review => review.SavedAt ?? review.CreatedAt)
+                .ToList();
+            var timelineEvents = (saveData.RepositoryTimelineEvents ?? new List<RepositoryTimelineEvent>())
+                .Where(item => item != null && string.Equals(item.RepositoryId, repositoryId, StringComparison.Ordinal))
+                .OrderByDescending(item => item.TimestampUtc)
+                .ToList();
+
+            summary.TimelineEvents = timelineEvents;
+            summary.HasSavedGrowth = growthRecords.Any(growth => Math.Max(0, growth.ExpGained) > 0) ||
+                                     savedNativeRuns.Any(run => Math.Max(0, run.XpDelta) > 0) ||
+                                     savedActivityReviews.Any(review => Math.Max(0, review.XpDelta) > 0) ||
+                                     timelineEvents.Any(IsSavedGrowthTimelineEvent);
+            summary.HasHistoricalEvents = sessions.Count > 0 || growthRecords.Count > 0 || savedNativeRuns.Count > 0 || savedActivityReviews.Count > 0 || timelineEvents.Count > 0;
+
+            var timelineAxisEvents = timelineEvents.Where(HasTimelineAxisDelta).ToList();
+            var savedTimelineAxisEvents = timelineAxisEvents.Where(IsSavedGrowthTimelineEvent).ToList();
+            var hasCanonicalGrowthSavedTimelineEvent = timelineEvents.Any(item => string.Equals(item?.EventType, "growth_saved", StringComparison.OrdinalIgnoreCase));
+            var timelineHasSavedGrowthXp = savedTimelineAxisEvents.Any(item => ShouldCountTimelineXp(item, hasCanonicalGrowthSavedTimelineEvent));
+            var timelineSavedGrowthXp = SumTimelineXp(timelineEvents, item => ShouldCountTimelineXp(item, hasCanonicalGrowthSavedTimelineEvent));
+            var growthHistoryXp = SumGrowthXp(growthRecords, null);
+            var nativeRunXp = SumNativeRunXp(savedNativeRuns, null);
+            var activityReviewXp = SumActivityReviewXp(savedActivityReviews, null);
+            var timelineSavedGrowthWeeklyXp = SumTimelineXp(timelineEvents, item => ShouldCountTimelineXp(item, hasCanonicalGrowthSavedTimelineEvent) && item.TimestampUtc >= weekStart);
+            var growthHistoryWeeklyXp = SumGrowthXp(growthRecords, growth => (sessionById.TryGetValue(growth.SessionId ?? string.Empty, out var session) ? session.EndedAt : now) >= weekStart);
+            var nativeRunWeeklyXp = SumNativeRunXp(savedNativeRuns, run => run.CreatedAtUtc >= weekStart);
+            var activityReviewWeeklyXp = SumActivityReviewXp(savedActivityReviews, review => (review.SavedAt ?? review.CreatedAt) >= weekStart);
+            if (timelineAxisEvents.Count > 0)
+            {
+                foreach (var timelineEvent in timelineAxisEvents.OrderBy(item => item.TimestampUtc))
+                {
+                    AddAxes(summary, AxesFromTimeline(timelineEvent), timelineEvent.TimestampUtc >= weekStart);
+                    if (ShouldCountTimelineXp(timelineEvent, hasCanonicalGrowthSavedTimelineEvent))
+                    {
+                        AddXp(summary, timelineEvent.DeltaXp, timelineEvent.TimestampUtc >= weekStart);
+                    }
+
+                    summary.HasStoredAxisDeltas = true;
+                    summary.ProjectionSource = "timelineAxisDelta";
+                }
+            }
+
+            foreach (var growth in growthRecords)
+            {
+                sessionById.TryGetValue(growth.SessionId ?? string.Empty, out var session);
+                var endedAt = session?.EndedAt ?? now;
+                if (savedTimelineAxisEvents.Count == 0)
+                {
+                    var axes = AxesFromCharacterStats(growth.StatDeltas);
+                    if (axes.HasAny && HasAnyStat(growth.StatDeltas))
+                    {
+                        summary.HasStoredAxisDeltas = true;
+                        AddAxes(summary, axes, endedAt >= weekStart);
+                        summary.ProjectionSource = timelineAxisEvents.Count > 0 ? "growthHistory+timelineAxisDelta" : "growthHistory";
+                    }
+                }
+
+                if (!timelineHasSavedGrowthXp)
+                {
+                    AddXp(summary, growth.ExpGained, endedAt >= weekStart);
+                }
+            }
+
+            if (timelineAxisEvents.Count == 0 && !summary.HasStoredAxisDeltas)
+            {
+                foreach (var run in savedNativeRuns)
+                {
+                    var axes = AxesFromCharacterStats(run.StatDeltas);
+                    if (!axes.HasAny)
+                    {
+                        continue;
+                    }
+
+                    AddAxes(summary, axes, run.CreatedAtUtc >= weekStart);
+                    AddXp(summary, run.XpDelta, run.CreatedAtUtc >= weekStart);
+                    summary.HasStoredAxisDeltas = true;
+                    summary.ProjectionSource = "savedNativeRun";
+                }
+            }
+
+            if (timelineAxisEvents.Count == 0 && !summary.HasStoredAxisDeltas)
+            {
+                foreach (var review in savedActivityReviews)
+                {
+                    var axes = AxesFromCharacterStats(review.CategoryBreakdown);
+                    if (!axes.HasAny)
+                    {
+                        continue;
+                    }
+
+                    var recordedAt = review.SavedAt ?? review.CreatedAt;
+                    AddAxes(summary, axes, recordedAt >= weekStart);
+                    AddXp(summary, review.XpDelta, recordedAt >= weekStart);
+                    summary.HasStoredAxisDeltas = true;
+                    summary.ProjectionSource = "savedActivityReview";
+                }
+            }
+
+            var storedTotalXp = Math.Max(Math.Max(growthHistoryXp, nativeRunXp), Math.Max(activityReviewXp, timelineSavedGrowthXp));
+            var storedWeeklyXp = Math.Max(Math.Max(growthHistoryWeeklyXp, nativeRunWeeklyXp), Math.Max(activityReviewWeeklyXp, timelineSavedGrowthWeeklyXp));
+            summary.TotalXp = Math.Max(summary.TotalXp, storedTotalXp);
+            summary.WeeklyXp = Math.Max(summary.WeeklyXp, storedWeeklyXp);
+
+            foreach (var timelineEvent in timelineEvents)
+            {
+                AddTimelineSyncSignal(summary, timelineEvent, timelineEvent.TimestampUtc >= weekStart);
+            }
+
+            if (summary.ProjectionSource == "none" && summary.HasHistoricalEvents)
+            {
+                summary.ProjectionSource = summary.HasSavedGrowth ? "legacyAxisMissing" : "historicalActivityOnly";
+            }
+
+            summary.HasLegacyAxisGap = summary.HasSavedGrowth &&
+                                       ((!summary.HasStoredAxisDeltas &&
+                                         summary.Code == 0 &&
+                                         summary.Focus == 0 &&
+                                         summary.Debug == 0 &&
+                                         summary.Design == 0 &&
+                                         summary.Sync == 0) ||
+                                         (savedTimelineAxisEvents.Count > 0 &&
+                                          timelineSavedGrowthXp > 0 &&
+                                          growthHistoryXp > timelineSavedGrowthXp));
+
+            if (summary.HasLegacyAxisGap && summary.ProjectionSource != "legacyAxisMissing")
+            {
+                summary.ProjectionSource = summary.ProjectionSource + "+legacyAxisGap";
+            }
+
+            summary.Code = Math.Max(0, summary.Code);
+            summary.Focus = Math.Max(0, summary.Focus);
+            summary.Debug = Math.Max(0, summary.Debug);
+            summary.Design = Math.Max(0, summary.Design);
+            summary.Sync = Math.Max(0, summary.Sync);
+            summary.WeeklyCode = Math.Max(0, summary.WeeklyCode);
+            summary.WeeklyFocus = Math.Max(0, summary.WeeklyFocus);
+            summary.WeeklyDebug = Math.Max(0, summary.WeeklyDebug);
+            summary.WeeklyDesign = Math.Max(0, summary.WeeklyDesign);
+            summary.WeeklySync = Math.Max(0, summary.WeeklySync);
+            summary.TotalXp = Math.Max(0, summary.TotalXp);
+            summary.WeeklyXp = Math.Max(0, summary.WeeklyXp);
+            summary.LatestSummary = LatestSummary(timelineEvents, growthRecords, savedNativeRuns, savedActivityReviews, sessions, summary);
+            return summary;
+        }
+
+        private static AxisScores AxesFromCharacterStats(CharacterStats stats)
+        {
+            stats = stats ?? CharacterStats.Zero();
+            return new AxisScores
+            {
+                Code = Math.Max(0, stats.Logic + stats.Architecture + stats.Velocity),
+                Focus = Math.Max(0, stats.Efficiency + stats.Stability),
+                Debug = Math.Max(0, stats.Debug),
+                Design = Math.Max(0, stats.Design + stats.Creativity),
+                Sync = 0
+            };
+        }
+
+        private static AxisScores AxesFromTimeline(RepositoryTimelineEvent timelineEvent)
+        {
+            if (timelineEvent == null)
+            {
+                return AxisScores.Zero;
+            }
+
+            return new AxisScores
+            {
+                Code = Math.Max(0, timelineEvent.CodeDelta),
+                Focus = Math.Max(0, timelineEvent.FocusDelta),
+                Debug = Math.Max(0, timelineEvent.DebugDelta),
+                Design = Math.Max(0, timelineEvent.DesignDelta),
+                Sync = Math.Max(0, timelineEvent.SyncDelta)
+            };
+        }
+
+        private static void AddTimelineSyncSignal(RepositoryGrowthSummary summary, RepositoryTimelineEvent timelineEvent, bool weekly)
+        {
+            if (!IsSyncSignal(timelineEvent))
+            {
+                return;
+            }
+
+            AddAxes(summary, new AxisScores { Sync = 1 }, weekly);
+        }
+
+        private static void AddAxes(RepositoryGrowthSummary summary, AxisScores axes, bool weekly)
+        {
+            summary.Code += axes.Code;
+            summary.Focus += axes.Focus;
+            summary.Debug += axes.Debug;
+            summary.Design += axes.Design;
+            summary.Sync += axes.Sync;
+            if (!weekly)
+            {
+                return;
+            }
+
+            summary.WeeklyCode += axes.Code;
+            summary.WeeklyFocus += axes.Focus;
+            summary.WeeklyDebug += axes.Debug;
+            summary.WeeklyDesign += axes.Design;
+            summary.WeeklySync += axes.Sync;
+        }
+
+        private static void AddXp(RepositoryGrowthSummary summary, int xp, bool weekly)
+        {
+            var delta = Math.Max(0, xp);
+            summary.TotalXp += delta;
+            if (weekly)
+            {
+                summary.WeeklyXp += delta;
+            }
+        }
+
+        private static bool HasAnyStat(CharacterStats stats)
+        {
+            return stats != null &&
+                   (Math.Max(0, stats.Logic) +
+                    Math.Max(0, stats.Architecture) +
+                    Math.Max(0, stats.Velocity) +
+                    Math.Max(0, stats.Efficiency) +
+                    Math.Max(0, stats.Stability) +
+                    Math.Max(0, stats.Debug) +
+                    Math.Max(0, stats.Design) +
+                    Math.Max(0, stats.Creativity)) > 0;
+        }
+
+        private static bool HasTimelineAxisDelta(RepositoryTimelineEvent item)
+        {
+            return item != null &&
+                   Math.Max(0, item.CodeDelta) +
+                   Math.Max(0, item.FocusDelta) +
+                   Math.Max(0, item.DebugDelta) +
+                   Math.Max(0, item.DesignDelta) +
+                   Math.Max(0, item.SyncDelta) > 0;
+        }
+
+        private static bool IsSavedNativeRun(NativeAnalysisRunRecord run)
+        {
+            return run != null &&
+                   (string.Equals(run.Status, "saved", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(run.SourceKind, "reviewSaved", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(run.SourceKind, "levelUp", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool IsSavedGrowthTimelineEvent(RepositoryTimelineEvent item)
+        {
+            return item != null &&
+                   (Math.Max(0, item.DeltaXp) > 0 ||
+                    string.Equals(item.EventType, "xp_applied", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(item.EventType, "growth_saved", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(item.EventType, "level_up", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool ShouldCountTimelineXp(RepositoryTimelineEvent item, bool hasCanonicalGrowthSavedTimelineEvent)
+        {
+            if (item == null || Math.Max(0, item.DeltaXp) <= 0)
+            {
+                return false;
+            }
+
+            if (hasCanonicalGrowthSavedTimelineEvent &&
+                string.Equals(item.EventType, "xp_applied", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return IsSavedGrowthTimelineEvent(item);
+        }
+
+        private static bool IsSyncSignal(RepositoryTimelineEvent item)
+        {
+            var text = ((item?.EventType ?? string.Empty) + " " + (item?.Title ?? string.Empty) + " " + (item?.Summary ?? string.Empty) + " " + (item?.TimelineSource ?? string.Empty)).ToLowerInvariant();
+            return text.Contains("sync") || text.Contains("push") || text.Contains("pull") || text.Contains("merge") || text.Contains("conflict") || text.Contains("remote");
+        }
+
+        private static int SumTimelineXp(IEnumerable<RepositoryTimelineEvent> events, Func<RepositoryTimelineEvent, bool> predicate)
+        {
+            return (events ?? Enumerable.Empty<RepositoryTimelineEvent>())
+                .Where(item => item != null && (predicate == null || predicate(item)))
+                .Sum(item => Math.Max(0, item.DeltaXp));
+        }
+
+        private static int SumGrowthXp(IEnumerable<CharacterGrowthResult> records, Func<CharacterGrowthResult, bool> predicate)
+        {
+            return (records ?? Enumerable.Empty<CharacterGrowthResult>())
+                .Where(item => item != null && (predicate == null || predicate(item)))
+                .Sum(item => Math.Max(0, item.ExpGained));
+        }
+
+        private static int SumNativeRunXp(IEnumerable<NativeAnalysisRunRecord> records, Func<NativeAnalysisRunRecord, bool> predicate)
+        {
+            return (records ?? Enumerable.Empty<NativeAnalysisRunRecord>())
+                .Where(item => item != null && (predicate == null || predicate(item)))
+                .Sum(item => Math.Max(0, item.XpDelta));
+        }
+
+        private static int SumActivityReviewXp(IEnumerable<ActivityReview> records, Func<ActivityReview, bool> predicate)
+        {
+            return (records ?? Enumerable.Empty<ActivityReview>())
+                .Where(item => item != null && (predicate == null || predicate(item)))
+                .Sum(item => Math.Max(0, item.XpDelta));
+        }
+
+        private static string LatestSummary(
+            List<RepositoryTimelineEvent> timelineEvents,
+            List<CharacterGrowthResult> growthRecords,
+            List<NativeAnalysisRunRecord> savedNativeRuns,
+            List<ActivityReview> savedActivityReviews,
+            List<AgentWorkSession> sessions,
+            RepositoryGrowthSummary summary)
+        {
+            var latestEvent = timelineEvents.FirstOrDefault();
+            var suffix = summary.HasLegacyAxisGap
+                ? " · Legacy event lacks axis delta"
+                : string.Empty;
+            if (latestEvent != null)
+            {
+                var title = string.IsNullOrWhiteSpace(latestEvent.Title) ? latestEvent.EventType : latestEvent.Title;
+                var eventSummary = string.IsNullOrWhiteSpace(latestEvent.Summary) ? "Repository activity recorded." : latestEvent.Summary;
+                return title + " · " + eventSummary + suffix;
+            }
+
+            var latestGrowth = growthRecords.OrderByDescending(growth => growth.SessionId).FirstOrDefault();
+            if (latestGrowth != null)
+            {
+                return "+" + Math.Max(0, latestGrowth.ExpGained) + " XP | Level " + latestGrowth.LevelBefore + " -> " + latestGrowth.LevelAfter + suffix;
+            }
+
+            var latestRun = savedNativeRuns.FirstOrDefault();
+            if (latestRun != null)
+            {
+                return (string.IsNullOrWhiteSpace(latestRun.SafeSummary) ? "Saved native activity." : latestRun.SafeSummary) + suffix;
+            }
+
+            var latestReview = savedActivityReviews.FirstOrDefault();
+            if (latestReview != null)
+            {
+                return (string.IsNullOrWhiteSpace(latestReview.EvidenceSummary) ? "Saved activity review." : latestReview.EvidenceSummary) + suffix;
+            }
+
+            var latestSession = sessions.OrderByDescending(session => session.EndedAt).FirstOrDefault();
+            return latestSession == null ? "No growth recorded yet." : "Repository activity recorded on " + latestSession.EndedAt.UtcDateTime.ToString("yyyy-MM-dd") + suffix;
+        }
+
+        private struct AxisScores
+        {
+            public int Code;
+            public int Focus;
+            public int Debug;
+            public int Design;
+            public int Sync;
+
+            public bool HasAny
+            {
+                get { return Code > 0 || Focus > 0 || Debug > 0 || Design > 0 || Sync > 0; }
+            }
+
+            public static AxisScores Zero
+            {
+                get { return new AxisScores(); }
+            }
+        }
+    }
+}

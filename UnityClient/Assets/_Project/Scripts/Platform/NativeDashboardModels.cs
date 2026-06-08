@@ -153,6 +153,9 @@ namespace TokenForge.Client.Platform
         public int weeklyDebugStat;
         public int weeklyDesignStat;
         public int weeklySyncStat;
+        public bool hasGrowthAxisData;
+        public bool hasLegacyGrowthAxisGap;
+        public string growthAxisDataStatusText = "No axis data recorded yet.";
         public string dominantGrowthPath = "Unknown";
         public string secondaryGrowthTrait = "Unknown";
         public string currentEvolutionBias = "Unknown";
@@ -392,6 +395,7 @@ namespace TokenForge.Client.Platform
         public string tokenCurrencyName = "Forge Coins";
         public int tokenCurrencyBalance;
         public string[] purchasedTokenShopItemIds = new string[0];
+        public string[] equippedTokenShopItemIds = new string[0];
         public string motionMood = "idle";
         public string motionReason = "No recent aggregate activity.";
         public bool canViewGrowth = true;
@@ -568,6 +572,9 @@ namespace TokenForge.Client.Platform
         public int debug;
         public int design;
         public int sync;
+        public bool hasAxisData;
+        public bool hasLegacyAxisGap;
+        public string axisDataStatusText = "No axis data recorded yet.";
         public string recentRunsSummary = "No recent runs";
         public string savedReviewsSummary = "No saved reviews";
         public string repositoryActivitySummary = "No repository activity";

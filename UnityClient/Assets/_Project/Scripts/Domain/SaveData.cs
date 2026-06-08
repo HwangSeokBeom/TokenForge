@@ -192,6 +192,11 @@ namespace TokenForge.Client.Domain
         public string TimelineSource { get; set; } = "local";
         public int DeltaXp { get; set; }
         public int DeltaCoins { get; set; }
+        public int CodeDelta { get; set; }
+        public int FocusDelta { get; set; }
+        public int DebugDelta { get; set; }
+        public int DesignDelta { get; set; }
+        public int SyncDelta { get; set; }
         public string AiAgentId { get; set; } = string.Empty;
         public string ItemId { get; set; } = string.Empty;
         public string ZodiacId { get; set; } = string.Empty;

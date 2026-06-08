@@ -1,0 +1,42 @@
+attempt to write a readonly database
+attempt to write a readonly database
+Unity Editor version:    6000.4.10f1 (feeafc12a938)
+Branch:                  6000.4/staging
+Build type:              Release
+Batch mode:              YES
+macOS version:           Version 26.4.1 (Build 25E253)
+Darwin version:          25.4.0
+Architecture:            arm64
+Running under Rosetta:   NO
+Available memory:        32768 MB
+Date:                    2026-06-08T12:50:14Z
+[Licensing::Module] Trying to connect to existing licensing client channel...
+No explicit failure code handling for error of type 1
+[Licensing::IpcConnector] Error: Failed to connect to LicenseClient-hwangseokbeom channel (error code: 0x80000000) .
+[Licensing::IpcConnector] Error: Connection to channel: "LicenseClient-hwangseokbeom" failed; code: "0x80000000"
+[Licensing::IpcConnector] Error: Failed to connect to LicenseClient-hwangseokbeom channel (error code: 0x80000000) .
+No explicit failure code handling for error of type 1
+[Licensing::IpcConnector] Error: Failed to connect to LicenseClient-hwangseokbeom-6000.4.10 channel (error code: 0x80000000) .
+[Licensing::IpcConnector] Error: Connection to channel: "LicenseClient-hwangseokbeom-6000.4.10" failed; code: "0x80000000"
+[Licensing::IpcConnector] Error: Failed to connect to LicenseClient-hwangseokbeom-6000.4.10 channel (error code: 0x80000000) .
+[Licensing::Module] Error: Licensing initialization failed after 0.00s
+Launching external process: /Applications/Unity/Hub/Editor/6000.4.10f1/Unity.app/Contents/Helpers/PackageManager/Server/UnityPackageManager
+
+COMMAND LINE ARGUMENTS:
+/Applications/Unity/Hub/Editor/6000.4.10f1/Unity.app/Contents/MacOS/Unity
+-batchmode
+-nographics
+-projectPath
+/Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient
+-runTests
+-testPlatform
+editmode
+-testResults
+/Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/TestResults/codex-unity6000-native-shell-growth-20260608.xml
+-logFile
+/Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient/TestResults/codex-unity6000-native-shell-growth-20260608.log
+-testFilter
+TokenForge.Client.Tests.NativeShellGrowthOverlayRegressionTests
+Successfully changed project path to: /Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient
+/Users/hwangseokbeom/Documents/GitHub/TokenForge/UnityClient
+[Package Manager] Server process was shutdown

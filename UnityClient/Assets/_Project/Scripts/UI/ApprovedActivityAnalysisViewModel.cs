@@ -95,6 +95,7 @@ namespace TokenForge.Client.UI
         public int TokenCurrencyBalance { get; set; }
         public string TokenCurrencyName { get; set; } = "Forge Coins";
         public List<string> PurchasedTokenShopItemIds { get; set; } = new List<string>();
+        public List<string> EquippedTokenShopItemIds { get; set; } = new List<string>();
         public string Skin { get; set; } = CompanionSkinCatalog.DefaultSkinId;
         public string CompanionId { get; set; } = string.Empty;
         public bool DesktopCompanionEnabled { get; set; } = true;
@@ -129,6 +130,9 @@ namespace TokenForge.Client.UI
         public int WeeklyDebug { get; set; }
         public int WeeklyDesign { get; set; }
         public int WeeklySync { get; set; }
+        public bool HasGrowthAxisData { get; set; }
+        public bool HasLegacyGrowthAxisGap { get; set; }
+        public string GrowthAxisDataStatusText { get; set; } = "No axis data recorded yet.";
         public string DominantGrowthPath { get; set; } = "Unknown";
         public string SecondaryGrowthTrait { get; set; } = "Unknown";
         public string CurrentEvolutionBias { get; set; } = "Unknown";
@@ -136,6 +140,7 @@ namespace TokenForge.Client.UI
         public string EggInfluenceText { get; set; } = "아직 부화 전이에요. 최근 Git 성장 성향이 미래 진화 방향에 영향을 줍니다.";
         public string TokenCurrencyName { get; set; } = "Forge Coins";
         public int TokenCurrencyBalance { get; set; }
+        public List<string> EquippedTokenShopItemIds { get; set; } = new List<string>();
         public bool TokenUsageTrackingEnabled { get; set; } = true;
         public bool HasSavedRun { get; set; }
         public CompanionState CompanionState { get; set; } = CompanionState.CreateDefault();
@@ -1100,13 +1105,14 @@ namespace TokenForge.Client.UI
             var saveData = await repository.LoadAsync(cancellationToken);
             saveData.RecentNativeAnalysisRuns = saveData.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>();
             var normalizedStatus = SafeLocalAlias(status, "failed");
+            var normalizedSourceKind = SafeLocalAlias(sourceKind, "activity");
             var repositoryHash = saveData.SelectedRepositoryHash ?? string.Empty;
             var connectedProject = (saveData.ConnectedProjects ?? new List<ConnectedProject>())
                 .FirstOrDefault(project => project != null && string.Equals(project.PathHash, repositoryHash, StringComparison.Ordinal));
             saveData.RecentNativeAnalysisRuns.Insert(0, new NativeAnalysisRunRecord
             {
                 RunId = Guid.NewGuid().ToString("N"),
-                SourceKind = SafeLocalAlias(sourceKind, "activity"),
+                SourceKind = normalizedSourceKind,
                 Status = normalizedStatus,
                 ErrorCode = SafeLocalAlias(errorCode, "unknown"),
                 SafeSummary = SafeLocalAlias(safeSummary, "Analysis failed safely."),
@@ -1114,24 +1120,29 @@ namespace TokenForge.Client.UI
                 RepositoryAlias = RepositoryAliasForHash(saveData, repositoryHash),
                 Branch = string.Empty,
                 CommitRange = connectedProject?.AnalyzedCommitRange ?? string.Empty,
-                AnalysisScope = FirstNonEmpty(connectedProject?.LastAnalysisScope, connectedProject?.LastAnalysisMode, string.Equals(sourceKind, "repository", StringComparison.OrdinalIgnoreCase) ? "Repository analysis" : SafeLocalAlias(sourceKind, "activity")),
+                AnalysisScope = FirstNonEmpty(connectedProject?.LastAnalysisScope, connectedProject?.LastAnalysisMode, string.Equals(normalizedSourceKind, "repository", StringComparison.OrdinalIgnoreCase) ? "Repository analysis" : normalizedSourceKind),
                 CreatedAtUtc = DateTimeOffset.UtcNow
             });
             saveData.RecentNativeAnalysisRuns = saveData.RecentNativeAnalysisRuns.Take(20).ToList();
-            RepositoryCompanionProfileService.RecordTimelineEvent(
-                saveData,
-                string.Equals(normalizedStatus, "failed", StringComparison.OrdinalIgnoreCase) ? "analysis_failed" : "analysis_completed",
-                string.Equals(normalizedStatus, "failed", StringComparison.OrdinalIgnoreCase) ? "Analysis failed" : "Analysis completed",
-                SafeLocalAlias(safeSummary, "Analysis run recorded."),
-                saveData.SelectedRepositoryHash,
-                string.Empty,
-                SafeLocalAlias(sourceKind, "activity"),
-                0,
-                0,
-                PendingProviderId(saveData.PendingNativeActivityReview),
-                string.Empty,
-                string.Empty,
-                string.Equals(normalizedStatus, "failed", StringComparison.OrdinalIgnoreCase) ? "error" : "info");
+            if (!string.Equals(normalizedSourceKind, "reviewSaved", StringComparison.OrdinalIgnoreCase))
+            {
+                RepositoryCompanionProfileService.RecordTimelineEvent(
+                    saveData,
+                    string.Equals(normalizedStatus, "failed", StringComparison.OrdinalIgnoreCase) ? "analysis_failed" : "analysis_completed",
+                    string.Equals(normalizedStatus, "failed", StringComparison.OrdinalIgnoreCase) ? "Analysis failed" : "Analysis completed",
+                    SafeLocalAlias(safeSummary, "Analysis run recorded."),
+                    saveData.SelectedRepositoryHash,
+                    string.Empty,
+                    normalizedSourceKind,
+                    0,
+                    0,
+                    PendingProviderId(saveData.PendingNativeActivityReview),
+                    string.Empty,
+                    string.Empty,
+                    string.Equals(normalizedStatus, "failed", StringComparison.OrdinalIgnoreCase) ? "error" : "info",
+                    string.Empty,
+                    saveData.PendingNativeActivityReview?.StatDeltas);
+            }
             var validation = privacySanitizer.ValidateSafeSaveData(saveData);
             if (!validation.IsSuccess)
             {
@@ -1683,6 +1694,22 @@ namespace TokenForge.Client.UI
                 StatDeltas = pending.StatDeltas ?? CharacterStats.Zero(),
                 CreatedAtUtc = DateTimeOffset.UtcNow
             });
+            RepositoryCompanionProfileService.RecordTimelineEvent(
+                saveData,
+                "growth_saved",
+                "Growth saved",
+                "Approved activity review was saved for repository growth.",
+                pending.RepositoryHash ?? saveData.SelectedRepositoryHash ?? string.Empty,
+                RepositoryAliasForHash(saveData, pending.RepositoryHash ?? saveData.SelectedRepositoryHash),
+                "growth_review",
+                pendingGrowthResults.Sum(growth => Math.Max(0, growth?.ExpGained ?? 0)),
+                0,
+                PendingProviderId(pending),
+                string.Empty,
+                string.Empty,
+                "success",
+                string.Empty,
+                pending.StatDeltas ?? CharacterStats.Zero());
             saveData.PendingNativeActivityReview = null;
 
             var validation = privacySanitizer.ValidateSafeSaveData(saveData);
@@ -1745,6 +1772,20 @@ namespace TokenForge.Client.UI
                 RepositoryAlias = targetName,
                 CreatedAtUtc = DateTimeOffset.UtcNow
             });
+            RepositoryCompanionProfileService.RecordTimelineEvent(
+                saveData,
+                "level_up",
+                "Level Up",
+                "Repository companion advanced from Lv " + previousLevel + " to Lv " + saveData.CompanionState.Level + ".",
+                profile == null ? "agent-only" : profile.RepositoryHash,
+                targetName,
+                "companion",
+                0,
+                0,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                "success");
             saveData.ActivityReviews = saveData.ActivityReviews ?? new List<ActivityReview>();
             saveData.ActivityReviews.Insert(0, new ActivityReview
             {
@@ -3227,9 +3268,10 @@ namespace TokenForge.Client.UI
                                          RepositoryCompanionProfileService.IsConnectedRepository(saveData, selectedRepositoryProfile.RepositoryHash);
             var companion = CompanionProgressionRules.Normalize(selectedRepositoryProfile?.CompanionState ?? saveData.CompanionState);
             var desktopSettings = RepositoryCompanionProfileService.GetSelectedDesktopCompanionSettings(saveData);
-            var stats = profile.Stats ?? CharacterStats.Zero();
-            var companionStats = companion.Stats ?? CompanionStatProfile.Empty();
             var totalExp = hasConnectedRepository ? Math.Max(0, companion.TotalLifetimeXp) : 0;
+            var repositoryGrowth = hasConnectedRepository
+                ? RepositoryGrowthSummaryProjection.Build(saveData, selectedRepositoryProfile.RepositoryHash)
+                : new RepositoryGrowthSummary();
             var selectedSessionIds = (saveData.WorkSessionSummaries ?? new List<AgentWorkSession>())
                 .Where(session => !string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash) &&
                                   string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), saveData.SelectedRepositoryHash, StringComparison.Ordinal))
@@ -3238,15 +3280,35 @@ namespace TokenForge.Client.UI
             var latestGrowth = (saveData.GrowthHistory ?? new List<CharacterGrowthResult>())
                 .Where(growth => selectedSessionIds.Contains(growth.SessionId))
                 .LastOrDefault();
-            var hasSavedRun = selectedSessionIds.Count > 0;
+            var hasSavedRun = selectedSessionIds.Count > 0 || repositoryGrowth.HasSavedGrowth;
             var selectedLatestSummary = (summaries ?? new List<RecentSafeSessionSummary>())
                 .FirstOrDefault(summary => selectedSessionIds.Contains(summary.ClientSessionId));
             var latestSession = hasSavedRun
                 ? BootstrapUiTextFormatter.SafeLocalSessionLabel(selectedLatestSummary ?? new RecentSafeSessionSummary())
                 : "No saved growth yet. Run Analysis on a repository or AI agent log to generate your first XP.";
-            var growthSummary = latestGrowth == null
-                ? "No growth recorded yet."
-                : "+" + latestGrowth.ExpGained + " XP | Level " + latestGrowth.LevelBefore + " -> " + latestGrowth.LevelAfter;
+            var growthSummary = repositoryGrowth.HasSavedGrowth
+                ? repositoryGrowth.LatestSummary
+                : latestGrowth == null
+                    ? "No growth recorded yet."
+                    : "+" + latestGrowth.ExpGained + " XP | Level " + latestGrowth.LevelBefore + " -> " + latestGrowth.LevelAfter;
+            if (hasConnectedRepository && repositoryGrowth.HasLegacyAxisGap)
+            {
+                Debug.LogWarning("WARN [GrowthSummary][LEGACY_AXIS_GAP] repositoryId=" + selectedRepositoryProfile.RepositoryHash + " source=" + repositoryGrowth.ProjectionSource + " action=showLegacyNotice axes=0");
+            }
+
+            if (hasConnectedRepository &&
+                repositoryGrowth.HasSavedGrowth &&
+                repositoryGrowth.Code == repositoryGrowth.Focus &&
+                repositoryGrowth.Focus == repositoryGrowth.Debug &&
+                repositoryGrowth.Debug == repositoryGrowth.Design &&
+                repositoryGrowth.Design == repositoryGrowth.Sync)
+            {
+                Debug.Log("INFO [GrowthSummary][EQUAL_AXIS_VALUES] repositoryId=" + selectedRepositoryProfile.RepositoryHash +
+                          " value=" + repositoryGrowth.Code +
+                          " source=" + repositoryGrowth.ProjectionSource +
+                          " storedAxisDeltas=" + repositoryGrowth.HasStoredAxisDeltas);
+            }
+
             RepositoryCompanions = ToRepositoryCompanionDisplayItemsWithMetadata(saveData, approvedGitMetadataByHash);
             var previewOnlyCount = (saveData.RepositoryCompanionProfiles ?? new List<RepositoryCompanionProfile>())
                 .Count(candidate => candidate != null && !RepositoryCompanions.Any(item => string.Equals(item.RepositoryHash, candidate.RepositoryHash, StringComparison.Ordinal)));
@@ -3285,16 +3347,21 @@ namespace TokenForge.Client.UI
                 RankTitle = RankFor(Math.Max(1, companion.Level), profile.CurrentEvolutionType),
                 CurrentRepositoryHash = selectedRepositoryHash,
                 CurrentRepositoryAlias = hasConnectedRepository ? selectedRepositoryDisplay?.SafeRepositoryAlias ?? selectedRepositoryProfile?.SafeRepositoryAlias ?? string.Empty : string.Empty,
-                Code = hasConnectedRepository ? Math.Max(0, companionStats.CodeStat > 0 ? companionStats.CodeStat : stats.Logic + stats.Architecture + stats.Velocity) : 0,
-                Focus = hasConnectedRepository ? Math.Max(0, companionStats.FocusStat > 0 ? companionStats.FocusStat : stats.Efficiency + stats.Stability) : 0,
-                Debug = hasConnectedRepository ? Math.Max(0, companionStats.DebugStat > 0 ? companionStats.DebugStat : stats.Debug) : 0,
-                Design = hasConnectedRepository ? Math.Max(0, companionStats.DesignStat > 0 ? companionStats.DesignStat : stats.Design + stats.Creativity) : 0,
-                Sync = hasConnectedRepository ? Math.Max(0, companionStats.SyncStat + (saveData.SyncState?.PendingQueueCount ?? 0) + (RemoteSafeSessions?.Count ?? 0)) : 0,
-                WeeklyCode = hasConnectedRepository ? Math.Max(0, companion.WeeklyStats?.CodeStat ?? 0) : 0,
-                WeeklyFocus = hasConnectedRepository ? Math.Max(0, companion.WeeklyStats?.FocusStat ?? 0) : 0,
-                WeeklyDebug = hasConnectedRepository ? Math.Max(0, companion.WeeklyStats?.DebugStat ?? 0) : 0,
-                WeeklyDesign = hasConnectedRepository ? Math.Max(0, companion.WeeklyStats?.DesignStat ?? 0) : 0,
-                WeeklySync = hasConnectedRepository ? Math.Max(0, companion.WeeklyStats?.SyncStat ?? 0) : 0,
+                Code = hasConnectedRepository ? Math.Max(0, repositoryGrowth.Code) : 0,
+                Focus = hasConnectedRepository ? Math.Max(0, repositoryGrowth.Focus) : 0,
+                Debug = hasConnectedRepository ? Math.Max(0, repositoryGrowth.Debug) : 0,
+                Design = hasConnectedRepository ? Math.Max(0, repositoryGrowth.Design) : 0,
+                Sync = hasConnectedRepository ? Math.Max(0, repositoryGrowth.Sync) : 0,
+                WeeklyCode = hasConnectedRepository ? Math.Max(0, repositoryGrowth.WeeklyCode) : 0,
+                WeeklyFocus = hasConnectedRepository ? Math.Max(0, repositoryGrowth.WeeklyFocus) : 0,
+                WeeklyDebug = hasConnectedRepository ? Math.Max(0, repositoryGrowth.WeeklyDebug) : 0,
+                WeeklyDesign = hasConnectedRepository ? Math.Max(0, repositoryGrowth.WeeklyDesign) : 0,
+                WeeklySync = hasConnectedRepository ? Math.Max(0, repositoryGrowth.WeeklySync) : 0,
+                HasGrowthAxisData = hasConnectedRepository && repositoryGrowth.HasStoredAxisDeltas,
+                HasLegacyGrowthAxisGap = hasConnectedRepository && repositoryGrowth.HasLegacyAxisGap,
+                GrowthAxisDataStatusText = hasConnectedRepository && repositoryGrowth.HasStoredAxisDeltas
+                    ? "Axis data recorded from approved activity deltas."
+                    : "No axis data recorded yet.",
                 DominantGrowthPath = hasConnectedRepository ? bias.MainPath : "Unknown",
                 SecondaryGrowthTrait = hasConnectedRepository ? bias.SecondaryTrait : "Unknown",
                 CurrentEvolutionBias = hasConnectedRepository ? bias.CurrentBias : "Unknown",
@@ -3302,16 +3369,21 @@ namespace TokenForge.Client.UI
                 EggInfluenceText = hasConnectedRepository ? bias.EggInfluenceText : "Connect a repository to start shaping a companion.",
                 TokenCurrencyName = tokenShop.CurrencyName,
                 TokenCurrencyBalance = hasConnectedRepository ? Math.Max(0, tokenShop.CurrencyBalance) : 0,
+                EquippedTokenShopItemIds = hasConnectedRepository
+                    ? new List<string>(tokenShop.EquippedItemIds ?? new List<string>())
+                    : new List<string>(),
                 TokenUsageTrackingEnabled = tokenShop.TrackLocalAiTokenUsage,
                 HasSavedRun = hasConnectedRepository && hasSavedRun,
                 CompanionState = hasConnectedRepository ? companion : CompanionState.CreateDefault(),
                 DesktopCompanionSettings = desktopSettings,
                 DesktopOverlayState = hasConnectedRepository && desktopSettings.IsDesktopCompanionEnabled ? CompanionDesktopOverlayState.Fallback : CompanionDesktopOverlayState.Disabled,
                 MotionState = motionState,
-                LatestSafeSessionSummary = hasConnectedRepository ? latestSession : "No repository is connected yet.",
-                RecentGrowthSummary = hasConnectedRepository ? growthSummary : "Connect a repository to start Git growth.",
+                LatestSafeSessionSummary = hasConnectedRepository ? (repositoryGrowth.HasSavedGrowth ? repositoryGrowth.LatestSummary : latestSession) : "No repository is connected yet.",
+                RecentGrowthSummary = hasConnectedRepository && repositoryGrowth.HasLegacyAxisGap ? "Legacy saved growth found, but no axis delta was stored. Re-run analysis to rebuild Code/Focus/Debug/Design/Sync." : hasConnectedRepository ? growthSummary : "Connect a repository to start Git growth.",
                 QuestSummary = BuildQuestSummary(hasSavedRun),
-                ActivityLogSummary = hasSavedRun
+                ActivityLogSummary = repositoryGrowth.TimelineEvents.Count > 0
+                    ? string.Join("\n", repositoryGrowth.TimelineEvents.Take(6).Select(item => (string.IsNullOrWhiteSpace(item.Title) ? item.EventType : item.Title) + " · " + item.TimestampUtc.UtcDateTime.ToString("yyyy-MM-dd")))
+                    : hasSavedRun
                     ? string.Join("\n", (summaries ?? new List<RecentSafeSessionSummary>())
                         .Where(summary => selectedSessionIds.Contains(summary.ClientSessionId))
                         .Select(BootstrapUiTextFormatter.SafeLocalSessionLabel))
@@ -3382,6 +3454,7 @@ namespace TokenForge.Client.UI
                         TokenCurrencyName = profile.TokenShop?.CurrencyName ?? "Forge Coins",
                         TokenCurrencyBalance = Math.Max(0, profile.TokenShop?.CurrencyBalance ?? 0),
                         PurchasedTokenShopItemIds = new List<string>(profile.TokenShop?.PurchasedItemIds ?? new List<string>()),
+                        EquippedTokenShopItemIds = new List<string>(profile.TokenShop?.EquippedItemIds ?? new List<string>()),
                         Skin = CompanionSkinCatalog.Normalize(profile.DesktopCompanionSettings?.VisualThemeId),
                         CompanionId = profile.CompanionId,
                         DesktopCompanionEnabled = profile.DesktopCompanionSettings?.IsDesktopCompanionEnabled ?? true,
@@ -3641,7 +3714,12 @@ namespace TokenForge.Client.UI
                           (string.IsNullOrWhiteSpace(saveData.PendingNativeActivityReview.RepositoryHash) ||
                            string.IsNullOrWhiteSpace(repositoryHash) ||
                            string.Equals(saveData.PendingNativeActivityReview.RepositoryHash, repositoryHash, StringComparison.Ordinal));
-            var latestRun = (saveData.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>()).FirstOrDefault();
+            var latestRun = (saveData.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>())
+                .Where(run => run != null &&
+                              (string.IsNullOrWhiteSpace(repositoryHash) ||
+                               string.Equals(run.RepositoryId, repositoryHash, StringComparison.Ordinal)))
+                .OrderByDescending(run => run.CreatedAtUtc)
+                .FirstOrDefault();
             var forced = CompanionMotionReaction.None;
             if (latestRun != null && latestRun.CreatedAtUtc > DateTimeOffset.UtcNow.AddMinutes(-10))
             {

@@ -495,7 +495,8 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("buildPersistentShellStatusBar", source);
             StringAssert.Contains("TokenForge.PersistentStatusBar", source);
             StringAssert.Contains("TokenForge persistent app status bar", source);
-            StringAssert.Contains("[rightPane addArrangedSubview:[self buildPersistentShellStatusBar]]", source);
+            StringAssert.Contains("[rootWindowContent addArrangedSubview:[self buildFixedTopShellHeader]]", source);
+            StringAssert.Contains("identifier=TokenForge.FixedTopShellHeader insertedBefore=TokenForge.DashboardTabScrollView", source);
             StringAssert.Contains("verifyPersistentStatusBarForContext", source);
             StringAssert.Contains("[PersistentStatusBar][MISSING]", source);
             StringAssert.Contains("[PersistentStatusBar][REPAIR]", source);
@@ -592,7 +593,7 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("state.companion = NativeCompanionState.CreateDefault();", bootstrapperSource);
             StringAssert.Contains("state.review = NativeReviewState.CreateDefault();", bootstrapperSource);
             StringAssert.Contains("state.activity.pendingReviews = new NativeActivityItem[0];", bootstrapperSource);
-            StringAssert.Contains("state.companionFarm = BuildNativeCompanionFarmState(new NativeRepositoryListItem[0], settings);", bootstrapperSource);
+            StringAssert.Contains("state.companionFarm = BuildNativeCompanionFarmState(new NativeRepositoryListItem[0], settings, false);", bootstrapperSource);
             StringAssert.Contains("Connect a repository to create your first companion.", nativeSource);
             StringAssert.Contains("Connect your first Git repository", nativeSource);
             StringAssert.Contains("TokenForge creates a companion from approved local Git activity.", nativeSource);
@@ -1735,10 +1736,14 @@ namespace TokenForge.Client.Tests
         {
             var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
 
-            StringAssert.Contains("TokenForgePinSubview(content, document, 32, 44, 96, 44);", source);
-            StringAssert.Contains("TokenForgePinSubview(guideContent, guideDocument, 20, 32, 96, 32);", source);
+            StringAssert.Contains("TokenForgeTabSafeBottomInset", source);
+            StringAssert.Contains("TokenForgeTabContentTopInset", source);
+            StringAssert.Contains("TokenForgeTabContentSideInset", source);
+            StringAssert.Contains("scrollView.contentInsets", source);
+            StringAssert.Contains("TokenForgePinSubview(content, document, TokenForgeTabContentTopInset, TokenForgeTabContentSideInset, TokenForgeTabSafeBottomInset, TokenForgeTabContentSideInset);", source);
+            StringAssert.Contains("TokenForgePinSubview(guideContent, guideDocument, 20, 32, TokenForgeTabSafeBottomInset, 32);", source);
             StringAssert.Contains("[LayoutBounds]", source);
-            StringAssert.Contains("bottomInset=96", source);
+            StringAssert.Contains("bottomInset=%.0f", source);
         }
 
         [Test]

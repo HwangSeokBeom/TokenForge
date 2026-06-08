@@ -148,7 +148,9 @@ namespace TokenForge.Client.Platform
                 var nativeVisible = NativeIsCompanionVisible();
                 State = nativeVisible ? CompanionDesktopOverlayState.Active : CompanionDesktopOverlayState.Disabled;
                 StatusMessage = nativeVisible ? "Native desktop companion active." : "Native desktop companion show requested but not visible.";
+                Debug.Log("INFO [Overlay][Action] repoHash=legacy desiredVisible=true actualVisible=" + nativeVisible + " panelExists=true panelFrame=nativeLegacyPanel reason=explicitShow sourceAction=csharp.overlayService.show action=show");
                 Debug.Log("INFO [OverlayState][NATIVE_ACTUAL] desiredVisible=true actualVisible=" + nativeVisible + " source=csharp.overlayService.show");
+                Debug.Log("INFO [Overlay][Actual] repoHash=legacy desiredVisible=true actualVisible=" + nativeVisible + " panelExists=true panelFrame=nativeLegacyPanel reason=explicitShow sourceAction=csharp.overlayService.show");
             }
             catch (Exception exception)
             {
@@ -171,7 +173,9 @@ namespace TokenForge.Client.Platform
                 NativeSetCompanionVisibleWithSource(false, "csharp.overlayService.hide");
                 State = CompanionDesktopOverlayState.Disabled;
                 StatusMessage = "Native desktop companion hidden.";
+                Debug.Log("INFO [Overlay][Action] repoHash=legacy desiredVisible=false actualVisible=false panelExists=true panelFrame=nativeLegacyPanel reason=explicitHide sourceAction=csharp.overlayService.hide action=hide");
                 Debug.Log("INFO [OverlayState][NATIVE_ACTUAL] desiredVisible=false actualVisible=false source=csharp.overlayService.hide");
+                Debug.Log("INFO [Overlay][Actual] repoHash=legacy desiredVisible=false actualVisible=false panelExists=true panelFrame=nativeLegacyPanel reason=explicitHide sourceAction=csharp.overlayService.hide");
             }
             catch (Exception exception)
             {
@@ -267,10 +271,16 @@ namespace TokenForge.Client.Platform
                 }
 
                 NativeSetFarmSnapshots(JsonUtility.ToJson(envelope));
+                Debug.Log("INFO [Overlay][Desired] repoHash=" + (envelope.overlays.Count == 0 ? "none" : string.Join(",", envelope.overlays.ConvertAll(item => item.repositoryId).ToArray())) +
+                          " desiredVisible=" + (farmState != null && farmState.enabled) +
+                          " actualVisible=" + (State == CompanionDesktopOverlayState.Active) +
+                          " panelExists=" + (envelope.overlays.Count > 0) +
+                          " panelFrame=farmSnapshot reason=farmSnapshot sourceAction=csharp.setFarmSnapshots snapshots=" + envelope.overlays.Count);
                 if (envelope.overlays.Count == 0)
                 {
                     NativeHideAllRepositoryCompanions("csharp.noConnectedRepositories");
                     NativeSetCompanionVisibleWithSource(false, "csharp.noConnectedRepositories");
+                    Debug.Log("INFO [Overlay][Action] repoHash=none desiredVisible=false actualVisible=false panelExists=false panelFrame=none reason=noApprovedRepository sourceAction=csharp.noConnectedRepositories action=hide");
                     Debug.Log("INFO [OverlayFarm][HIDE_ALL] reason=noConnectedRepositories");
                     Debug.Log("INFO [FarmProjection][SKIP_PLACEHOLDER] reason=noRepository");
                 }
@@ -284,6 +294,11 @@ namespace TokenForge.Client.Platform
                 Debug.Log("INFO [FarmProjection][BUILD] connectedRepositories=" + envelope.overlays.Count + " snapshots=" + envelope.overlays.Count);
                 Debug.Log("INFO [OverlayFarm][SNAPSHOT_APPLY] count=" + envelope.overlays.Count + " source=csharp");
                 Debug.Log("INFO [OverlayFarm][VISIBLE_COUNT] count=" + (State == CompanionDesktopOverlayState.Active ? envelope.overlays.Count : 0));
+                Debug.Log("INFO [Overlay][Actual] repoHash=" + (envelope.overlays.Count == 0 ? "none" : string.Join(",", envelope.overlays.ConvertAll(item => item.repositoryId).ToArray())) +
+                          " desiredVisible=" + (farmState != null && farmState.enabled) +
+                          " actualVisible=" + (State == CompanionDesktopOverlayState.Active) +
+                          " panelExists=" + (envelope.overlays.Count > 0) +
+                          " panelFrame=farmSnapshot reason=farmSnapshotApplied sourceAction=csharp.setFarmSnapshots");
             }
             catch (Exception exception)
             {
@@ -383,7 +398,7 @@ namespace TokenForge.Client.Platform
         {
             if (IsAvailable)
             {
-                try { NativeResetPosition(); } catch (Exception exception) { StatusMessage = "Native overlay reset failed: " + exception.GetType().Name; }
+                try { NativeResetPosition(); Debug.Log("INFO [Overlay][Action] reset source=csharp.resetPosition"); } catch (Exception exception) { StatusMessage = "Native overlay reset failed: " + exception.GetType().Name; }
             }
         }
 
@@ -417,6 +432,7 @@ namespace TokenForge.Client.Platform
 
                     NativeSetClickThrough(clickThrough);
                     lastClickThrough = clickThrough;
+                    Debug.Log("INFO [Overlay][Action] clickThrough enabled=" + clickThrough);
                     LogOnce(clickThrough ? "click-through enabled" : "click-through disabled");
                 }
                 catch (Exception exception)

@@ -73,6 +73,23 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void ReSelectingSameRepositoryDedupesActivationTimelineNoise()
+        {
+            var saveData = SaveData.CreateDefault();
+            var repository = CreateGitRepository("TimelineDedupeRepo");
+
+            var first = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repository);
+            var second = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repository);
+
+            Assert.IsTrue(first.IsSuccess, first.ErrorMessage);
+            Assert.IsTrue(second.IsSuccess, second.ErrorMessage);
+            Assert.AreEqual(first.Value.RepositoryHash, second.Value.RepositoryHash);
+            Assert.AreEqual(1, saveData.RepositoryTimelineEvents.Count(item =>
+                item.RepositoryId == first.Value.RepositoryHash &&
+                (item.EventType == "repository_connected" || item.EventType == "active_repository_changed")));
+        }
+
+        [Test]
         public void LegacyLocalRepositoryMigrationArchivesFallbackAndClearsActiveSelection()
         {
             var saveData = SaveData.CreateDefault();
@@ -556,8 +573,9 @@ namespace TokenForge.Client.Tests
                 Assert.IsFalse(string.IsNullOrWhiteSpace(zodiac.VisualTheme), zodiac.Id);
                 Assert.IsFalse(string.IsNullOrWhiteSpace(zodiac.PlayStyleHint), zodiac.Id);
                 Assert.IsFalse(string.IsNullOrWhiteSpace(zodiac.SilhouetteHint), zodiac.Id);
-                Assert.AreEqual(6, zodiac.Stages.Count, zodiac.Id);
-                CollectionAssert.AreEqual(new[] { "egg", "baby", "child", "teen", "young_adult", "adult" }, zodiac.Stages.Select(stage => stage.StageId).ToArray(), zodiac.Id);
+                Assert.AreEqual(7, zodiac.Stages.Count, zodiac.Id);
+                CollectionAssert.AreEqual(new[] { "egg", "baby", "child", "junior", "teen", "young_adult", "adult" }, zodiac.Stages.Select(stage => stage.StageId).ToArray(), zodiac.Id);
+                StringAssert.Contains("junior:zodiac_" + zodiac.Id + "_junior", zodiac.EvolutionStageMapping);
                 StringAssert.Contains("young_adult:zodiac_" + zodiac.Id + "_young_adult", zodiac.EvolutionStageMapping);
                 Assert.IsTrue(zodiac.Stages.All(stage => stage.ArtVariantKey == "zodiac_" + zodiac.Id + "_" + stage.StageId), zodiac.Id);
                 Assert.IsTrue(zodiac.Stages.All(stage => !string.IsNullOrWhiteSpace(stage.LevelRange)), zodiac.Id);
@@ -567,6 +585,7 @@ namespace TokenForge.Client.Tests
                 Assert.IsTrue(zodiac.Stages.All(stage => stage.ShopPreviewKey == stage.ArtVariantKey), zodiac.Id);
                 Assert.IsTrue(zodiac.Stages.All(stage => stage.WardrobePreviewKey == stage.ArtVariantKey + "_wardrobe"), zodiac.Id);
                 Assert.AreEqual("유년기", zodiac.Stages.Single(stage => stage.StageId == "baby").KoreanStageName, zodiac.Id);
+                Assert.AreEqual("주니어", zodiac.Stages.Single(stage => stage.StageId == "junior").KoreanStageName, zodiac.Id);
                 Assert.AreEqual("청소년기", zodiac.Stages.Single(stage => stage.StageId == "teen").KoreanStageName, zodiac.Id);
                 Assert.AreEqual("성숙기", zodiac.Stages.Single(stage => stage.StageId == "young_adult").KoreanStageName, zodiac.Id);
                 Assert.AreEqual("성체", zodiac.Stages.Single(stage => stage.StageId == "adult").KoreanStageName, zodiac.Id);
