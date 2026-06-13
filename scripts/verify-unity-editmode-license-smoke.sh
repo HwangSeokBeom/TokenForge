@@ -2,9 +2,9 @@
 set -u -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/tokenforge-unity-env.sh"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 UNITY_PROJECT_PATH="${UNITY_PROJECT_PATH:-${REPO_ROOT}/UnityClient}"
-UNITY_PATH="${UNITY_PATH:-/Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/MacOS/Unity}"
 SIMPLE_LOG_FILE="${SIMPLE_LOG_FILE:-/tmp/tokenforge-unity-simple-license-smoke-shaped-compare.log}"
 EDITMODE_LOG_FILE="${EDITMODE_LOG_FILE:-/tmp/tokenforge-unity-editmode-license-smoke.log}"
 EDITMODE_RESULTS="${EDITMODE_RESULTS:-/tmp/tokenforge-unity-editmode-license-smoke-results.xml}"
@@ -12,7 +12,7 @@ TEST_FILTER="${TEST_FILTER:-TokenForge.Client.Tests.__EditModeLicenseProbeNoSuch
 
 if [[ ! -x "${UNITY_PATH}" ]]; then
   echo "Unity executable not found or not executable: ${UNITY_PATH}" >&2
-  echo "Set UNITY_PATH to a Unity 2022.3.0f1 executable." >&2
+  echo "Set UNITY_PATH to a Unity 6000.4.10f1 executable." >&2
   exit 1
 fi
 

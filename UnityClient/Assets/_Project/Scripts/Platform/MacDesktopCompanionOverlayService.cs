@@ -71,6 +71,17 @@ namespace TokenForge.Client.Platform
             try { return NativeIsOverlayDragging(); }
             catch { return false; }
         }
+
+        public bool IsAnyOverlayActuallyVisible()
+        {
+            if (!IsAvailable)
+            {
+                return false;
+            }
+
+            try { return NativeIsCompanionVisible(); }
+            catch { return State == CompanionDesktopOverlayState.Active; }
+        }
         public string StatusMessage { get; private set; } = "Native overlay has not been initialized.";
 
         public bool Create()
@@ -82,6 +93,14 @@ namespace TokenForge.Client.Platform
                 State = CompanionDesktopOverlayState.Unavailable;
                 StatusMessage = "Unsupported runtime. Native desktop overlay requires a macOS player build.";
                 LogOnce("platform unsupported");
+                return false;
+            }
+
+            if (DisableNativeOverlayEnabled)
+            {
+                State = CompanionDesktopOverlayState.Unavailable;
+                StatusMessage = "Native overlay disabled by startup safe-mode environment.";
+                Debug.Log("INFO [NativeSafeMode][SKIP] function=MacDesktopCompanionOverlayService.Create reason=" + NativeOverlaySkipReason);
                 return false;
             }
 
@@ -131,6 +150,13 @@ namespace TokenForge.Client.Platform
                 return;
             }
 
+            if (DisableNativeOverlayEnabled)
+            {
+                State = CompanionDesktopOverlayState.Unavailable;
+                Debug.Log("INFO [NativeSafeMode][SKIP] function=MacDesktopCompanionOverlayService.Show reason=" + NativeOverlaySkipReason);
+                return;
+            }
+
             try
             {
                 if (!createAttempted || State == CompanionDesktopOverlayState.Unavailable)
@@ -165,6 +191,12 @@ namespace TokenForge.Client.Platform
             if (!IsAvailable)
             {
                 State = CompanionDesktopOverlayState.Unavailable;
+                return;
+            }
+            if (DisableNativeOverlayEnabled)
+            {
+                State = CompanionDesktopOverlayState.Unavailable;
+                Debug.Log("INFO [NativeSafeMode][SKIP] function=MacDesktopCompanionOverlayService.Hide reason=" + NativeOverlaySkipReason);
                 return;
             }
 
@@ -218,8 +250,12 @@ namespace TokenForge.Client.Platform
 
         public void SetRenderSnapshot(string repositoryId, CompanionState state, int xp, string visualThemeId)
         {
-            if (!IsAvailable)
+            if (!IsAvailable || DisablePixelNativeRendererEnabled)
             {
+                if (DisablePixelNativeRendererEnabled)
+                {
+                    Debug.Log("INFO [NativeSafeMode][SKIP] function=MacDesktopCompanionOverlayService.SetRenderSnapshot reason=" + NativePixelSkipReason);
+                }
                 return;
             }
 
@@ -243,8 +279,12 @@ namespace TokenForge.Client.Platform
 
         public void SetCompanionFarmSnapshots(DesktopCompanionFarmState farmState)
         {
-            if (!IsAvailable)
+            if (!IsAvailable || DisablePixelNativeRendererEnabled)
             {
+                if (DisablePixelNativeRendererEnabled)
+                {
+                    Debug.Log("INFO [NativeSafeMode][SKIP] function=MacDesktopCompanionOverlayService.SetCompanionFarmSnapshots reason=" + NativePixelSkipReason);
+                }
                 return;
             }
 
@@ -285,7 +325,8 @@ namespace TokenForge.Client.Platform
                     Debug.Log("INFO [FarmProjection][SKIP_PLACEHOLDER] reason=noRepository");
                 }
 
-                State = envelope.overlays.Count > 0 && farmState != null && farmState.enabled
+                var nativeVisible = NativeIsCompanionVisible();
+                State = nativeVisible
                     ? CompanionDesktopOverlayState.Active
                     : CompanionDesktopOverlayState.Disabled;
                 StatusMessage = State == CompanionDesktopOverlayState.Active
@@ -293,12 +334,23 @@ namespace TokenForge.Client.Platform
                     : "Native repository companion farm hidden.";
                 Debug.Log("INFO [FarmProjection][BUILD] connectedRepositories=" + envelope.overlays.Count + " snapshots=" + envelope.overlays.Count);
                 Debug.Log("INFO [OverlayFarm][SNAPSHOT_APPLY] count=" + envelope.overlays.Count + " source=csharp");
-                Debug.Log("INFO [OverlayFarm][VISIBLE_COUNT] count=" + (State == CompanionDesktopOverlayState.Active ? envelope.overlays.Count : 0));
+                Debug.Log("INFO [OverlayFarm][VISIBLE_COUNT] count=" + (nativeVisible ? envelope.overlays.Count : 0));
                 Debug.Log("INFO [Overlay][Actual] repoHash=" + (envelope.overlays.Count == 0 ? "none" : string.Join(",", envelope.overlays.ConvertAll(item => item.repositoryId).ToArray())) +
                           " desiredVisible=" + (farmState != null && farmState.enabled) +
-                          " actualVisible=" + (State == CompanionDesktopOverlayState.Active) +
+                          " actualVisible=" + nativeVisible +
                           " panelExists=" + (envelope.overlays.Count > 0) +
                           " panelFrame=farmSnapshot reason=farmSnapshotApplied sourceAction=csharp.setFarmSnapshots");
+                Debug.Log("INFO [OverlayVisibilityDiagnostic] selectedRepoHash=" + (envelope.overlays.Count == 0 ? "none" : string.Join(",", envelope.overlays.ConvertAll(item => item.repositoryId).ToArray())) +
+                          " canonicalRepoHash=" + (envelope.overlays.Count == 0 ? "none" : string.Join(",", envelope.overlays.ConvertAll(item => item.repositoryId).ToArray())) +
+                          " approvedRepoCount=" + envelope.overlays.Count +
+                          " desiredVisible=" + (farmState != null && farmState.enabled) +
+                          " actualVisible=" + nativeVisible +
+                          " panelExists=" + (envelope.overlays.Count > 0) +
+                          " forcedHiddenByNoRepo=" + (envelope.overlays.Count == 0 && farmState != null && farmState.enabled) +
+                          " legacyPanelExists=" + nativeVisible +
+                          " farmPanelCount=" + envelope.overlays.Count +
+                          " persistedFarmSnapshotCount=" + envelope.overlays.Count +
+                          " reason=farmSnapshotApplied");
             }
             catch (Exception exception)
             {
@@ -319,7 +371,7 @@ namespace TokenForge.Client.Platform
 
         public void ShowAllRepositoryCompanions(string source = "csharp.showAll")
         {
-            if (IsAvailable)
+            if (IsAvailable && !DisableNativeOverlayEnabled)
             {
                 try { NativeShowAllRepositoryCompanions(source); } catch { }
             }
@@ -327,7 +379,7 @@ namespace TokenForge.Client.Platform
 
         public void HideAllRepositoryCompanions(string source = "csharp.hideAll")
         {
-            if (IsAvailable)
+            if (IsAvailable && !DisableNativeOverlayEnabled)
             {
                 try { NativeHideAllRepositoryCompanions(source); } catch { }
             }
@@ -335,7 +387,7 @@ namespace TokenForge.Client.Platform
 
         public void SetOverlayFrame(string repositoryId, Rect frame, string source = "csharp.setFrame")
         {
-            if (IsAvailable)
+            if (IsAvailable && !DisableNativeOverlayEnabled)
             {
                 try { NativeSetOverlayFrame(SafeRepositoryId(repositoryId), frame.x, frame.y, Mathf.Max(24f, frame.width), Mathf.Max(24f, frame.height), source); } catch { }
             }
@@ -348,8 +400,12 @@ namespace TokenForge.Client.Platform
 
         public void SetMotionProfile(CompanionVisualProfile profile)
         {
-            if (!IsAvailable || profile == null)
+            if (!IsAvailable || profile == null || DisableNativeOverlayEnabled)
             {
+                if (DisableNativeOverlayEnabled)
+                {
+                    Debug.Log("INFO [NativeSafeMode][SKIP] function=MacDesktopCompanionOverlayService.SetMotionProfile reason=" + NativeOverlaySkipReason);
+                }
                 return;
             }
 
@@ -388,7 +444,7 @@ namespace TokenForge.Client.Platform
 
         public void TriggerReaction(CompanionReaction reaction, string speechText)
         {
-            if (IsAvailable)
+            if (IsAvailable && !DisableNativeOverlayEnabled)
             {
                 try { NativeTriggerReaction((int)reaction, SafeSpeechText(speechText)); } catch (Exception exception) { StatusMessage = "Native overlay reaction failed: " + exception.GetType().Name; }
             }
@@ -396,7 +452,7 @@ namespace TokenForge.Client.Platform
 
         public void ResetPosition()
         {
-            if (IsAvailable)
+            if (IsAvailable && !DisableNativeOverlayEnabled)
             {
                 try { NativeResetPosition(); Debug.Log("INFO [Overlay][Action] reset source=csharp.resetPosition"); } catch (Exception exception) { StatusMessage = "Native overlay reset failed: " + exception.GetType().Name; }
             }
@@ -404,7 +460,7 @@ namespace TokenForge.Client.Platform
 
         public void SetClickEnabled(bool enabled)
         {
-            if (IsAvailable)
+            if (IsAvailable && !DisableNativeOverlayEnabled)
             {
                 try
                 {
@@ -421,7 +477,7 @@ namespace TokenForge.Client.Platform
 
         public void SetClickThrough(bool clickThrough)
         {
-            if (IsAvailable)
+            if (IsAvailable && !DisableNativeOverlayEnabled)
             {
                 try
                 {
@@ -594,6 +650,27 @@ namespace TokenForge.Client.Platform
 
             lastLoggedMessage = message;
             Debug.Log("INFO " + LogPrefix + " " + message);
+        }
+
+        private static bool NativeSafeModeEnabled => IsEnvironmentFlagEnabled("TOKENFORGE_NATIVE_SAFE_MODE");
+        private static bool DisableNativeOverlayEnabled => NativeSafeModeEnabled || IsEnvironmentFlagEnabled("TOKENFORGE_DISABLE_NATIVE_OVERLAY");
+        private static bool DisablePixelNativeRendererEnabled => NativeSafeModeEnabled || IsEnvironmentFlagEnabled("TOKENFORGE_DISABLE_PIXEL_NATIVE_RENDERER");
+        private static string NativeOverlaySkipReason => NativeSafeModeEnabled ? "TOKENFORGE_NATIVE_SAFE_MODE" : "TOKENFORGE_DISABLE_NATIVE_OVERLAY";
+        private static string NativePixelSkipReason => NativeSafeModeEnabled ? "TOKENFORGE_NATIVE_SAFE_MODE" : "TOKENFORGE_DISABLE_PIXEL_NATIVE_RENDERER";
+
+        private static bool IsEnvironmentFlagEnabled(string name)
+        {
+            var value = Environment.GetEnvironmentVariable(name);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            value = value.Trim();
+            return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "on", StringComparison.OrdinalIgnoreCase);
         }
 
 #if UNITY_STANDALONE_OSX && !UNITY_EDITOR

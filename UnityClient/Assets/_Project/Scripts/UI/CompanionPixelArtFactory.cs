@@ -27,6 +27,7 @@ namespace TokenForge.Client.UI
             var key = CanonicalAssetKey(state, walkFrame, zodiacTypeId, equippedItemIds, repositoryIdentity, previewRole, cosmeticVariant);
             if (Cache.TryGetValue(key, out var cached) && cached != null)
             {
+                LogPixelDiagnostic(state, zodiacTypeId, equippedItemIds, key, "unityCache", true);
                 return cached;
             }
 
@@ -42,6 +43,7 @@ namespace TokenForge.Client.UI
             var sprite = Sprite.Create(texture, new Rect(0, 0, SpriteSize, SpriteSize), new Vector2(0.5f, 0.5f), SpriteSize);
             sprite.name = texture.name;
             Cache[key] = sprite;
+            LogPixelDiagnostic(state, zodiacTypeId, equippedItemIds, key, "unityFactory", false);
             return sprite;
         }
 
@@ -58,7 +60,7 @@ namespace TokenForge.Client.UI
             var repo = SanitizeKeyPart(repositoryIdentity, "no-repo");
             var role = SanitizeKeyPart(previewRole, "legacy");
             var variant = SanitizeKeyPart(cosmeticVariant, "default");
-            return "sprite:v3:grid24:" + state.Stage + ":" + state.Archetype + ":" + (walkFrame ? "walk" : "idle") + ":repo=" + repo + ":role=" + role + ":zodiac=" + zodiac + ":variant=" + variant + ":items=" + string.Join(",", items);
+            return "signature=sprite:v4:grid24:stage=" + state.Stage + ":archetype=" + state.Archetype + ":frame=" + (walkFrame ? "walk" : "idle") + ":repo=" + repo + ":role=" + role + ":zodiac=" + zodiac + ":variant=" + variant + ":equippedItemsHash=" + string.Join(",", items);
         }
 
         public static string SpriteSignature(CompanionState state, bool walkFrame, string zodiacTypeId, IEnumerable<string> equippedItemIds = null)
@@ -100,6 +102,22 @@ namespace TokenForge.Client.UI
             }
 
             DrawCosmetics(texture, NormalizeItems(equippedItemIds), palette);
+        }
+
+        private static void LogPixelDiagnostic(CompanionState state, string zodiacTypeId, IEnumerable<string> equippedItemIds, string cacheKey, string generatedFrom, bool reusedCache)
+        {
+            var zodiac = RepositoryCompanionProfileService.NormalizeZodiacTypeId(zodiacTypeId, state.Archetype.ToString());
+            var equippedItemsHash = string.Join(",", NormalizeItems(equippedItemIds));
+            Debug.Log("INFO [PixelDiagnostic] signature=sprite:v4:grid24 repoHash=unity zodiacKey=" + zodiac +
+                      " stageKey=" + state.Stage +
+                      " equippedItemKeys=" + (string.IsNullOrWhiteSpace(equippedItemsHash) ? "none" : equippedItemsHash) +
+                      " wardrobePreviewKey=unitySprite" +
+                      " cacheKey=" + cacheKey +
+                      " cacheHit=" + reusedCache +
+                      " generatedVariant=" + generatedFrom +
+                      " zodiac=" + zodiac +
+                      " stage=" + state.Stage +
+                      " equippedItemsHash=" + (string.IsNullOrWhiteSpace(equippedItemsHash) ? "none" : equippedItemsHash));
         }
 
         private static void DrawCreature(Texture2D texture, CompanionState state, bool walkFrame, Palette palette)
@@ -152,62 +170,99 @@ namespace TokenForge.Client.UI
             {
                 case "rat":
                     Ellipse(texture, 5, 5, 8, 8, palette.Outline);
+                    Ellipse(texture, 6, 6, 7, 7, palette.Accent);
                     Ellipse(texture, 15, 5, 18, 8, palette.Outline);
-                    Line(texture, 16, 17, 21, 14 + tailOffset, palette.Accent);
+                    Ellipse(texture, 16, 6, 17, 7, palette.Accent);
+                    Line(texture, 15, 17, 21, 14 + tailOffset, palette.Outline);
+                    Line(texture, 16, 17, 21, 15 + tailOffset, palette.Accent);
                     break;
                 case "ox":
-                    Line(texture, 7, 6, 4, 3, palette.Outline);
-                    Line(texture, 16, 6, 19, 3, palette.Outline);
+                    Line(texture, 7, 6, 3, 3, palette.Outline);
+                    Line(texture, 16, 6, 20, 3, palette.Outline);
+                    Line(texture, 7, 7, 4, 4, palette.Accent);
+                    Line(texture, 16, 7, 19, 4, palette.Accent);
                     Rect(texture, 10, 9, 13, 10, palette.Dark);
+                    Rect(texture, 9, 13, 14, 15, palette.Accent);
                     break;
                 case "tiger":
+                    Rect(texture, 7, 4, 9, 7, palette.Outline);
+                    Rect(texture, 15, 4, 17, 7, palette.Outline);
+                    Pixel(texture, 8, 5, palette.Body);
+                    Pixel(texture, 16, 5, palette.Body);
                     Line(texture, 9, 8, 12, 9, palette.Dark);
                     Line(texture, 14, 8, 11, 9, palette.Dark);
-                    Rect(texture, 8, 13, 9, 14, palette.Dark);
-                    Rect(texture, 15, 13, 16, 14, palette.Dark);
+                    Rect(texture, 11, 7, 12, 11, palette.Dark);
+                    Rect(texture, 8, 13, 9, 16, palette.Dark);
+                    Rect(texture, 15, 13, 16, 16, palette.Dark);
+                    Line(texture, 16, 18, 22, 15 + tailOffset, palette.Outline);
+                    Line(texture, 17, 18, 21, 16 + tailOffset, palette.Body);
+                    Pixel(texture, 20, 16 + tailOffset, palette.Dark);
                     break;
                 case "rabbit":
                     Rect(texture, 7, 1, 9, 7, palette.Outline);
                     Rect(texture, 14, 1, 16, 7, palette.Outline);
                     Rect(texture, 8, 2, 8, 6, palette.Accent);
                     Rect(texture, 15, 2, 15, 6, palette.Accent);
+                    Pixel(texture, 9, 15, palette.Accent);
+                    Pixel(texture, 15, 15, palette.Accent);
                     break;
                 case "dragon":
-                    Rect(texture, 6, 4, 7, 7, palette.Outline);
-                    Rect(texture, 16, 4, 17, 7, palette.Outline);
-                    Line(texture, 8, 14, 4, 13, palette.Accent);
-                    Line(texture, 15, 14, 19, 13, palette.Accent);
+                    Rect(texture, 5, 3, 7, 7, palette.Outline);
+                    Rect(texture, 16, 3, 18, 7, palette.Outline);
+                    Pixel(texture, 6, 4, palette.Accent);
+                    Pixel(texture, 17, 4, palette.Accent);
+                    Line(texture, 8, 14, 3, 13, palette.Accent);
+                    Line(texture, 15, 14, 20, 13, palette.Accent);
                     Pixel(texture, 12, 4, palette.Aura);
+                    Pixel(texture, 10, 10, palette.Accent);
+                    Pixel(texture, 13, 10, palette.Accent);
+                    Pixel(texture, 16, 16, palette.Accent);
                     break;
                 case "snake":
-                    Line(texture, 16, 18, 20, 18 + tailOffset, palette.Accent);
-                    Line(texture, 20, 18 + tailOffset, 19, 20, palette.Accent);
+                    Rect(texture, 5, 17, 15, 19, palette.Outline);
+                    Rect(texture, 7, 16, 18, 18, palette.Body);
+                    Line(texture, 16, 18, 21, 18 + tailOffset, palette.Outline);
+                    Line(texture, 20, 18 + tailOffset, 19, 20, palette.Outline);
+                    Line(texture, 17, 18, 21, 17 + tailOffset, palette.Accent);
                     Pixel(texture, 13, 13, palette.Accent);
+                    Pixel(texture, 17, 12, palette.Dark);
                     break;
                 case "horse":
-                    Rect(texture, 11, 4, 13, 8, palette.Dark);
-                    Rect(texture, 15, 15, 17, 20, palette.Accent);
+                    Rect(texture, 11, 3, 14, 9, palette.Dark);
+                    Rect(texture, 15, 15, 18, 20, palette.Outline);
+                    Rect(texture, 16, 15, 17, 19, palette.Accent);
+                    Rect(texture, 8, 9, 15, 11, palette.Body);
                     break;
                 case "goat":
-                    Line(texture, 8, 6, 5, 4, palette.Outline);
-                    Line(texture, 15, 6, 18, 4, palette.Outline);
+                    Line(texture, 8, 6, 4, 4, palette.Outline);
+                    Line(texture, 15, 6, 19, 4, palette.Outline);
+                    Line(texture, 5, 4, 5, 7, palette.Accent);
+                    Line(texture, 18, 4, 18, 7, palette.Accent);
                     Pixel(texture, 8, 10, palette.Highlight);
                     Pixel(texture, 15, 10, palette.Highlight);
+                    Rect(texture, 10, 14, 13, 17, palette.Highlight);
                     break;
                 case "monkey":
                     Ellipse(texture, 4, 8, 7, 12, palette.Outline);
                     Ellipse(texture, 16, 8, 19, 12, palette.Outline);
-                    Line(texture, 17, 17, 21, 19 - tailOffset, palette.Accent);
+                    Rect(texture, 9, 11, 14, 15, palette.Accent);
+                    Line(texture, 17, 17, 22, 19 - tailOffset, palette.Outline);
+                    Line(texture, 18, 17, 21, 18 - tailOffset, palette.Accent);
                     break;
                 case "rooster":
-                    Rect(texture, 10, 3, 13, 5, palette.Accent);
-                    Pixel(texture, 15, 12, palette.Accent);
-                    Line(texture, 16, 16, 20, 13, palette.Dark);
+                    Rect(texture, 9, 2, 11, 6, palette.Accent);
+                    Rect(texture, 12, 1, 14, 6, palette.Accent);
+                    Rect(texture, 15, 3, 16, 6, palette.Accent);
+                    Rect(texture, 15, 12, 18, 13, palette.Accent);
+                    Line(texture, 16, 16, 21, 12, palette.Dark);
+                    Line(texture, 17, 17, 21, 16, palette.Accent);
                     break;
                 case "dog":
-                    Rect(texture, 5, 7, 7, 13, palette.Dark);
-                    Rect(texture, 16, 7, 18, 13, palette.Dark);
+                    Rect(texture, 5, 6, 8, 14, palette.Dark);
+                    Rect(texture, 15, 6, 18, 14, palette.Dark);
                     Rect(texture, 8, 16, 15, 17, palette.Accent);
+                    Line(texture, 16, 17, 21, 15 + tailOffset, palette.Outline);
+                    Line(texture, 17, 17, 21, 14 + tailOffset, palette.Accent);
                     break;
                 case "pig":
                     Rect(texture, 10, 12, 13, 14, palette.Accent);
@@ -215,6 +270,7 @@ namespace TokenForge.Client.UI
                     Pixel(texture, 13, 13, palette.Dark);
                     Ellipse(texture, 6, 6, 8, 8, palette.Accent);
                     Ellipse(texture, 15, 6, 17, 8, palette.Accent);
+                    Line(texture, 17, 17, 20, 16 + tailOffset, palette.Accent);
                     break;
             }
 
@@ -236,16 +292,26 @@ namespace TokenForge.Client.UI
                     Pixel(texture, 8, 9, ColorForItem(item, palette.Highlight));
                     Pixel(texture, 16, 16, ColorForItem(item, palette.Accent));
                 }
-                else if (item.Contains("outfit") || item.Contains("jacket") || item.Contains("hoodie") || item.Contains("cape"))
+                else if (item.Contains("outfit") || item.Contains("jacket") || item.Contains("hoodie") || item.Contains("cape") || item.Contains("armor"))
                 {
                     Rect(texture, 8, 16, 15, 18, ColorForItem(item, palette.Dark));
                     Pixel(texture, 11, 17, palette.Highlight);
                 }
-                else if (item.Contains("hat") || item.Contains("crown") || item.Contains("cap") || item.Contains("accessory"))
+                else if (item.Contains("hat") || item.Contains("crown") || item.Contains("cap") || item.Contains("helmet") || item.Contains("head"))
                 {
                     Rect(texture, 8, 3, 15, 5, ColorForItem(item, palette.Accent));
                     Pixel(texture, 11, 2, palette.Highlight);
                     Pixel(texture, 13, 2, palette.Highlight);
+                }
+                else if (item.Contains("back") || item.Contains("wing") || item.Contains("bag"))
+                {
+                    Rect(texture, 4, 12, 7, 18, ColorForItem(item, palette.Accent));
+                    Rect(texture, 17, 12, 20, 18, ColorForItem(item, palette.Accent));
+                }
+                else if (!item.Contains("badge") && (item.Contains("accessory") || item.Contains("glasses") || item.Contains("necklace")))
+                {
+                    Rect(texture, 9, 11, 15, 12, ColorForItem(item, palette.Dark));
+                    Pixel(texture, 12, 16, ColorForItem(item, palette.Aura));
                 }
                 else if (item.Contains("badge"))
                 {

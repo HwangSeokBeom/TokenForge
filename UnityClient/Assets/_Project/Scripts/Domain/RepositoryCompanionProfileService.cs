@@ -10,6 +10,23 @@ namespace TokenForge.Client.Domain
     public static class RepositoryCompanionProfileService
     {
         public const string DefaultLocalRepositoryHash = "0000000000000000000000000000000000000000000000000000000000000001";
+        public sealed class SelectedRepositoryCanonicalization
+        {
+            public string InputSelectedRepoHash { get; set; } = string.Empty;
+            public string InputAliasType { get; set; } = "empty";
+            public string ResolvedCanonicalHash { get; set; } = string.Empty;
+            public string MatchedBy { get; set; } = "none";
+            public bool ProfileExists { get; set; }
+            public bool ConnectedProjectExists { get; set; }
+            public bool DidCreateNewProfile { get; set; }
+            public string Reason { get; set; } = "unresolved";
+
+            public bool Resolved
+            {
+                get { return !string.IsNullOrWhiteSpace(ResolvedCanonicalHash); }
+            }
+        }
+
         private static readonly IReadOnlyList<TokenShopItemDefinition> TokenShopItems = new List<TokenShopItemDefinition>
         {
             new TokenShopItemDefinition
@@ -639,22 +656,41 @@ namespace TokenForge.Client.Domain
             else if (string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash) ||
                      !connectedRepositoryIds.Contains(saveData.SelectedRepositoryHash))
             {
-                var nextActive = saveData.ConnectedProjects
-                                     .Where(project => project != null && project.IsActive && !project.IsArchived)
-                                     .Select(project => FirstNonEmpty(project.Id, project.PathHash, project.ProjectPathHash))
-                                     .FirstOrDefault(id => connectedRepositoryIds.Contains(id)) ??
-                                 connectedRepositoryIds.FirstOrDefault();
-                saveData.SelectedRepositoryHash = nextActive ?? string.Empty;
+                var resolvedSelection = CanonicalizeSelectedRepositoryHash(saveData, saveData.SelectedRepositoryHash);
+                if (resolvedSelection.Resolved)
+                {
+                    saveData.SelectedRepositoryHash = resolvedSelection.ResolvedCanonicalHash;
+                }
+                else if (string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash))
+                {
+                    saveData.SelectedRepositoryHash = string.Empty;
+                }
+                else
+                {
+                    UnityEngine.Debug.LogWarning("WARN [CompanionProfile][EMPTY_STATE] selectedRepoHash=" + saveData.SelectedRepositoryHash + " reason=canonical_profile_not_found didCreateNewProfile=false");
+                    saveData.SelectedRepositoryHash = string.Empty;
+                }
             }
 
             SyncConnectedProjectActiveFlags(saveData);
+            if (!string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash))
+            {
+                CanonicalizeSelectedRepositoryHash(saveData, saveData.SelectedRepositoryHash);
+            }
 
             var selected = saveData.RepositoryCompanionProfiles.FirstOrDefault(profile =>
                 profile.ArchivedAtUtc == null &&
                 connectedRepositoryIds.Contains(profile.RepositoryHash) &&
-                string.Equals(profile.RepositoryHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal));
+                RepositoryIdentityMatches(saveData, profile.RepositoryHash, saveData.SelectedRepositoryHash));
             if (selected != null)
             {
+                if (!string.Equals(saveData.SelectedRepositoryHash, selected.RepositoryHash, StringComparison.Ordinal))
+                {
+                    CanonicalizeSelectedRepositoryHash(saveData, saveData.SelectedRepositoryHash);
+                    saveData.SelectedRepositoryHash = selected.RepositoryHash;
+                    SyncConnectedProjectActiveFlags(saveData);
+                }
+
                 UnityEngine.Debug.Log("INFO [RepositoryProjection][ACTIVE_REPOSITORY_FROM_CONNECTED_PROJECT] repositoryId=" + selected.RepositoryHash);
                 if (ShouldMigrateLegacyDesktopSettings(selected.DesktopCompanionSettings, saveData.DesktopCompanionSettings))
                 {
@@ -1110,10 +1146,7 @@ namespace TokenForge.Client.Domain
             return saveData.RepositoryCompanionProfiles.FirstOrDefault(profile =>
                        profile.ArchivedAtUtc == null &&
                        connectedIds.Contains(profile.RepositoryHash) &&
-                       string.Equals(profile.RepositoryHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal)) ??
-                   saveData.RepositoryCompanionProfiles.FirstOrDefault(profile =>
-                       profile.ArchivedAtUtc == null &&
-                       connectedIds.Contains(profile.RepositoryHash));
+                       RepositoryIdentityMatches(saveData, profile.RepositoryHash, saveData.SelectedRepositoryHash));
         }
 
         public static RepositoryCompanionProfile ApplyApprovedGrowth(
@@ -1270,12 +1303,139 @@ namespace TokenForge.Client.Domain
                                 !IsStaleFallbackProject(project) &&
                                 (string.Equals(project.Id, repositoryHash, StringComparison.Ordinal) ||
                                  string.Equals(project.PathHash, repositoryHash, StringComparison.Ordinal) ||
-                                 string.Equals(project.ProjectPathHash, repositoryHash, StringComparison.Ordinal)));
+                                 string.Equals(project.ProjectPathHash, repositoryHash, StringComparison.Ordinal) ||
+                                 string.Equals(project.LocalOnlyProjectId, repositoryHash, StringComparison.Ordinal)));
         }
 
         public static string SafeRepositoryHashForSession(AgentWorkSession session)
         {
             return session?.GitChangeSummary?.ProjectPathHash ?? string.Empty;
+        }
+
+        public static SelectedRepositoryCanonicalization CanonicalizeSelectedRepositoryHash(SaveData saveData, string selectedRepoHash = null, bool emitDiagnostic = true)
+        {
+            saveData = saveData ?? SaveData.CreateDefault();
+            var input = string.IsNullOrWhiteSpace(selectedRepoHash) ? saveData.SelectedRepositoryHash ?? string.Empty : selectedRepoHash.Trim();
+            var result = new SelectedRepositoryCanonicalization
+            {
+                InputSelectedRepoHash = input,
+                InputAliasType = AliasTypeFor(saveData, input),
+                DidCreateNewProfile = false
+            };
+
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                result.Reason = "empty_selection";
+                LogCanonicalizeSelected(result, emitDiagnostic);
+                return result;
+            }
+
+            var connectedProjects = (saveData.ConnectedProjects ?? new List<ConnectedProject>())
+                .Where(project => project != null &&
+                                  !project.IsArchived &&
+                                  project.ApprovedAt != null &&
+                                  !IsStaleFallbackProject(project))
+                .ToList();
+            var profiles = (saveData.RepositoryCompanionProfiles ?? new List<RepositoryCompanionProfile>())
+                .Where(profile => profile != null &&
+                                  profile.ArchivedAtUtc == null &&
+                                  !string.IsNullOrWhiteSpace(profile.RepositoryHash) &&
+                                  !IsStaleFallbackProfile(profile))
+                .ToList();
+
+            var exactProfile = profiles.FirstOrDefault(profile => string.Equals(profile.RepositoryHash, input, StringComparison.Ordinal));
+            if (exactProfile != null && connectedProjects.Any(project => ConnectedProjectContainsCanonical(project, exactProfile.RepositoryHash)))
+            {
+                result.ResolvedCanonicalHash = exactProfile.RepositoryHash;
+                result.MatchedBy = "canonicalRepositoryHash";
+                result.ProfileExists = true;
+                result.ConnectedProjectExists = true;
+                result.Reason = "selected_is_canonical";
+                LogCanonicalizeSelected(result, emitDiagnostic);
+                return result;
+            }
+
+            var projectMatches = connectedProjects
+                .Where(project => ConnectedProjectMatchesCandidate(project, input))
+                .ToList();
+            if (projectMatches.Count == 1)
+            {
+                var project = projectMatches[0];
+                result.ConnectedProjectExists = true;
+                var profile = profiles.FirstOrDefault(item => ConnectedProjectContainsCanonical(project, item.RepositoryHash));
+                result.MatchedBy = MatchedByForProject(project, input);
+                if (profile != null)
+                {
+                    result.ResolvedCanonicalHash = profile.RepositoryHash;
+                    result.ProfileExists = true;
+                    result.Reason = "connected_project_alias";
+                    LogCanonicalizeSelected(result, emitDiagnostic);
+                    return result;
+                }
+
+                result.Reason = "connected_project_without_profile";
+                LogCanonicalizeSelected(result, emitDiagnostic);
+                return result;
+            }
+
+            if (projectMatches.Count > 1)
+            {
+                result.ConnectedProjectExists = true;
+                result.MatchedBy = "ambiguousConnectedProjectAlias";
+                result.Reason = "ambiguous_alias";
+                LogCanonicalizeSelected(result, emitDiagnostic);
+                return result;
+            }
+
+            if (LooksLikeRepositoryPath(input))
+            {
+                var pathHash = HashRepositoryPath(input);
+                var legacyPathHash = SafeHashUtility.ComputeProjectPathHash(CanonicalRepositoryPathForIdentity(input));
+                var pathProfile = profiles.FirstOrDefault(profile =>
+                    (string.Equals(profile.RepositoryHash, pathHash, StringComparison.Ordinal) ||
+                     string.Equals(profile.RepositoryHash, legacyPathHash, StringComparison.Ordinal)) &&
+                    connectedProjects.Any(project => ConnectedProjectContainsCanonical(project, profile.RepositoryHash)));
+                if (pathProfile != null)
+                {
+                    result.ResolvedCanonicalHash = pathProfile.RepositoryHash;
+                    result.MatchedBy = string.Equals(pathProfile.RepositoryHash, pathHash, StringComparison.Ordinal) ? "repositoryPathHash" : "legacyRepositoryPathHash";
+                    result.ProfileExists = true;
+                    result.ConnectedProjectExists = true;
+                    result.Reason = "repository_path_alias";
+                    LogCanonicalizeSelected(result, emitDiagnostic);
+                    return result;
+                }
+            }
+
+            var aliasMatches = profiles
+                .Where(profile => !string.IsNullOrWhiteSpace(profile.SafeRepositoryAlias) &&
+                                  string.Equals(profile.SafeRepositoryAlias.Trim(), input, StringComparison.OrdinalIgnoreCase) &&
+                                  connectedProjects.Any(project => ConnectedProjectContainsCanonical(project, profile.RepositoryHash)))
+                .ToList();
+            if (aliasMatches.Count == 1)
+            {
+                result.ResolvedCanonicalHash = aliasMatches[0].RepositoryHash;
+                result.MatchedBy = "profileDisplayNameAlias";
+                result.ProfileExists = true;
+                result.ConnectedProjectExists = true;
+                result.Reason = "unique_profile_alias";
+                LogCanonicalizeSelected(result, emitDiagnostic);
+                return result;
+            }
+
+            if (aliasMatches.Count > 1)
+            {
+                result.ProfileExists = true;
+                result.ConnectedProjectExists = true;
+                result.MatchedBy = "ambiguousProfileDisplayNameAlias";
+                result.Reason = "ambiguous_alias";
+                LogCanonicalizeSelected(result, emitDiagnostic);
+                return result;
+            }
+
+            result.Reason = "canonical_profile_not_found";
+            LogCanonicalizeSelected(result, emitDiagnostic);
+            return result;
         }
 
         private static RepositoryCompanionProfile CreateDefaultProfileFromLegacyCompanion(CompanionState legacyCompanion)
@@ -1399,6 +1559,7 @@ namespace TokenForge.Client.Domain
             project.Id = repositoryHash;
             project.DisplayName = profile.SafeRepositoryAlias;
             project.ApprovedAt = project.ApprovedAt ?? profile.ApprovedAtUtc ?? now;
+            project.FirstConnectedAt = project.FirstConnectedAt ?? project.ApprovedAt ?? now;
             project.ConnectionSource = "userSelected";
             project.PathHash = repositoryHash;
             project.ProjectPathHash = repositoryHash;
@@ -1477,13 +1638,168 @@ namespace TokenForge.Client.Domain
 
         private static HashSet<string> ConnectedRepositoryIds(SaveData saveData)
         {
-            return new HashSet<string>((saveData.ConnectedProjects ?? new List<ConnectedProject>())
-                .Where(project => project != null &&
-                                  !project.IsArchived &&
-                                  project.ApprovedAt != null &&
-                                  !IsStaleFallbackProject(project))
-                .Select(project => FirstNonEmpty(project.Id, project.PathHash, project.ProjectPathHash))
-                .Where(id => !string.IsNullOrWhiteSpace(id)), StringComparer.Ordinal);
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var project in saveData.ConnectedProjects ?? new List<ConnectedProject>())
+            {
+                if (project == null ||
+                    project.IsArchived ||
+                    project.ApprovedAt == null ||
+                    IsStaleFallbackProject(project))
+                {
+                    continue;
+                }
+
+                AddRepositoryIdentity(ids, project.Id);
+                AddRepositoryIdentity(ids, project.PathHash);
+                AddRepositoryIdentity(ids, project.ProjectPathHash);
+                AddRepositoryIdentity(ids, project.LocalOnlyProjectId);
+            }
+
+            return ids;
+        }
+
+        private static bool ConnectedProjectContainsCanonical(ConnectedProject project, string canonicalRepositoryHash)
+        {
+            return project != null &&
+                   !string.IsNullOrWhiteSpace(canonicalRepositoryHash) &&
+                   (string.Equals(project.Id, canonicalRepositoryHash, StringComparison.Ordinal) ||
+                    string.Equals(project.PathHash, canonicalRepositoryHash, StringComparison.Ordinal) ||
+                    string.Equals(project.ProjectPathHash, canonicalRepositoryHash, StringComparison.Ordinal) ||
+                    string.Equals(project.LocalOnlyProjectId, canonicalRepositoryHash, StringComparison.Ordinal));
+        }
+
+        private static bool ConnectedProjectMatchesCandidate(ConnectedProject project, string candidate)
+        {
+            if (project == null || string.IsNullOrWhiteSpace(candidate))
+            {
+                return false;
+            }
+
+            var trimmed = candidate.Trim();
+            return string.Equals(project.Id, trimmed, StringComparison.Ordinal) ||
+                   string.Equals(project.PathHash, trimmed, StringComparison.Ordinal) ||
+                   string.Equals(project.ProjectPathHash, trimmed, StringComparison.Ordinal) ||
+                   string.Equals(project.LocalOnlyProjectId, trimmed, StringComparison.Ordinal) ||
+                   (!string.IsNullOrWhiteSpace(project.DisplayName) && string.Equals(project.DisplayName.Trim(), trimmed, StringComparison.OrdinalIgnoreCase)) ||
+                   (!string.IsNullOrWhiteSpace(project.ProjectAlias) && string.Equals(project.ProjectAlias.Trim(), trimmed, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static string MatchedByForProject(ConnectedProject project, string candidate)
+        {
+            if (project == null || string.IsNullOrWhiteSpace(candidate))
+            {
+                return "none";
+            }
+
+            var trimmed = candidate.Trim();
+            if (string.Equals(project.Id, trimmed, StringComparison.Ordinal)) return "connectedProjectId";
+            if (string.Equals(project.PathHash, trimmed, StringComparison.Ordinal)) return "pathHash";
+            if (string.Equals(project.ProjectPathHash, trimmed, StringComparison.Ordinal)) return "normalizedPathHash";
+            if (string.Equals(project.LocalOnlyProjectId, trimmed, StringComparison.Ordinal)) return "localOnlyProjectId";
+            if (!string.IsNullOrWhiteSpace(project.DisplayName) && string.Equals(project.DisplayName.Trim(), trimmed, StringComparison.OrdinalIgnoreCase)) return "displayNameAlias";
+            if (!string.IsNullOrWhiteSpace(project.ProjectAlias) && string.Equals(project.ProjectAlias.Trim(), trimmed, StringComparison.OrdinalIgnoreCase)) return "projectAlias";
+            return "none";
+        }
+
+        private static string AliasTypeFor(SaveData saveData, string candidate)
+        {
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                return "empty";
+            }
+
+            var trimmed = candidate.Trim();
+            if ((saveData?.RepositoryCompanionProfiles ?? new List<RepositoryCompanionProfile>()).Any(profile => profile != null && string.Equals(profile.RepositoryHash, trimmed, StringComparison.Ordinal)))
+            {
+                return "canonicalRepositoryHash";
+            }
+
+            foreach (var project in saveData?.ConnectedProjects ?? new List<ConnectedProject>())
+            {
+                var match = MatchedByForProject(project, trimmed);
+                if (!string.Equals(match, "none", StringComparison.Ordinal))
+                {
+                    return match;
+                }
+            }
+
+            if ((saveData?.RepositoryCompanionProfiles ?? new List<RepositoryCompanionProfile>()).Any(profile => profile != null &&
+                    !string.IsNullOrWhiteSpace(profile.SafeRepositoryAlias) &&
+                    string.Equals(profile.SafeRepositoryAlias.Trim(), trimmed, StringComparison.OrdinalIgnoreCase)))
+            {
+                return "profileDisplayNameAlias";
+            }
+
+            return "unknownAlias";
+        }
+
+        private static bool LooksLikeRepositoryPath(string candidate)
+        {
+            return !string.IsNullOrWhiteSpace(candidate) &&
+                   (candidate.IndexOf(Path.DirectorySeparatorChar) >= 0 ||
+                    candidate.IndexOf(Path.AltDirectorySeparatorChar) >= 0 ||
+                    candidate.StartsWith("~", StringComparison.Ordinal));
+        }
+
+        private static void LogCanonicalizeSelected(SelectedRepositoryCanonicalization result, bool emitDiagnostic)
+        {
+            if (!emitDiagnostic || result == null)
+            {
+                return;
+            }
+
+            UnityEngine.Debug.Log("INFO [CompanionProfile][CANONICALIZE_SELECTED] inputPath=" + (LooksLikeRepositoryPath(result.InputSelectedRepoHash) ? result.InputSelectedRepoHash : string.Empty) +
+                                  " inputHash=" + (LooksLikeRepositoryPath(result.InputSelectedRepoHash) ? string.Empty : result.InputSelectedRepoHash ?? string.Empty) +
+                                  " inputSelectedRepoHash=" + (result.InputSelectedRepoHash ?? string.Empty) +
+                                  " inputAliasType=" + result.InputAliasType +
+                                  " canonicalHash=" + (result.ResolvedCanonicalHash ?? string.Empty) +
+                                  " resolvedCanonicalHash=" + (result.ResolvedCanonicalHash ?? string.Empty) +
+                                  " matchedBy=" + result.MatchedBy +
+                                  " restoredExistingProfile=" + (result.ProfileExists && result.Resolved && !result.DidCreateNewProfile) +
+                                  " createdNewProfile=" + result.DidCreateNewProfile +
+                                  " preventedDefaultEggOverwrite=" + (result.ProfileExists && result.Resolved && !result.DidCreateNewProfile) +
+                                  " profileExists=" + result.ProfileExists +
+                                  " connectedProjectExists=" + result.ConnectedProjectExists +
+                                  " didCreateNewProfile=" + result.DidCreateNewProfile +
+                                  " reason=" + result.Reason);
+        }
+
+        private static bool RepositoryIdentityMatches(SaveData saveData, string canonicalRepositoryHash, string candidate)
+        {
+            if (string.IsNullOrWhiteSpace(canonicalRepositoryHash) || string.IsNullOrWhiteSpace(candidate))
+            {
+                return false;
+            }
+
+            if (string.Equals(canonicalRepositoryHash, candidate, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return (saveData.ConnectedProjects ?? new List<ConnectedProject>())
+                .Any(project => project != null &&
+                                !project.IsArchived &&
+                                project.ApprovedAt != null &&
+                                (string.Equals(project.Id, canonicalRepositoryHash, StringComparison.Ordinal) ||
+                                 string.Equals(project.PathHash, canonicalRepositoryHash, StringComparison.Ordinal) ||
+                                 string.Equals(project.ProjectPathHash, canonicalRepositoryHash, StringComparison.Ordinal) ||
+                                 string.Equals(project.LocalOnlyProjectId, canonicalRepositoryHash, StringComparison.Ordinal)) &&
+                                (string.Equals(project.Id, candidate, StringComparison.Ordinal) ||
+                                 string.Equals(project.PathHash, candidate, StringComparison.Ordinal) ||
+                                 string.Equals(project.ProjectPathHash, candidate, StringComparison.Ordinal) ||
+                                 string.Equals(project.LocalOnlyProjectId, candidate, StringComparison.Ordinal) ||
+                                 (!string.IsNullOrWhiteSpace(project.DisplayName) && string.Equals(project.DisplayName.Trim(), candidate.Trim(), StringComparison.OrdinalIgnoreCase)) ||
+                                 (!string.IsNullOrWhiteSpace(project.ProjectAlias) && string.Equals(project.ProjectAlias.Trim(), candidate.Trim(), StringComparison.OrdinalIgnoreCase))));
+        }
+
+        private static void AddRepositoryIdentity(HashSet<string> ids, string value)
+        {
+            if (ids == null || string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            ids.Add(value.Trim());
         }
 
         private static void SyncConnectedProjectActiveFlags(SaveData saveData)
@@ -1501,7 +1817,8 @@ namespace TokenForge.Client.Domain
                                    !string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash) &&
                                    (string.Equals(project.Id, saveData.SelectedRepositoryHash, StringComparison.Ordinal) ||
                                     string.Equals(project.PathHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal) ||
-                                    string.Equals(project.ProjectPathHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal));
+                                    string.Equals(project.ProjectPathHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal) ||
+                                    string.Equals(project.LocalOnlyProjectId, saveData.SelectedRepositoryHash, StringComparison.Ordinal));
             }
         }
 

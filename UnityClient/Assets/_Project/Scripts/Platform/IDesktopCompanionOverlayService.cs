@@ -13,6 +13,7 @@ namespace TokenForge.Client.Platform
         bool IsNativeOverlay { get; }
         bool IsAnyOverlayDragging();
         bool IsOverlayDragging(string repositoryId);
+        bool IsAnyOverlayActuallyVisible();
         CompanionDesktopOverlayState State { get; }
         string StatusMessage { get; }
         bool Create();

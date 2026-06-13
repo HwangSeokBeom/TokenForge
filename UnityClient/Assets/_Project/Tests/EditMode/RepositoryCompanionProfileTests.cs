@@ -90,6 +90,224 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void SelectedConnectedProjectAliasRestoresExistingProfileInsteadOfDefaultEgg()
+        {
+            var saveData = SaveData.CreateDefault();
+            var canonicalHash = "canonical-tokenforge-profile";
+            saveData.SelectedRepositoryHash = "connected-project-tokenforge";
+            saveData.RepositoryCompanionProfiles.Add(new RepositoryCompanionProfile
+            {
+                RepositoryHash = canonicalHash,
+                SafeRepositoryAlias = "TokenForge",
+                ApprovedAtUtc = DateTimeOffset.UtcNow.AddDays(-10),
+                ConnectionSource = "userSelected",
+                CompanionState = new CompanionState
+                {
+                    Stage = CompanionStage.Adult,
+                    Level = 11,
+                    CurrentXp = 2400,
+                    TotalLifetimeXp = 7200,
+                    TotalXp = 7200,
+                    Archetype = CompanionArchetype.Builder
+                }
+            });
+            saveData.ConnectedProjects.Add(new ConnectedProject
+            {
+                Id = "connected-project-tokenforge",
+                PathHash = canonicalHash,
+                ProjectPathHash = "normalized-tokenforge-path",
+                DisplayName = "TokenForge",
+                ApprovedAt = DateTimeOffset.UtcNow.AddDays(-10),
+                IsActive = true,
+                IsGitRepository = true,
+                ConnectionSource = "userSelected"
+            });
+
+            RepositoryCompanionProfileService.Normalize(saveData);
+            var selected = RepositoryCompanionProfileService.GetSelectedProfile(saveData);
+
+            Assert.IsNotNull(selected);
+            Assert.AreEqual(canonicalHash, selected.RepositoryHash);
+            Assert.AreEqual(canonicalHash, saveData.SelectedRepositoryHash);
+            Assert.AreEqual(CompanionStage.Adult, saveData.CompanionState.Stage);
+            Assert.AreEqual(11, saveData.CompanionState.Level);
+            Assert.AreEqual(2400, saveData.CompanionState.CurrentXp);
+            Assert.Greater(saveData.CompanionState.TotalLifetimeXp, 0);
+        }
+
+        [Test]
+        public void SelectedNormalizedPathAliasRestoresExistingProfileInsteadOfDefaultEgg()
+        {
+            var saveData = SaveData.CreateDefault();
+            var canonicalHash = "canonical-tokenforge-profile";
+            saveData.SelectedRepositoryHash = "normalized-tokenforge-path";
+            saveData.RepositoryCompanionProfiles.Add(new RepositoryCompanionProfile
+            {
+                RepositoryHash = canonicalHash,
+                SafeRepositoryAlias = "TokenForge",
+                ApprovedAtUtc = DateTimeOffset.UtcNow.AddDays(-7),
+                ConnectionSource = "userSelected",
+                CompanionState = new CompanionState
+                {
+                    Stage = CompanionStage.Child,
+                    Level = 4,
+                    CurrentXp = 320,
+                    TotalLifetimeXp = 1600,
+                    TotalXp = 1600,
+                    Archetype = CompanionArchetype.Builder
+                }
+            });
+            saveData.ConnectedProjects.Add(new ConnectedProject
+            {
+                Id = "connected-project-tokenforge",
+                PathHash = canonicalHash,
+                ProjectPathHash = "normalized-tokenforge-path",
+                DisplayName = "TokenForge",
+                ApprovedAt = DateTimeOffset.UtcNow.AddDays(-7),
+                IsActive = true,
+                IsGitRepository = true,
+                ConnectionSource = "userSelected"
+            });
+
+            RepositoryCompanionProfileService.Normalize(saveData);
+            var selected = RepositoryCompanionProfileService.GetSelectedProfile(saveData);
+
+            Assert.IsNotNull(selected);
+            Assert.AreEqual(canonicalHash, selected.RepositoryHash);
+            Assert.AreEqual(canonicalHash, saveData.SelectedRepositoryHash);
+            Assert.AreEqual(CompanionStage.Child, saveData.CompanionState.Stage);
+            Assert.AreEqual(4, saveData.CompanionState.Level);
+            Assert.AreEqual(320, saveData.CompanionState.CurrentXp);
+        }
+
+        [Test]
+        public void SelectedRepositoryPathAliasRestoresExistingProfile()
+        {
+            var saveData = SaveData.CreateDefault();
+            var repositoryPath = CreateGitRepository("TokenForgePathAlias");
+            var profile = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, repositoryPath).Value;
+            profile.CompanionState = new CompanionState
+            {
+                Stage = CompanionStage.Child,
+                Level = 4,
+                CurrentXp = 410,
+                TotalLifetimeXp = 1400,
+                TotalXp = 1400
+            };
+            saveData.SelectedRepositoryHash = repositoryPath;
+
+            RepositoryCompanionProfileService.Normalize(saveData);
+            var selected = RepositoryCompanionProfileService.GetSelectedProfile(saveData);
+
+            Assert.IsNotNull(selected);
+            Assert.AreEqual(profile.RepositoryHash, selected.RepositoryHash);
+            Assert.AreEqual(profile.RepositoryHash, saveData.SelectedRepositoryHash);
+            Assert.AreEqual(CompanionStage.Child, saveData.CompanionState.Stage);
+            Assert.AreEqual(4, saveData.CompanionState.Level);
+        }
+
+        [Test]
+        public void SelectedRepositoryAliasVariantsRestoreSameExistingLv4Profile()
+        {
+            var repositoryPath = CreateGitRepository("TokenForgeLv4");
+            var canonicalPath = RepositoryCompanionProfileService.CanonicalRepositoryPathForIdentity(repositoryPath);
+            var canonicalHash = RepositoryCompanionProfileService.HashRepositoryPath(repositoryPath);
+            var legacyPathHash = SafeHashUtility.ComputeProjectPathHash(canonicalPath);
+            var cases = new[]
+            {
+                new { Name = "canonical hash", Selected = canonicalHash },
+                new { Name = "connected project id", Selected = "connected-project-tokenforge" },
+                new { Name = "absolute path", Selected = repositoryPath },
+                new { Name = "normalized path", Selected = canonicalPath },
+                new { Name = "display name", Selected = "TokenForge" },
+                new { Name = "local-only alias", Selected = "local-only-tokenforge" },
+                new { Name = "legacy path hash", Selected = legacyPathHash }
+            };
+
+            foreach (var testCase in cases)
+            {
+                var saveData = BuildLv4TokenForgeAliasSaveData(canonicalHash, legacyPathHash);
+                saveData.SelectedRepositoryHash = testCase.Selected;
+
+                RepositoryCompanionProfileService.Normalize(saveData);
+                var selected = RepositoryCompanionProfileService.GetSelectedProfile(saveData);
+
+                Assert.IsNotNull(selected, testCase.Name);
+                Assert.AreEqual(canonicalHash, selected.RepositoryHash, testCase.Name);
+                Assert.AreEqual(canonicalHash, saveData.SelectedRepositoryHash, testCase.Name);
+                Assert.AreEqual(CompanionStage.Child, saveData.CompanionState.Stage, testCase.Name);
+                Assert.AreEqual(4, saveData.CompanionState.Level, testCase.Name);
+                Assert.AreEqual(420, saveData.CompanionState.CurrentXp, testCase.Name);
+                Assert.AreEqual(1200, saveData.CompanionState.TotalLifetimeXp, testCase.Name);
+                Assert.AreEqual(1, saveData.RepositoryCompanionProfiles.Count(profile => profile.ArchivedAtUtc == null), testCase.Name);
+            }
+        }
+
+        [Test]
+        public void UnknownSelectedRepositoryDoesNotMatchAnotherProfileOrCreateDefaultEgg()
+        {
+            var saveData = SaveData.CreateDefault();
+            saveData.SelectedRepositoryHash = "unrelated-random-hash";
+            saveData.RepositoryCompanionProfiles.Add(new RepositoryCompanionProfile
+            {
+                RepositoryHash = "repo-a-canonical",
+                SafeRepositoryAlias = "Repo A",
+                ApprovedAtUtc = DateTimeOffset.UtcNow,
+                ConnectionSource = "userSelected",
+                CompanionState = new CompanionState
+                {
+                    Stage = CompanionStage.Adult,
+                    Level = 9,
+                    CurrentXp = 900,
+                    TotalLifetimeXp = 5400,
+                    TotalXp = 5400
+                }
+            });
+            saveData.ConnectedProjects.Add(new ConnectedProject
+            {
+                Id = "repo-a-connected-project",
+                PathHash = "repo-a-canonical",
+                ProjectPathHash = "repo-a-normalized",
+                DisplayName = "Repo A",
+                ApprovedAt = DateTimeOffset.UtcNow,
+                IsActive = true,
+                IsGitRepository = true,
+                ConnectionSource = "userSelected"
+            });
+
+            RepositoryCompanionProfileService.Normalize(saveData);
+            var selected = RepositoryCompanionProfileService.GetSelectedProfile(saveData);
+
+            Assert.IsNull(selected);
+            Assert.IsTrue(string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash));
+            Assert.AreEqual(1, saveData.RepositoryCompanionProfiles.Count);
+            Assert.AreEqual(CompanionStage.Egg, saveData.CompanionState.Stage);
+            Assert.AreEqual(1, saveData.CompanionState.Level);
+        }
+
+        [Test]
+        public void RandomSelectedRepositoryStaysExplicitEmptyDiagnosticState()
+        {
+            var canonicalHash = "repo-a-canonical";
+            var saveData = BuildLv4TokenForgeAliasSaveData(canonicalHash, "repo-a-legacy-path-hash");
+            saveData.SelectedRepositoryHash = "random-not-a-repository-alias";
+
+            var diagnostic = RepositoryCompanionProfileService.CanonicalizeSelectedRepositoryHash(saveData, saveData.SelectedRepositoryHash, false);
+            RepositoryCompanionProfileService.Normalize(saveData);
+            var selected = RepositoryCompanionProfileService.GetSelectedProfile(saveData);
+
+            Assert.IsFalse(diagnostic.Resolved);
+            Assert.AreEqual("canonical_profile_not_found", diagnostic.Reason);
+            Assert.IsFalse(diagnostic.DidCreateNewProfile);
+            Assert.IsNull(selected);
+            Assert.IsTrue(string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash));
+            Assert.AreEqual(1, saveData.RepositoryCompanionProfiles.Count(profile => profile.ArchivedAtUtc == null));
+            Assert.AreEqual(canonicalHash, saveData.RepositoryCompanionProfiles.Single(profile => profile.ArchivedAtUtc == null).RepositoryHash);
+            Assert.AreEqual(CompanionStage.Egg, saveData.CompanionState.Stage);
+            Assert.AreEqual(1, saveData.CompanionState.Level);
+        }
+
+        [Test]
         public void LegacyLocalRepositoryMigrationArchivesFallbackAndClearsActiveSelection()
         {
             var saveData = SaveData.CreateDefault();
@@ -1016,6 +1234,42 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(profile.RepositoryHash, dto.RepositoryHash);
             Assert.IsTrue(new SyncPayloadSanitizer().ValidatePayload(dto).IsSafe);
             Assert.IsTrue(new PrivacySanitizer().ValidateNoForbiddenFields(dto).IsSuccess);
+        }
+
+        private static SaveData BuildLv4TokenForgeAliasSaveData(string canonicalHash, string legacyPathHash)
+        {
+            var saveData = SaveData.CreateDefault();
+            saveData.RepositoryCompanionProfiles.Add(new RepositoryCompanionProfile
+            {
+                RepositoryHash = canonicalHash,
+                SafeRepositoryAlias = "TokenForge",
+                ApprovedAtUtc = DateTimeOffset.UtcNow.AddDays(-10),
+                ConnectionSource = "userSelected",
+                CompanionState = new CompanionState
+                {
+                    Stage = CompanionStage.Child,
+                    Level = 4,
+                    CurrentXp = 420,
+                    TotalLifetimeXp = 1200,
+                    TotalXp = 1200,
+                    Archetype = CompanionArchetype.Builder
+                }
+            });
+            saveData.ConnectedProjects.Add(new ConnectedProject
+            {
+                Id = "connected-project-tokenforge",
+                PathHash = canonicalHash,
+                ProjectPathHash = legacyPathHash,
+                LocalOnlyProjectId = "local-only-tokenforge",
+                DisplayName = "TokenForge",
+                ProjectAlias = "TokenForge",
+                ApprovedAt = DateTimeOffset.UtcNow.AddDays(-10),
+                IsActive = true,
+                IsGitRepository = true,
+                ConnectionSource = "userSelected"
+            });
+
+            return saveData;
         }
 
         private static string CreateGitRepository(string directoryName = "")

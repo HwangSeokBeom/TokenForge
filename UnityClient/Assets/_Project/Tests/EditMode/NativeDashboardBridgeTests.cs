@@ -224,14 +224,26 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
-        public void NativeAppLifecycleSourceCancelsUnexpectedTerminateAttempts()
+        public void NativeAppLifecycleRoutesAppKitTerminateThroughCanonicalQuitPath()
         {
             var sourcePath = Path.Combine(Application.dataPath, "Plugins", "macOS", "DesktopCompanionOverlay.mm");
             var source = File.ReadAllText(sourcePath);
 
-            StringAssert.Contains("[AppLifecycle][UNEXPECTED_TERMINATE_ATTEMPT]", source);
-            StringAssert.Contains("termination cancelled reason=notExplicitUserQuit", source);
-            StringAssert.Contains("return NSTerminateCancel;", source);
+            StringAssert.Contains("[AppLifecycle][QUIT_REQUESTED] source=appkit", source);
+            StringAssert.Contains("[AppLifecycle][QUIT_BEGIN]", source);
+            StringAssert.Contains("[AppLifecycle][QUIT_GUARD]", source);
+            StringAssert.Contains("[AppLifecycle][TIMERS_STOPPED]", source);
+            StringAssert.Contains("[AppLifecycle][QUIT_OVERLAYS_STOPPED]", source);
+            StringAssert.Contains("[AppLifecycle][OBSERVERS_REMOVED]", source);
+            StringAssert.Contains("[AppLifecycle][PANELS_CLOSED]", source);
+            StringAssert.Contains("[AppLifecycle][QUIT_WINDOWS_CLOSED]", source);
+            StringAssert.Contains("[AppLifecycle][PENDING_TASKS_CANCELLED]", source);
+            StringAssert.Contains("[AppLifecycle][NSAPP_TERMINATE]", source);
+            StringAssert.Contains("[AppLifecycle][QUIT_FINAL]", source);
+            StringAssert.Contains("alreadyComplete=true", source);
+            StringAssert.Contains("reason=alreadyStopped", source);
+            StringAssert.Contains("reason=alreadyRemoved", source);
+            StringAssert.Contains("reason=alreadyClosed", source);
             StringAssert.Contains("[DashboardLifecycle][CLOSE_HIDE_ONLY]", source);
             StringAssert.Contains("[WindowLifecycle][ORDER_OUT_NOT_TERMINATE]", source);
             StringAssert.Contains("[OverlayLifecycle][KEEP_ALIVE_AFTER_DASHBOARD_CLOSE]", source);
@@ -245,10 +257,10 @@ namespace TokenForge.Client.Tests
 
             StringAssert.Contains("[DashboardLifecycle][CLOSE_HIDE_ONLY]", source);
             StringAssert.Contains("[WindowLifecycle][ORDER_OUT_NOT_TERMINATE]", source);
-            StringAssert.Contains("return NSTerminateCancel;", source);
             StringAssert.Contains("TokenForgeRequestExplicitQuit(@\"menu\")", source);
             StringAssert.Contains("TokenForgeRequestExplicitQuit(@\"sidebar\")", source);
             StringAssert.Contains("TokenForgeRequestExplicitQuit(@\"nativeBridge\")", source);
+            StringAssert.Contains("TokenForgeRequestExplicitQuit(@\"contextMenu\")", source);
             StringAssert.Contains("[AppLifecycle][QUIT_ALLOWED]", source);
             StringAssert.Contains("[AppLifecycle][TEARDOWN_OVERLAY]", source);
             Assert.IsFalse(source.Contains("return [self.originalAppDelegate applicationShouldTerminate:sender];"));
@@ -1366,12 +1378,16 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("[DashboardLifecycle][CLOSE_REQUEST] shouldTerminate=false", source);
             StringAssert.Contains("[OverlayLifecycle][KEEP_ALIVE_AFTER_DASHBOARD_CLOSE]", source);
             StringAssert.Contains("[AppLifecycle][QUIT_REQUESTED] source=menu", source);
-            StringAssert.Contains("[AppLifecycle][UNEXPECTED_TERMINATE_ATTEMPT]", source);
+            StringAssert.Contains("[AppLifecycle][QUIT_REQUESTED] source=contextMenu", source);
+            StringAssert.Contains("[AppLifecycle][QUIT_REQUESTED] source=appkit", source);
             StringAssert.Contains("[DesktopOverlay] movementTimer started interval=", source);
             StringAssert.Contains("[DesktopOverlay] tick oldOrigin=", source);
             StringAssert.Contains("[DesktopOverlay] tick oldFrame=", source);
             StringAssert.Contains("[DesktopOverlay] boundsClamped screen=", source);
             StringAssert.Contains("[DesktopOverlay] quit cleanup completed", source);
+            StringAssert.Contains("[OverlayVisibilityDiagnostic]", source);
+            StringAssert.Contains("desiredVisible", source);
+            StringAssert.Contains("actualVisible", source);
         }
 
         [Test]

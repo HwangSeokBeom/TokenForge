@@ -859,7 +859,9 @@ namespace TokenForge.Client.UI
 
             connection.Id = profile.RepositoryHash;
             connection.DisplayName = profile.SafeRepositoryAlias;
-            connection.ApprovedAt = profile.ApprovedAtUtc ?? DateTimeOffset.UtcNow;
+            var now = DateTimeOffset.UtcNow;
+            connection.ApprovedAt = profile.ApprovedAtUtc ?? now;
+            connection.FirstConnectedAt = connection.FirstConnectedAt ?? connection.ApprovedAt ?? now;
             connection.ConnectionSource = "userSelected";
             connection.PathHash = pathHash;
             connection.ProjectPathHash = pathHash;
@@ -3272,9 +3274,16 @@ namespace TokenForge.Client.UI
             var repositoryGrowth = hasConnectedRepository
                 ? RepositoryGrowthSummaryProjection.Build(saveData, selectedRepositoryProfile.RepositoryHash)
                 : new RepositoryGrowthSummary();
+            var selectedRepositoryHash = hasConnectedRepository ? selectedRepositoryProfile.RepositoryHash : string.Empty;
+            if (hasConnectedRepository && !string.Equals(saveData.SelectedRepositoryHash, selectedRepositoryHash, StringComparison.Ordinal))
+            {
+                Debug.Log("INFO [RepositoryProjection][CANONICAL_SELECTED_FOR_UI] previous=" + saveData.SelectedRepositoryHash + " canonical=" + selectedRepositoryHash);
+                saveData.SelectedRepositoryHash = selectedRepositoryHash;
+            }
+
+            var selectedAliases = RepositoryAliases(saveData, selectedRepositoryHash);
             var selectedSessionIds = (saveData.WorkSessionSummaries ?? new List<AgentWorkSession>())
-                .Where(session => !string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash) &&
-                                  string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), saveData.SelectedRepositoryHash, StringComparison.Ordinal))
+                .Where(session => selectedAliases.Contains(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session)))
                 .Select(session => session.SessionId)
                 .ToList();
             var latestGrowth = (saveData.GrowthHistory ?? new List<CharacterGrowthResult>())
@@ -3323,7 +3332,6 @@ namespace TokenForge.Client.UI
             Debug.Log("INFO [RepositoryProjection][CONSISTENT] dashboard=" + (!string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash)) +
                       " repositoriesTab=" + RepositoryCompanions.Count +
                       " sidebar=" + RepositoryCompanions.Count);
-            var selectedRepositoryHash = hasConnectedRepository ? saveData.SelectedRepositoryHash : string.Empty;
             var selectedRepositoryDisplay = RepositoryCompanions.FirstOrDefault(item => string.Equals(item.RepositoryHash, selectedRepositoryHash, StringComparison.Ordinal));
             var tokenShop = selectedRepositoryProfile?.TokenShop ?? new TokenShopState();
             var bias = CompanionEvolutionPathResolver.Resolve(companion.Stats, companion.Stage);
@@ -3390,6 +3398,7 @@ namespace TokenForge.Client.UI
                     : "No run saved yet.\nConnect a Git repository, review the safe aggregate, then save Git growth.",
                 RepositoryCompanions = RepositoryCompanions
             };
+            LogGrowthProjectionDiagnostic(saveData, selectedRepositoryProfile, repositoryGrowth, selectedRepositoryHash);
         }
 
         private static List<RepositoryCompanionDisplayItem> ToRepositoryCompanionDisplayItems(SaveData saveData)
@@ -3400,13 +3409,19 @@ namespace TokenForge.Client.UI
         private static List<RepositoryCompanionDisplayItem> ToRepositoryCompanionDisplayItemsWithMetadata(SaveData saveData, IReadOnlyDictionary<string, RepositoryLocalMetadata> metadataByHash)
         {
             saveData = RepositoryCompanionProfileService.Normalize(saveData);
-            var connectedProjects = (saveData.ConnectedProjects ?? new List<ConnectedProject>())
+            var connectedProjects = new Dictionary<string, ConnectedProject>(StringComparer.Ordinal);
+            foreach (var project in (saveData.ConnectedProjects ?? new List<ConnectedProject>())
                 .Where(project => project != null &&
                                   !project.IsArchived &&
                                   project.ApprovedAt != null &&
-                                  !RepositoryCompanionProfileService.IsStaleFallbackProject(project))
-                .GroupBy(project => string.IsNullOrWhiteSpace(project.Id) ? project.PathHash : project.Id, StringComparer.Ordinal)
-                .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+                                  !RepositoryCompanionProfileService.IsStaleFallbackProject(project)))
+            {
+                AddConnectedProjectAlias(connectedProjects, project.Id, project);
+                AddConnectedProjectAlias(connectedProjects, project.PathHash, project);
+                AddConnectedProjectAlias(connectedProjects, project.ProjectPathHash, project);
+                AddConnectedProjectAlias(connectedProjects, project.LocalOnlyProjectId, project);
+            }
+
             return (saveData.RepositoryCompanionProfiles ?? new List<RepositoryCompanionProfile>())
                 .Where(profile => profile != null &&
                                   profile.ArchivedAtUtc == null &&
@@ -3473,6 +3488,51 @@ namespace TokenForge.Client.UI
                 .Where(item => !string.Equals(item.SafeRepositoryAlias, "Local Repository", StringComparison.OrdinalIgnoreCase))
                 .Where(item => item.ApprovedByUser && !item.Archived)
                 .ToList();
+        }
+
+        private static void AddConnectedProjectAlias(Dictionary<string, ConnectedProject> connectedProjects, string key, ConnectedProject project)
+        {
+            if (connectedProjects == null || project == null || string.IsNullOrWhiteSpace(key))
+            {
+                return;
+            }
+
+            key = key.Trim();
+            if (!connectedProjects.ContainsKey(key) || project.IsActive)
+            {
+                connectedProjects[key] = project;
+            }
+        }
+
+        private static void LogGrowthProjectionDiagnostic(
+            SaveData saveData,
+            RepositoryCompanionProfile selectedRepositoryProfile,
+            RepositoryGrowthSummary repositoryGrowth,
+            string selectedRepositoryHash)
+        {
+            var project = (saveData?.ConnectedProjects ?? new List<ConnectedProject>())
+                .FirstOrDefault(item => item != null &&
+                                        !item.IsArchived &&
+                                        item.ApprovedAt != null &&
+                                        (string.Equals(item.Id, selectedRepositoryHash, StringComparison.Ordinal) ||
+                                         string.Equals(item.PathHash, selectedRepositoryHash, StringComparison.Ordinal) ||
+                                         string.Equals(item.ProjectPathHash, selectedRepositoryHash, StringComparison.Ordinal) ||
+                                         string.Equals(item.LocalOnlyProjectId, selectedRepositoryHash, StringComparison.Ordinal)));
+            var state = CompanionProgressionRules.Normalize(selectedRepositoryProfile?.CompanionState);
+            Debug.Log("INFO [GrowthProjectionDiagnostic] selectedRepoHash=" + (selectedRepositoryHash ?? string.Empty) +
+                      " connectedProjectId=" + (project?.Id ?? string.Empty) +
+                      " normalizedPath=" + (project?.ProjectPathHash ?? project?.PathHash ?? string.Empty) +
+                      " matchedProfileId=" + (selectedRepositoryProfile?.RepositoryHash ?? string.Empty) +
+                      " profileLevel=" + Math.Max(1, state.Level) +
+                      " profileXp=" + Math.Max(0, state.CurrentXp) +
+                      " profileStage=" + state.Stage +
+                      " timelineEventCount=" + Math.Max(0, repositoryGrowth?.MatchedTimelineEventCount ?? 0) +
+                      " approvedGrowthCount=" + Math.Max(0, repositoryGrowth?.MatchedApprovedGrowthCount ?? 0) +
+                      " nativeRunCount=" + Math.Max(0, repositoryGrowth?.MatchedNativeRunCount ?? 0) +
+                      " activityReviewCount=" + Math.Max(0, repositoryGrowth?.MatchedActivityReviewCount ?? 0) +
+                      " legacyGapCount=" + ((repositoryGrowth?.HasLegacyAxisGap ?? false) ? 1 : 0) +
+                      " axisDeltaTotals=" + Math.Max(0, repositoryGrowth?.Code ?? 0) + ":" + Math.Max(0, repositoryGrowth?.Focus ?? 0) + ":" + Math.Max(0, repositoryGrowth?.Debug ?? 0) + ":" + Math.Max(0, repositoryGrowth?.Design ?? 0) + ":" + Math.Max(0, repositoryGrowth?.Sync ?? 0) +
+                      " defaultProfileUsed=" + (selectedRepositoryProfile == null));
         }
 
         private sealed class RepositoryLocalMetadata
@@ -3645,10 +3705,10 @@ namespace TokenForge.Client.UI
 
         private static int RecentXpForRepository(SaveData saveData, string repositoryHash, bool gitOnly)
         {
-            repositoryHash = repositoryHash ?? string.Empty;
+            var aliases = RepositoryAliases(saveData, repositoryHash);
             var sessions = (saveData?.WorkSessionSummaries ?? new List<AgentWorkSession>())
                 .Where(session => session != null &&
-                                  string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), repositoryHash, StringComparison.Ordinal))
+                                  aliases.Contains(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session)))
                 .OrderByDescending(session => session.EndedAt)
                 .Take(8)
                 .ToList();
@@ -3667,18 +3727,58 @@ namespace TokenForge.Client.UI
 
         private static int WeeklyXpForRepository(SaveData saveData, string repositoryHash)
         {
-            repositoryHash = repositoryHash ?? string.Empty;
+            var aliases = RepositoryAliases(saveData, repositoryHash);
             var since = DateTimeOffset.UtcNow.AddDays(-7);
             var sessionIds = (saveData?.WorkSessionSummaries ?? new List<AgentWorkSession>())
                 .Where(session => session != null &&
                                   session.EndedAt >= since &&
-                                  string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), repositoryHash, StringComparison.Ordinal))
+                                  aliases.Contains(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session)))
                 .Select(session => session.SessionId)
                 .Where(id => !string.IsNullOrWhiteSpace(id))
                 .ToHashSet(StringComparer.Ordinal);
             return (saveData?.GrowthHistory ?? new List<CharacterGrowthResult>())
                 .Where(growth => growth != null && sessionIds.Contains(growth.SessionId))
                 .Sum(growth => Math.Max(0, growth.ExpGained));
+        }
+
+        private static HashSet<string> RepositoryAliases(SaveData saveData, string repositoryHash)
+        {
+            var aliases = new HashSet<string>(StringComparer.Ordinal);
+            AddRepositoryAlias(aliases, repositoryHash);
+            foreach (var project in saveData?.ConnectedProjects ?? new List<ConnectedProject>())
+            {
+                if (project == null || project.IsArchived || project.ApprovedAt == null)
+                {
+                    continue;
+                }
+
+                var ids = new[] { project.Id, project.PathHash, project.ProjectPathHash, project.LocalOnlyProjectId };
+                var matchesRepository = ids.Any(id => !string.IsNullOrWhiteSpace(id) && aliases.Contains(id.Trim())) ||
+                                        (project.IsActive &&
+                                         !string.IsNullOrWhiteSpace(saveData?.SelectedRepositoryHash) &&
+                                         string.Equals(saveData.SelectedRepositoryHash.Trim(), repositoryHash?.Trim(), StringComparison.Ordinal));
+                if (!matchesRepository)
+                {
+                    continue;
+                }
+
+                foreach (var id in ids)
+                {
+                    AddRepositoryAlias(aliases, id);
+                }
+            }
+
+            return aliases;
+        }
+
+        private static void AddRepositoryAlias(HashSet<string> aliases, string value)
+        {
+            if (aliases == null || string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            aliases.Add(value.Trim());
         }
 
         private static TokenUsageBucket EstimatedTokenActivityForRepository(SaveData saveData, string repositoryHash)
@@ -3791,12 +3891,26 @@ namespace TokenForge.Client.UI
             }
 
             connection.LastAnalyzedAt = DateTimeOffset.UtcNow;
+            if (string.IsNullOrWhiteSpace(connection.FirstAnalyzedCommit))
+            {
+                connection.FirstAnalyzedCommit = summary.AnalyzedStartCommit ?? string.Empty;
+            }
+
             connection.LastAnalyzedCommit = summary.LastAnalyzedCommit ?? string.Empty;
+            connection.CurrentHeadCommit = summary.AnalyzedEndCommit ?? summary.LastAnalyzedCommit ?? string.Empty;
             connection.FirstCommitAt = summary.FirstCommitAtUtc ?? string.Empty;
             connection.TotalCommitCount = Math.Max(0, summary.TotalCommitsAnalyzed);
             connection.AnalyzedCommitRange = (summary.AnalyzedStartCommit ?? string.Empty) + ".." + (summary.AnalyzedEndCommit ?? string.Empty);
             connection.LastAnalysisMode = summary.AnalysisMode ?? string.Empty;
             connection.LastAnalysisScope = AnalysisScopeLabel(summary);
+            Debug.Log("INFO [GrowthSummary][GIT_BASELINE] repositoryId=" + repositoryHash +
+                      " firstConnectedAt=" + (connection.FirstConnectedAt?.UtcDateTime.ToString("O") ?? "none") +
+                      " firstAnalyzedCommit=" + connection.FirstAnalyzedCommit +
+                      " lastAnalyzedCommit=" + connection.LastAnalyzedCommit +
+                      " currentHead=" + connection.CurrentHeadCommit +
+                      " analysisMode=" + connection.LastAnalysisMode +
+                      " totalCommitCount=" + connection.TotalCommitCount +
+                      " analyzedRange=" + connection.AnalyzedCommitRange);
         }
 
         private static string AnalysisScopeLabel(GitChangeSummary summary)

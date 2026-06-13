@@ -2,11 +2,11 @@
 set -u -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/tokenforge-unity-env.sh"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CLEANUP_SCRIPT="${SCRIPT_DIR}/tokenforge-clean-unity-processes.sh"
 
 UNITY_PROJECT_PATH="${UNITY_PROJECT_PATH:-${REPO_ROOT}/UnityClient}"
-UNITY_PATH="${UNITY_PATH:-/Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/MacOS/Unity}"
 
 VERIFY_ROOT="${VERIFY_ROOT:-/tmp/tokenforge-local-verify-all}"
 LICENSE_LOG="${LICENSE_LOG:-${VERIFY_ROOT}/unity-license-smoke.log}"
@@ -381,6 +381,10 @@ run_env_command "Unity License Smoke" \
   "${SCRIPT_DIR}/verify-unity-license-smoke.sh"
 
 run_command "git diff --check" git diff --check
+
+run_env_command "DesktopCompanionOverlay dylib rebuild" \
+  "UNITY_PROJECT_PATH=${UNITY_PROJECT_PATH}" \
+  "${SCRIPT_DIR}/rebuild-desktop-companion-overlay-dylib.sh"
 
 run_command "Native Symbol Verification" "${SCRIPT_DIR}/verify-native-symbols.sh"
 

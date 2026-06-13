@@ -615,6 +615,11 @@ namespace TokenForge.Client.Tests
                 return AnyOverlayDragging && string.Equals(DraggingRepositoryId, repositoryId, System.StringComparison.Ordinal);
             }
 
+            public bool IsAnyOverlayActuallyVisible()
+            {
+                return State == CompanionDesktopOverlayState.Active;
+            }
+
             public bool Create()
             {
                 CreateCount++;

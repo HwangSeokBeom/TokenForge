@@ -24,6 +24,12 @@ namespace TokenForge.Client.Platform
         {
             return IsAnyOverlayDragging();
         }
+
+        public bool IsAnyOverlayActuallyVisible()
+        {
+            return view != null && State == CompanionDesktopOverlayState.Fallback;
+        }
+
         public CompanionDesktopOverlayState State { get; private set; } = CompanionDesktopOverlayState.Fallback;
         public string StatusMessage { get; private set; } = "Editor preview mode. Native desktop overlay is available only in macOS player builds.";
         private FallbackCompanionView view;

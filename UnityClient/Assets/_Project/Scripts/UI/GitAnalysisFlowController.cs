@@ -175,10 +175,21 @@ namespace TokenForge.Client.UI
             RepositoryCompanionProfileService.Normalize(saveDataBeforeAnalysis);
             var selectedRepositoryHash = RepositoryCompanionProfileService.HashRepositoryPath(selectedRepositoryRootPath);
             var connection = FindConnectedProject(saveDataBeforeAnalysis, selectedRepositoryHash);
-            var analysisMode = requestedAnalysisMode ?? (connection == null || string.IsNullOrWhiteSpace(connection.LastAnalyzedCommit)
+            var checkpointCommit = connection?.LastAnalyzedCommit ?? string.Empty;
+            var missingCheckpoint = connection == null ||
+                                    string.IsNullOrWhiteSpace(connection.FirstAnalyzedCommit) ||
+                                    string.IsNullOrWhiteSpace(checkpointCommit);
+            var analysisMode = requestedAnalysisMode ?? (missingCheckpoint
                 ? GitAnalysisMode.FullBaseline
                 : GitAnalysisMode.Incremental);
-            var input = Settings.ToInput(selectedRepositoryRootPath, analysisMode, connection?.LastAnalyzedCommit ?? string.Empty);
+            logger?.Info("INFO [GrowthSummary][RECOMPUTE] selectedRepoHash=" + selectedRepositoryHash +
+                         " firstConnectedAt=" + (connection?.FirstConnectedAt?.UtcDateTime.ToString("O") ?? "none") +
+                         " firstAnalyzedCommit=" + (connection?.FirstAnalyzedCommit ?? string.Empty) +
+                         " lastAnalyzedCommit=" + checkpointCommit +
+                         " requestedMode=" + (requestedAnalysisMode?.ToString() ?? "auto") +
+                         " resolvedMode=" + analysisMode +
+                         " missingCheckpoint=" + missingCheckpoint);
+            var input = Settings.ToInput(selectedRepositoryRootPath, analysisMode, checkpointCommit);
             var analysisResult = await Task.Run(() => analyzer.AnalyzeAsync(input, cancellationToken), cancellationToken).ConfigureAwait(false);
             if (!analysisResult.IsSuccess)
             {
@@ -388,12 +399,26 @@ namespace TokenForge.Client.UI
             }
 
             connection.LastAnalyzedAt = DateTimeOffset.UtcNow;
+            if (string.IsNullOrWhiteSpace(connection.FirstAnalyzedCommit))
+            {
+                connection.FirstAnalyzedCommit = summary.AnalyzedStartCommit ?? string.Empty;
+            }
+
             connection.LastAnalyzedCommit = summary.LastAnalyzedCommit ?? string.Empty;
+            connection.CurrentHeadCommit = summary.AnalyzedEndCommit ?? summary.LastAnalyzedCommit ?? string.Empty;
             connection.FirstCommitAt = summary.FirstCommitAtUtc ?? string.Empty;
             connection.TotalCommitCount = Math.Max(0, summary.TotalCommitsAnalyzed);
             connection.AnalyzedCommitRange = (summary.AnalyzedStartCommit ?? string.Empty) + ".." + (summary.AnalyzedEndCommit ?? string.Empty);
             connection.LastAnalysisMode = summary.AnalysisMode ?? string.Empty;
             connection.LastAnalysisScope = AnalysisScopeLabel(summary);
+            UnityEngine.Debug.Log("INFO [GrowthSummary][GIT_BASELINE] repositoryId=" + repositoryHash +
+                                  " firstConnectedAt=" + (connection.FirstConnectedAt?.UtcDateTime.ToString("O") ?? "none") +
+                                  " firstAnalyzedCommit=" + connection.FirstAnalyzedCommit +
+                                  " lastAnalyzedCommit=" + connection.LastAnalyzedCommit +
+                                  " currentHead=" + connection.CurrentHeadCommit +
+                                  " analysisMode=" + connection.LastAnalysisMode +
+                                  " totalCommitCount=" + connection.TotalCommitCount +
+                                  " analyzedRange=" + connection.AnalyzedCommitRange);
         }
 
         private static string AnalysisScopeLabel(GitChangeSummary summary)

@@ -170,6 +170,13 @@ namespace TokenForge.Client.Platform
         public bool actualVisible;
         public bool movementEnabled = true;
         public bool dragEnabled = true;
+        public bool panelExists;
+        public string panelFrame = string.Empty;
+        public string selectedRepoHash = string.Empty;
+        public bool repoApproved;
+        public bool movementPaused;
+        public string overlayLastAction = string.Empty;
+        public string overlayLastError = string.Empty;
         public bool clickThroughEnabled;
         public bool clickReactionEnabled = true;
         public bool explicitQuitRequested;

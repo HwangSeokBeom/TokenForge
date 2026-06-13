@@ -33,6 +33,8 @@ namespace TokenForge.Client
         private const string LogPrefix = "[TokenForgeBootstrap]";
         private const string HierarchyLogPrefix = "[TokenForgeHierarchy]";
         private const string AppBootstrapperVersionMarker = "app-bootstrapper-overlay-projection-v9";
+        private const string RuntimeBuildIdentityMarker = "tokenforge_runtime_fix_20260609_230131";
+        private const string RuntimeBuildIdentityGitMarker = "git=ef8500e workingTreeHash=167daf548046abe649ba56bd1c67ee1a22fba25ce963be0abfdf8063d8ccf0af";
         private const string BootstrapRootPrefabPath = "Assets/_Project/Prefabs/UI/BootstrapRoot.prefab";
         private const string StartupScenePath = "Assets/_Project/Scenes/TokenForgeMain.unity";
         private const string LegacyBootstrapScenePath = "Assets/_Project/Scenes/Bootstrap.unity";
@@ -108,6 +110,7 @@ namespace TokenForge.Client
         private string nativeCompanionLastProjectionSource = "startup";
         private bool nativeExplicitQuitRequested;
         private bool runtimeVerificationMode;
+        private bool startupIdleLogged;
 
 #if UNITY_EDITOR
         public static bool DisableEditorAssetPrefabLookupForTests { get; set; }
@@ -147,8 +150,11 @@ namespace TokenForge.Client
 
         private void Awake()
         {
+            Debug.Log("INFO [StartupDiagnostic][BEGIN]");
+            Debug.Log("INFO [StartupDiagnostic][CSharpBootstrap_BEGIN]");
             unityMainThreadId = Thread.CurrentThread.ManagedThreadId;
             runtimeVerificationMode = IsRuntimeVerificationMode();
+            LogNativeSafeModeState();
             if (runtimeVerificationMode)
             {
                 Debug.Log("INFO [RuntimeVerify][ENABLED] source=AppBootstrapper dashboardAutoOpen=false overlayAutoShow=false");
@@ -157,11 +163,25 @@ namespace TokenForge.Client
 
             Debug.Log("INFO [Startup] AppBootstrapper begin");
             Debug.Log("INFO " + LogPrefix + " TokenForge bootstrap starting.");
+            Debug.Log("INFO [StartupDiagnostic][CSharpBootstrap_OK]");
+            Debug.Log("INFO [StartupDiagnostic][NATIVE_BRIDGE_LOAD_BEGIN]");
             LogRuntimeBuildIdentity();
+            Debug.Log("INFO [StartupDiagnostic][NATIVE_BRIDGE_LOAD_OK]");
             LogStartupScene();
             LogHierarchyDump("AwakeStart");
             lifecycleService = new MacApplicationLifecycleService();
-            lifecycleService.Install();
+            Debug.Log("INFO [StartupDiagnostic][APPKIT_INIT_BEGIN]");
+            Debug.Log("INFO [StartupDiagnostic][STATUS_ITEM_INIT_BEGIN]");
+            if (NativeSafeModeEnabled || DisableStatusItemEnabled)
+            {
+                Debug.Log("INFO [StartupDiagnostic][STATUS_ITEM_INIT_OK] skipped=true reason=" + NativeSkipReason("statusItem"));
+            }
+            else
+            {
+                lifecycleService.Install();
+                Debug.Log("INFO [StartupDiagnostic][STATUS_ITEM_INIT_OK]");
+            }
+            Debug.Log("INFO [StartupDiagnostic][APPKIT_INIT_OK]");
             EnsureSceneInfrastructure();
             LogHierarchyDump("AfterEnsureSceneInfrastructure");
             ConfigureServices();
@@ -190,7 +210,10 @@ namespace TokenForge.Client
                 Debug.Log("INFO [NativeDashboard] mode=macOSPlayer source=AppKit");
                 Debug.Log("INFO [BootstrapRoot] productUI=disabled reason=nativeShell");
                 EnsureNativeDashboardShell();
-                ApplyNativeShellState(showDashboardIfNeeded: true);
+                if (!NativeSafeModeEnabled)
+                {
+                    ApplyNativeShellState(showDashboardIfNeeded: true);
+                }
             }
             else if (bootstrapRoot != null)
             {
@@ -424,6 +447,21 @@ namespace TokenForge.Client
                 return;
             }
 
+            Debug.Log("INFO [StartupDiagnostic][DASHBOARD_INIT_BEGIN]");
+            if (NativeSafeModeEnabled || DisableNativeDashboardEnabled)
+            {
+                Debug.Log("INFO [StartupDiagnostic][DASHBOARD_INIT_OK] skipped=true reason=" + NativeSkipReason("dashboard"));
+                Debug.Log("INFO [StartupDiagnostic][RIGHT_CLICK_MENU_INIT_BEGIN]");
+                Debug.Log("INFO [StartupDiagnostic][RIGHT_CLICK_MENU_INIT_OK] skipped=true reason=" + NativeSkipReason("contextMenu"));
+                Debug.Log("INFO [StartupDiagnostic][OVERLAY_INIT_BEGIN]");
+                Debug.Log("INFO [StartupDiagnostic][OVERLAY_INIT_OK] skipped=true reason=" + NativeSkipReason("overlay"));
+                Debug.Log("INFO [StartupDiagnostic][PIXEL_RENDERER_INIT_BEGIN]");
+                Debug.Log("INFO [StartupDiagnostic][PIXEL_RENDERER_INIT_OK] skipped=true reason=" + NativeSkipReason("pixelRenderer"));
+                Debug.Log("INFO [StartupDiagnostic][MOVEMENT_TIMER_INIT_BEGIN]");
+                Debug.Log("INFO [StartupDiagnostic][MOVEMENT_TIMER_INIT_OK] skipped=true reason=" + NativeSkipReason("movementTimer"));
+                return;
+            }
+
             if (nativeDashboardService == null)
             {
                 Debug.Log("INFO [Startup] Native dashboard init begin");
@@ -432,6 +470,20 @@ namespace TokenForge.Client
                 nativeDashboardService.ActionRequested += HandleNativeDashboardAction;
                 nativeDashboardService.Install();
                 Debug.Log("INFO [Startup] Native dashboard init end");
+            }
+            Debug.Log("INFO [StartupDiagnostic][DASHBOARD_INIT_OK]");
+            Debug.Log("INFO [StartupDiagnostic][RIGHT_CLICK_MENU_INIT_BEGIN]");
+            Debug.Log("INFO [StartupDiagnostic][RIGHT_CLICK_MENU_INIT_OK] deferred=true owner=nativeOverlayContextMenu");
+
+            Debug.Log("INFO [StartupDiagnostic][OVERLAY_INIT_BEGIN]");
+            if (DisableNativeOverlayEnabled)
+            {
+                Debug.Log("INFO [StartupDiagnostic][OVERLAY_INIT_OK] skipped=true reason=" + NativeSkipReason("overlay"));
+                Debug.Log("INFO [StartupDiagnostic][PIXEL_RENDERER_INIT_BEGIN]");
+                Debug.Log("INFO [StartupDiagnostic][PIXEL_RENDERER_INIT_OK] skipped=true reason=" + NativeSkipReason("pixelRenderer"));
+                Debug.Log("INFO [StartupDiagnostic][MOVEMENT_TIMER_INIT_BEGIN]");
+                Debug.Log("INFO [StartupDiagnostic][MOVEMENT_TIMER_INIT_OK] skipped=true reason=" + NativeSkipReason("movementTimer"));
+                return;
             }
 
             if (nativeDesktopCompanionController == null)
@@ -447,6 +499,11 @@ namespace TokenForge.Client
                 nativeDesktopCompanionController.DashboardRestoreRequested -= HandleNativeCompanionDashboardRestoreRequested;
                 nativeDesktopCompanionController.DashboardRestoreRequested += HandleNativeCompanionDashboardRestoreRequested;
             }
+            Debug.Log("INFO [StartupDiagnostic][OVERLAY_INIT_OK]");
+            Debug.Log("INFO [StartupDiagnostic][PIXEL_RENDERER_INIT_BEGIN]");
+            Debug.Log("INFO [StartupDiagnostic][PIXEL_RENDERER_INIT_OK] disabled=" + DisablePixelNativeRendererEnabled);
+            Debug.Log("INFO [StartupDiagnostic][MOVEMENT_TIMER_INIT_BEGIN]");
+            Debug.Log("INFO [StartupDiagnostic][MOVEMENT_TIMER_INIT_OK] disabled=" + DisableNativeOverlayEnabled);
         }
 
         private void HandleNativeCompanionDashboardRestoreRequested()
@@ -456,6 +513,12 @@ namespace TokenForge.Client
 
         private void OpenNativeDashboardCanonical(string reason)
         {
+            if (nativeExplicitQuitRequested)
+            {
+                Debug.Log("INFO [DashboardLifecycle][SUPPRESS_REOPEN] reason=explicitQuit source=" + SafeNativeText(reason, "unknown"));
+                return;
+            }
+
             nativeDashboardShown = true;
             var source = NormalizeDashboardOpenSource(reason);
             Debug.Log("INFO [WindowLifecycle] openDashboard route reason=" + SafeNativeText(reason, "unknown") + " source=" + source);
@@ -528,6 +591,18 @@ namespace TokenForge.Client
         {
             if (!UseNativeMacDashboardShell)
             {
+                return;
+            }
+
+            if (NativeSafeModeEnabled)
+            {
+                Debug.Log("INFO [NativeSafeMode][SKIP] function=ApplyNativeShellState reason=TOKENFORGE_NATIVE_SAFE_MODE");
+                return;
+            }
+
+            if (nativeExplicitQuitRequested)
+            {
+                Debug.Log("INFO [DashboardLifecycle][SUPPRESS_REOPEN] reason=explicitQuit source=applyNativeShellState");
                 return;
             }
 
@@ -716,9 +791,21 @@ namespace TokenForge.Client
             state.clickThroughEnabled = settings.IsClickThroughEnabled;
             state.clickReactionEnabled = !settings.IsClickThroughEnabled;
             state.desiredVisible = repositoryConnected && (nativeCompanionDesiredVisibleInitialized ? nativeCompanionDesiredVisible : settings.IsDesktopCompanionEnabled);
-            state.actualVisible = nativeDesktopCompanionController != null && nativeDesktopCompanionController.OverlayState == CompanionDesktopOverlayState.Active;
+            state.actualVisible = NativeOverlayActuallyVisible();
             state.movementEnabled = state.wanderEnabled;
             state.dragEnabled = !state.clickThroughEnabled;
+            state.panelExists = nativeDesktopCompanionController != null &&
+                                nativeDesktopCompanionController.OverlayState != CompanionDesktopOverlayState.Unavailable;
+            state.panelFrame = settings.HasSavedOverlayPosition
+                ? settings.LastOverlayPositionX.ToString("0.#") + "," + settings.LastOverlayPositionY.ToString("0.#")
+                : string.Empty;
+            state.selectedRepoHash = repositoryConnected ? dashboard.CurrentRepositoryHash ?? string.Empty : string.Empty;
+            state.repoApproved = repositoryConnected;
+            state.movementPaused = !state.movementEnabled || state.clickThroughEnabled;
+            state.overlayLastAction = SafeNativeText(nativeCompanionLastProjectionSource, "startup");
+            state.overlayLastError = string.Equals(nativeActionStatusKind, "error", StringComparison.Ordinal)
+                ? SafeNativeText(nativeActionStatusText, string.Empty)
+                : string.Empty;
             state.explicitQuitRequested = nativeExplicitQuitRequested;
             state.dashboardVisible = nativeDashboardShown;
             state.lastKnownFrame = settings.HasSavedOverlayPosition
@@ -1087,6 +1174,13 @@ namespace TokenForge.Client
             state.companionVisible = false;
             state.desiredVisible = false;
             state.actualVisible = false;
+            state.panelExists = false;
+            state.panelFrame = string.Empty;
+            state.selectedRepoHash = string.Empty;
+            state.repoApproved = false;
+            state.movementPaused = true;
+            state.overlayLastAction = "noRepository";
+            state.overlayLastError = string.Empty;
             state.companion = NativeCompanionState.CreateDefault();
             state.companion.name = "No companion";
             state.companion.stage = "None";
@@ -1892,8 +1986,9 @@ namespace TokenForge.Client
                 return Enumerable.Empty<NativeAnalysisRunRecord>();
             }
 
+            var aliases = RepositoryAliasesForNative(repositoryId);
             return (approvedActivityAnalysis?.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>())
-                .Where(run => run != null && string.Equals(run.RepositoryId, repositoryId, StringComparison.Ordinal))
+                .Where(run => run != null && aliases.Contains(run.RepositoryId ?? string.Empty))
                 .OrderByDescending(run => run.CreatedAtUtc);
         }
 
@@ -2025,9 +2120,51 @@ namespace TokenForge.Client
                 return Enumerable.Empty<RepositoryTimelineEvent>();
             }
 
+            var aliases = RepositoryAliasesForNative(repositoryId);
             return (approvedActivityAnalysis?.CurrentSaveData?.RepositoryTimelineEvents ?? new List<RepositoryTimelineEvent>())
-                .Where(item => item != null && string.Equals(item.RepositoryId, repositoryId, StringComparison.Ordinal))
+                .Where(item => item != null && aliases.Contains(item.RepositoryId ?? string.Empty))
                 .OrderByDescending(item => item.TimestampUtc);
+        }
+
+        private HashSet<string> RepositoryAliasesForNative(string repositoryId)
+        {
+            var aliases = new HashSet<string>(StringComparer.Ordinal);
+            AddRepositoryAlias(aliases, repositoryId);
+            var saveData = approvedActivityAnalysis?.CurrentSaveData;
+            foreach (var project in saveData?.ConnectedProjects ?? new List<ConnectedProject>())
+            {
+                if (project == null || project.IsArchived || project.ApprovedAt == null)
+                {
+                    continue;
+                }
+
+                var projectIds = new[] { project.Id, project.PathHash, project.ProjectPathHash, project.LocalOnlyProjectId };
+                var matchesRepository = projectIds.Any(id => !string.IsNullOrWhiteSpace(id) && aliases.Contains(id.Trim())) ||
+                                        (project.IsActive &&
+                                         !string.IsNullOrWhiteSpace(saveData?.SelectedRepositoryHash) &&
+                                         string.Equals(saveData.SelectedRepositoryHash.Trim(), repositoryId.Trim(), StringComparison.Ordinal));
+                if (!matchesRepository)
+                {
+                    continue;
+                }
+
+                foreach (var id in projectIds)
+                {
+                    AddRepositoryAlias(aliases, id);
+                }
+            }
+
+            return aliases;
+        }
+
+        private static void AddRepositoryAlias(HashSet<string> aliases, string value)
+        {
+            if (aliases == null || string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            aliases.Add(value.Trim());
         }
 
         private static bool IsSavedTimelineEvent(RepositoryTimelineEvent item)
@@ -2760,6 +2897,12 @@ namespace TokenForge.Client
 
         private void RouteNativeDashboardAction(NativeDashboardActionRequest request)
         {
+            if (nativeExplicitQuitRequested && request.Action != NativeDashboardAction.Quit)
+            {
+                Debug.Log("INFO [NativeAction][IGNORED_DURING_QUIT] action=" + request.RawAction);
+                return;
+            }
+
             if (Thread.CurrentThread.ManagedThreadId != unityMainThreadId)
             {
                 Debug.LogWarning("WARN [Threading] mainThread violation action=" + request.RawAction);
@@ -3108,10 +3251,22 @@ namespace TokenForge.Client
 
         private async void RunNativeDashboardTask(Func<Task> taskFactory, string action)
         {
+            if (nativeExplicitQuitRequested)
+            {
+                Debug.Log("INFO [NativeAction][TASK_SUPPRESSED_DURING_QUIT] action=" + action);
+                return;
+            }
+
             Debug.Log("INFO [Threading] dispatch background action=" + action);
             try
             {
                 await taskFactory();
+                if (nativeExplicitQuitRequested)
+                {
+                    Debug.Log("INFO [NativeAction][TASK_COMPLETED_SUPPRESSED_DURING_QUIT] action=" + action);
+                    return;
+                }
+
                 Debug.Log("INFO [Threading] dispatch main action=" + action);
                 Debug.Log("INFO [DashboardAction] action=" + action + " target= result=completed");
             }
@@ -4027,7 +4182,7 @@ namespace TokenForge.Client
             Debug.Log("INFO [OverlayTrace:" + SafeNativeText(traceId, "none") + "] AppBootstrapper route invoked target=DesktopCompanionOverlayController.SetVisible visible=" + visible);
             Debug.Log("INFO [Overlay][Action] " + (visible ? "show" : "hide") + " source=" + SafeNativeText(source, "explicitDashboardAction") + " traceId=" + SafeNativeText(traceId, "none"));
             var oldDesired = nativeCompanionDesiredVisibleInitialized && nativeCompanionDesiredVisible;
-            var oldActual = nativeDesktopCompanionController != null && nativeDesktopCompanionController.OverlayState == CompanionDesktopOverlayState.Active;
+            var oldActual = NativeOverlayActuallyVisible();
             Debug.Log("INFO [OverlayState][BEFORE_ACTION] desiredVisible=" + oldDesired + " actualVisible=" + oldActual + " source=" + SafeNativeText(source, "explicitDashboardAction"));
             nativeCompanionDesiredVisible = visible;
             nativeCompanionDesiredVisibleInitialized = true;
@@ -4048,7 +4203,7 @@ namespace TokenForge.Client
                                    !string.IsNullOrWhiteSpace(item.RepositoryHash) &&
                                    !string.Equals(item.RepositoryHash, RepositoryCompanionProfileService.DefaultLocalRepositoryHash, StringComparison.Ordinal));
                 var selectedRepoHash = approvedActivityAnalysis?.CharacterDashboard?.CurrentRepositoryHash ?? string.Empty;
-                var actualVisible = nativeDesktopCompanionController != null && nativeDesktopCompanionController.OverlayState == CompanionDesktopOverlayState.Active;
+                var actualVisible = NativeOverlayActuallyVisible();
                 var panelFrame = approvedActivityAnalysis?.CharacterDashboard?.DesktopCompanionSettings?.HasSavedOverlayPosition == true
                     ? approvedActivityAnalysis.CharacterDashboard.DesktopCompanionSettings.LastOverlayPositionX.ToString("0.#") + "," + approvedActivityAnalysis.CharacterDashboard.DesktopCompanionSettings.LastOverlayPositionY.ToString("0.#")
                     : "none";
@@ -4067,6 +4222,15 @@ namespace TokenForge.Client
                           " selectedRepoId=" + SafeNativeText(selectedRepoHash, "none") +
                           " selectedRepoHash=" + SafeNativeText(selectedRepoHash, "none") +
                           " approvedRepoCount=" + approvedRepoCount);
+                Debug.Log("INFO [OverlayVisibilityDiagnostic] reason=noApprovedRepository" +
+                          " approvedRepoCount=" + approvedRepoCount +
+                          " selectedRepoHash=" + SafeNativeText(selectedRepoHash, "none") +
+                          " desiredVisible=" + visible +
+                          " actualVisible=" + actualVisible +
+                          " panelExists=" + (nativeDesktopCompanionController != null) +
+                          " farmPanelCount=0" +
+                          " forcedHiddenByNoRepo=true" +
+                          " canonicalRepoHash=none panelFrame=" + SafeNativeText(panelFrame, "none"));
                 nativeDesktopCompanionController?.HideLegacyOverlay(nativeCompanionLastProjectionSource);
                 nativeDashboardService?.SetCompanionVisible(false, nativeCompanionLastProjectionSource);
                 await RefreshAndPublishNativeDashboardAsync();
@@ -4093,7 +4257,8 @@ namespace TokenForge.Client
 
             Debug.Log("INFO [OverlayTrace:" + SafeNativeText(traceId, "none") + "] MacNativeDashboardService SetCompanionVisible visible=" + visible + " source=" + nativeCompanionLastProjectionSource);
             nativeDashboardService?.SetCompanionVisible(visible, nativeCompanionLastProjectionSource);
-            var actualAfterNativeCall = nativeDesktopCompanionController != null && nativeDesktopCompanionController.OverlayState == CompanionDesktopOverlayState.Active;
+            ApplyNativeShellState(showDashboardIfNeeded: false);
+            var actualAfterNativeCall = NativeOverlayActuallyVisible();
             Debug.Log("INFO [OverlayState][AFTER_ACTION] desiredVisible=" + nativeCompanionDesiredVisible + " actualVisible=" + actualAfterNativeCall + " source=" + nativeCompanionLastProjectionSource);
             Debug.Log("INFO [Overlay][Actual] panelExists=" + (nativeDesktopCompanionController != null) +
                       " visible=" + actualAfterNativeCall +
@@ -4101,6 +4266,11 @@ namespace TokenForge.Client
                           ? approvedActivityAnalysis.CharacterDashboard.DesktopCompanionSettings.LastOverlayPositionX.ToString("0.#") + "," + approvedActivityAnalysis.CharacterDashboard.DesktopCompanionSettings.LastOverlayPositionY.ToString("0.#")
                           : "unknown", "unknown"));
             await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private bool NativeOverlayActuallyVisible()
+        {
+            return nativeDesktopCompanionController != null && nativeDesktopCompanionController.IsAnyOverlayActuallyVisible();
         }
 
         private async Task SetWanderEnabledFromNativeAsync(bool enabled, string traceId = "none")
@@ -4524,7 +4694,16 @@ namespace TokenForge.Client
 
         private void LogRuntimeBuildIdentity()
         {
+            Debug.Log("INFO [BuildIdentity][RUNTIME_CODE_VERSION] " + RuntimeBuildIdentityMarker +
+                      " csharpMarker=" + AppBootstrapperVersionMarker +
+                      " " + RuntimeBuildIdentityGitMarker +
+                      " buildTimestamp=" + DateTimeOffset.UtcNow.ToString("O") +
+                      " unityProductVersion=" + Application.version +
+                      " unityVersion=" + Application.unityVersion +
+                      " appBundlePath=" + RuntimeAppBundlePath() +
+                      " playerLogPath=" + RuntimePlayerLogPath());
             Debug.Log("INFO [RuntimeIdentity] AppBootstrapperVersionMarker=" + AppBootstrapperVersionMarker);
+            Debug.Log("INFO [RuntimeIdentity] RuntimeBuild=" + RuntimeBuildIdentityMarker + " " + RuntimeBuildIdentityGitMarker);
             LogNativeRuntimeMarkerIfAvailable();
             Debug.Log("INFO [RuntimeIdentity] applicationVersion=" + Application.version + " unityVersion=" + Application.unityVersion + " buildGUID=" + Application.buildGUID);
             Debug.Log("INFO [RuntimeIdentity] dataPath=" + Application.dataPath + " persistentDataPath=" + Application.persistentDataPath);
@@ -4580,6 +4759,21 @@ namespace TokenForge.Client
                 var dataPath = Application.dataPath;
                 var contentsDirectory = Directory.GetParent(dataPath);
                 return contentsDirectory != null ? contentsDirectory.FullName : "unavailable";
+            }
+            catch (Exception exception)
+            {
+                return "unavailable:" + exception.GetType().Name;
+            }
+        }
+
+        private static string RuntimePlayerLogPath()
+        {
+            try
+            {
+                var home = Environment.GetFolderPath(Environment.SpecialFolder.Personal);
+                return string.IsNullOrWhiteSpace(home)
+                    ? "unavailable"
+                    : Path.Combine(home, "Library/Logs/TokenForge/TokenForge/Player.log");
             }
             catch (Exception exception)
             {
@@ -5290,13 +5484,17 @@ namespace TokenForge.Client
         {
             if (UseNativeMacDashboardShell)
             {
-                ApplyNativeShellState(showDashboardIfNeeded: true);
-                IsVisibleUiValidated = nativeDashboardService != null && nativeDashboardService.IsAvailable;
+                if (!NativeSafeModeEnabled)
+                {
+                    ApplyNativeShellState(showDashboardIfNeeded: true);
+                }
+                IsVisibleUiValidated = NativeSafeModeEnabled || (nativeDashboardService != null && nativeDashboardService.IsAvailable);
                 IsRenderedFrameSmokeSkippedForBatchMode = true;
                 IsBootstrapComplete = IsVisibleUiValidated;
                 Debug.Log("INFO " + LogPrefix + " native macOS dashboard shell ready; Unity uGUI dashboard validation skipped.");
                 Debug.Log("INFO " + LogPrefix + " " + message);
                 Debug.Log("INFO [Startup] AppBootstrapper end");
+                LogStartupIdleReached();
                 return;
             }
 
@@ -5315,6 +5513,7 @@ namespace TokenForge.Client
                 Debug.Log("INFO " + LogPrefix + " " + message);
                 IsBootstrapComplete = true;
                 Debug.Log("INFO [Startup] AppBootstrapper end");
+                LogStartupIdleReached();
                 return;
             }
 
@@ -5327,6 +5526,70 @@ namespace TokenForge.Client
             Debug.Log("INFO " + LogPrefix + " " + message);
             IsBootstrapComplete = true;
             Debug.Log("INFO [Startup] AppBootstrapper end");
+            LogStartupIdleReached();
+        }
+
+        private void LogStartupIdleReached()
+        {
+            if (startupIdleLogged)
+            {
+                return;
+            }
+
+            startupIdleLogged = true;
+            Debug.Log("INFO [StartupDiagnostic][IDLE_REACHED]");
+        }
+
+        private static bool NativeSafeModeEnabled => IsEnvironmentFlagEnabled("TOKENFORGE_NATIVE_SAFE_MODE");
+        private static bool DisableNativeOverlayEnabled => NativeSafeModeEnabled || IsEnvironmentFlagEnabled("TOKENFORGE_DISABLE_NATIVE_OVERLAY");
+        private static bool DisableStatusItemEnabled => NativeSafeModeEnabled || IsEnvironmentFlagEnabled("TOKENFORGE_DISABLE_STATUS_ITEM");
+        private static bool DisableNativeDashboardEnabled => NativeSafeModeEnabled || IsEnvironmentFlagEnabled("TOKENFORGE_DISABLE_NATIVE_DASHBOARD");
+        private static bool DisableContextMenuEnabled => NativeSafeModeEnabled || IsEnvironmentFlagEnabled("TOKENFORGE_DISABLE_CONTEXT_MENU");
+        private static bool DisablePixelNativeRendererEnabled => NativeSafeModeEnabled || IsEnvironmentFlagEnabled("TOKENFORGE_DISABLE_PIXEL_NATIVE_RENDERER");
+
+        private static bool IsEnvironmentFlagEnabled(string name)
+        {
+            return IsTruthy(Environment.GetEnvironmentVariable(name));
+        }
+
+        private static void LogNativeSafeModeState()
+        {
+            Debug.Log("INFO [NativeSafeMode][FLAGS] safeMode=" + NativeSafeModeEnabled +
+                      " disableNativeOverlay=" + DisableNativeOverlayEnabled +
+                      " disableStatusItem=" + DisableStatusItemEnabled +
+                      " disableNativeDashboard=" + DisableNativeDashboardEnabled +
+                      " disableContextMenu=" + DisableContextMenuEnabled +
+                      " disablePixelNativeRenderer=" + DisablePixelNativeRendererEnabled);
+        }
+
+        private static string NativeSkipReason(string subsystem)
+        {
+            if (NativeSafeModeEnabled)
+            {
+                return "TOKENFORGE_NATIVE_SAFE_MODE subsystem=" + subsystem;
+            }
+
+            if (string.Equals(subsystem, "dashboard", StringComparison.Ordinal) && DisableNativeDashboardEnabled)
+            {
+                return "TOKENFORGE_DISABLE_NATIVE_DASHBOARD";
+            }
+
+            if (string.Equals(subsystem, "statusItem", StringComparison.Ordinal) && DisableStatusItemEnabled)
+            {
+                return "TOKENFORGE_DISABLE_STATUS_ITEM";
+            }
+
+            if (string.Equals(subsystem, "contextMenu", StringComparison.Ordinal) && DisableContextMenuEnabled)
+            {
+                return "TOKENFORGE_DISABLE_CONTEXT_MENU";
+            }
+
+            if (string.Equals(subsystem, "pixelRenderer", StringComparison.Ordinal) && DisablePixelNativeRendererEnabled)
+            {
+                return "TOKENFORGE_DISABLE_PIXEL_NATIVE_RENDERER";
+            }
+
+            return "TOKENFORGE_DISABLE_NATIVE_OVERLAY";
         }
 
         private static bool HasVisibleRect(RectTransform rect)

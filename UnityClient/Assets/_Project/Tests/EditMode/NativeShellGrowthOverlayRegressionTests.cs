@@ -116,6 +116,43 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void ConnectedProjectStoresBaselineAndHeadCheckpoints()
+        {
+            var project = new ConnectedProject
+            {
+                Id = "repo-a",
+                PathHash = "repo-a",
+                FirstConnectedAt = DateTimeOffset.UtcNow.AddDays(-3),
+                FirstAnalyzedCommit = "FIRST_COMMIT",
+                LastAnalyzedCommit = "BASESHA",
+                CurrentHeadCommit = "HEADSHA",
+                FirstCommitAt = DateTimeOffset.UtcNow.AddDays(-10).ToString("O"),
+                TotalCommitCount = 42,
+                AnalyzedCommitRange = "FIRST_COMMIT..HEADSHA",
+                LastAnalysisMode = "full-baseline"
+            };
+
+            Assert.IsNotNull(project.FirstConnectedAt);
+            Assert.AreEqual("FIRST_COMMIT", project.FirstAnalyzedCommit);
+            Assert.AreEqual("BASESHA", project.LastAnalyzedCommit);
+            Assert.AreEqual("HEADSHA", project.CurrentHeadCommit);
+            Assert.AreEqual("FIRST_COMMIT..HEADSHA", project.AnalyzedCommitRange);
+        }
+
+        [Test]
+        public void GitBaselineDiagnosticsAndRecomputeMarkersExist()
+        {
+            var flowSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "UI", "GitAnalysisFlowController.cs"));
+            var viewModelSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "UI", "ApprovedActivityAnalysisViewModel.cs"));
+
+            Assert.That(flowSource, Does.Contain("[GrowthSummary][RECOMPUTE]"));
+            Assert.That(flowSource, Does.Contain("[GrowthSummary][GIT_BASELINE]"));
+            Assert.That(flowSource, Does.Contain("FirstAnalyzedCommit"));
+            Assert.That(flowSource, Does.Contain("CurrentHeadCommit"));
+            Assert.That(viewModelSource, Does.Contain("[GrowthSummary][GIT_BASELINE]"));
+        }
+
+        [Test]
         public void RepositoryGrowthUsesHistoricalEvents()
         {
             var saveData = SaveData.CreateDefault();
@@ -145,6 +182,98 @@ namespace TokenForge.Client.Tests
             Assert.Greater(summary.Code, 0);
             Assert.Greater(summary.Debug, 0);
             Assert.Greater(summary.Sync, 0);
+        }
+
+        [Test]
+        public void RepositoryGrowthProjectionMatchesConnectedProjectAliasesWithoutCrossRepoBleed()
+        {
+            var saveData = SaveData.CreateDefault();
+            saveData.SelectedRepositoryHash = "repo-a-canonical";
+            saveData.ConnectedProjects.Add(new ConnectedProject
+            {
+                Id = "repo-a-connected-project",
+                PathHash = "repo-a-canonical",
+                ProjectPathHash = "repo-a-normalized-path",
+                DisplayName = "TokenForge",
+                ApprovedAt = DateTimeOffset.UtcNow,
+                IsActive = true
+            });
+            saveData.ConnectedProjects.Add(new ConnectedProject
+            {
+                Id = "repo-b-connected-project",
+                PathHash = "repo-b-canonical",
+                ProjectPathHash = "repo-b-normalized-path",
+                DisplayName = "Other",
+                ApprovedAt = DateTimeOffset.UtcNow,
+                IsActive = false
+            });
+            saveData.WorkSessionSummaries.Add(Session("repo-a-connected-project", "a1", WorkType.Feature, CountBucket.Small, false, false));
+            saveData.WorkSessionSummaries.Add(Session("repo-b-canonical", "b1", WorkType.UIUX, CountBucket.Huge, false, true));
+            saveData.GrowthHistory.Add(new CharacterGrowthResult { SessionId = "a1", ExpGained = 42, StatDeltas = new CharacterStats { Logic = 3 } });
+            saveData.GrowthHistory.Add(new CharacterGrowthResult { SessionId = "b1", ExpGained = 99, StatDeltas = new CharacterStats { Design = 9 } });
+
+            var summary = RepositoryGrowthSummaryProjection.Build(saveData, "repo-a-canonical");
+
+            Assert.AreEqual(42, summary.TotalXp);
+            Assert.AreEqual(3, summary.Code);
+            Assert.AreEqual(0, summary.Design);
+        }
+
+        [Test]
+        public void GrowthProjectionKeepsRepoABSourcesSeparateAndRejectsGlobalPlaceholders()
+        {
+            var saveData = SaveData.CreateDefault();
+            saveData.SelectedRepositoryHash = "repo-a-canonical";
+            saveData.CharacterProfile.Stats = new CharacterStats { Logic = 99, Architecture = 99, Velocity = 99, Debug = 99, Design = 99, Stability = 99 };
+            saveData.SyncState.PendingQueueCount = 99;
+            saveData.ConnectedProjects.Add(new ConnectedProject
+            {
+                Id = "repo-a-connected",
+                PathHash = "repo-a-canonical",
+                ProjectPathHash = "repo-a-normalized",
+                LocalOnlyProjectId = "repo-a-local",
+                DisplayName = "Repo A",
+                ApprovedAt = DateTimeOffset.UtcNow,
+                IsActive = true
+            });
+            saveData.ConnectedProjects.Add(new ConnectedProject
+            {
+                Id = "repo-b-connected",
+                PathHash = "repo-b-canonical",
+                ProjectPathHash = "repo-b-normalized",
+                LocalOnlyProjectId = "repo-b-local",
+                DisplayName = "Repo B",
+                ApprovedAt = DateTimeOffset.UtcNow,
+                IsActive = false
+            });
+            saveData.WorkSessionSummaries.Add(Session("repo-a-connected", "a-session", WorkType.Feature, CountBucket.Small, false, false));
+            saveData.WorkSessionSummaries.Add(Session("repo-b-normalized", "b-session", WorkType.UIUX, CountBucket.Huge, true, true));
+            saveData.WorkSessionSummaries.Add(Session("remote-placeholder", "remote-session", WorkType.Refactor, CountBucket.Huge, true, true));
+            saveData.GrowthHistory.Add(new CharacterGrowthResult { SessionId = "a-session", ExpGained = 40, StatDeltas = new CharacterStats { Logic = 2 } });
+            saveData.GrowthHistory.Add(new CharacterGrowthResult { SessionId = "b-session", ExpGained = 90, StatDeltas = new CharacterStats { Design = 7, Creativity = 3 } });
+            saveData.GrowthHistory.Add(new CharacterGrowthResult { SessionId = "remote-session", ExpGained = 999, StatDeltas = new CharacterStats { Logic = 50, Design = 50, Stability = 50 } });
+            saveData.RepositoryTimelineEvents.Add(new RepositoryTimelineEvent { RepositoryId = "repo-a-canonical", RepositoryAlias = "Repo A", EventType = "growth_saved", Title = "Repo A growth", Summary = "Repo A code/focus.", DeltaXp = 40, CodeDelta = 3, FocusDelta = 2 });
+            saveData.RepositoryTimelineEvents.Add(new RepositoryTimelineEvent { RepositoryId = "repo-b-canonical", RepositoryAlias = "Repo B", EventType = "growth_saved", Title = "Repo B growth", Summary = "Repo B design/sync.", DeltaXp = 90, DesignDelta = 10, SyncDelta = 4 });
+            saveData.RecentNativeAnalysisRuns.Add(new NativeAnalysisRunRecord { RepositoryId = "repo-b-canonical", Status = "saved", XpDelta = 90, StatDeltas = new CharacterStats { Debug = 6 } });
+            saveData.RecentNativeAnalysisRuns.Add(new NativeAnalysisRunRecord { RepositoryId = "remote-placeholder", Status = "saved", XpDelta = 999, StatDeltas = new CharacterStats { Logic = 50, Debug = 50 } });
+            saveData.ActivityReviews.Add(new ActivityReview { RepositoryId = "repo-b-canonical", Status = "saved", XpDelta = 90, CategoryBreakdown = new CharacterStats { Design = 8 } });
+            saveData.ActivityReviews.Add(new ActivityReview { RepositoryId = "remote-placeholder", Status = "saved", XpDelta = 999, CategoryBreakdown = new CharacterStats { Stability = 50 } });
+
+            var repoA = RepositoryGrowthSummaryProjection.Build(saveData, "repo-a-canonical");
+            var repoB = RepositoryGrowthSummaryProjection.Build(saveData, "repo-b-canonical");
+
+            Assert.AreNotEqual(VectorKey(repoA), VectorKey(repoB));
+            Assert.AreEqual("3:2:0:0:0", VectorKey(repoA));
+            Assert.AreEqual("0:0:0:10:4", VectorKey(repoB));
+            Assert.AreEqual(40, repoA.TotalXp);
+            Assert.AreEqual(90, repoB.TotalXp);
+            Assert.AreEqual(1, repoA.MatchedSessionCount);
+            Assert.AreEqual(1, repoA.MatchedApprovedGrowthCount);
+            Assert.AreEqual(1, repoA.MatchedTimelineEventCount);
+            Assert.AreEqual(0, repoA.MatchedNativeRunCount);
+            Assert.AreEqual(0, repoA.MatchedActivityReviewCount);
+            Assert.AreNotEqual(297, repoA.Code);
+            Assert.Less(repoA.TotalXp, 999);
         }
 
         [Test]
@@ -300,6 +429,11 @@ namespace TokenForge.Client.Tests
             Assert.That(source, Does.Contain("scrollView.contentInsets"));
             Assert.That(source, Does.Contain("TokenForgePinSubview(content, document, TokenForgeTabContentTopInset, TokenForgeTabContentSideInset, TokenForgeTabSafeBottomInset, TokenForgeTabContentSideInset)"));
             Assert.That(source, Does.Contain("[LayoutBounds][BOTTOM_INSET]"));
+            Assert.That(source, Does.Contain("[LayoutDiagnostic] selectedTab=%@"));
+            Assert.That(source, Does.Contain("dashboardFrame=%@ shellHeaderFrame=fixed92 scrollContentFrame=bodyFill bottomTabFrame=TokenForge.BottomTabBar safeBottomInset=%.0f"));
+            Assert.That(source, Does.Contain("visibleContentHeight=%.0f contentBottomY=%.0f bottomTabTopY=%.0f isBottomClipped=%@"));
+            Assert.That(source, Does.Contain("isBottomClipped ? @\"true\" : @\"false\""));
+            Assert.That(source, Does.Contain("scrollView.contentInsets = NSEdgeInsetsMake(0, 0, TokenForgeTabSafeBottomInset, 0);"));
             Assert.That(source, Does.Contain("tokenShopScreen"));
             Assert.That(source, Does.Contain("wardrobeScreen"));
         }
@@ -354,8 +488,9 @@ namespace TokenForge.Client.Tests
             Assert.AreNotEqual(ratChild, tigerChild);
             Assert.AreNotEqual(ratChild, ratAdult);
             Assert.AreNotEqual(ratChild, ratCosmetic);
-            Assert.That(ratCosmetic, Does.Contain("sprite:v3:grid24"));
+            Assert.That(ratCosmetic, Does.Contain("sprite:v4:grid24"));
             Assert.That(CompanionPixelArtFactory.SpriteSignature(child, false, "rat", new[] { "Skin White Cat!?", "skin_white_cat" }), Does.Contain("skinwhitecat"));
+            Assert.That(File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "UI", "CompanionPixelArtFactory.cs")), Does.Contain("[PixelDiagnostic] signature=sprite:v4:grid24"));
         }
 
         [Test]
@@ -374,6 +509,28 @@ namespace TokenForge.Client.Tests
             Assert.That(dashboardRepoA, Does.Contain("repo=repo-a"));
             Assert.That(dashboardRepoA, Does.Contain("role=dashboardpreview"));
             Assert.That(dashboardRepoA, Does.Contain("variant=white_cat"));
+        }
+
+        [Test]
+        public void SpriteCacheKeyIncludesSignatureZodiacStageAndEquippedItemsHash()
+        {
+            var child = new CompanionState { Stage = CompanionStage.Child, Archetype = CompanionArchetype.Builder, Level = 4 };
+            var adult = new CompanionState { Stage = CompanionStage.Adult, Archetype = CompanionArchetype.Builder, Level = 12 };
+            var first = CompanionPixelArtFactory.SpriteSignature(child, false, "rat", new[] { "skin_white_cat" }, "repo-a", "dashboardPreview", "white_cat");
+            var same = CompanionPixelArtFactory.SpriteSignature(child, false, "rat", new[] { "skin_white_cat" }, "repo-a", "dashboardPreview", "white_cat");
+            var differentStage = CompanionPixelArtFactory.SpriteSignature(adult, false, "rat", new[] { "skin_white_cat" }, "repo-a", "dashboardPreview", "white_cat");
+            var differentItem = CompanionPixelArtFactory.SpriteSignature(child, false, "rat", new[] { "skin_calico" }, "repo-a", "dashboardPreview", "calico");
+            var differentZodiac = CompanionPixelArtFactory.SpriteSignature(child, false, "tiger", new[] { "skin_white_cat" }, "repo-a", "dashboardPreview", "white_cat");
+
+            Assert.AreEqual(first, same);
+            Assert.AreNotEqual(first, differentStage);
+            Assert.AreNotEqual(first, differentItem);
+            Assert.AreNotEqual(first, differentZodiac);
+            Assert.That(first, Does.Contain("signature=sprite:v4:grid24"));
+            Assert.That(first, Does.Contain("zodiac=rat"));
+            Assert.That(first, Does.Contain("stage=Child"));
+            Assert.That(first, Does.Contain("equippedItemsHash=skinwhitecat"));
+            Assert.That(first, Does.Not.Contain("zodiac=default"));
         }
 
         [Test]
@@ -436,6 +593,7 @@ namespace TokenForge.Client.Tests
         public void NoRepositoryDashboardShowPathForcesOverlayHidden()
         {
             var source = NativeSource();
+            var controllerSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "UI", "DesktopCompanionOverlayController.cs"));
 
             Assert.That(source, Does.Contain("settings.noApprovedRepository"));
             Assert.That(source, Does.Contain("TokenForge_HideAllRepositoryCompanions(explicitTrace.UTF8String)"));
@@ -443,6 +601,9 @@ namespace TokenForge.Client.Tests
             Assert.That(source, Does.Contain("sourceAction=menubar.showCompanion"));
             Assert.That(source, Does.Contain("selectedRepoId=none selectedRepoHash=none approvedRepoCount=0"));
             Assert.That(source, Does.Contain("[OverlayLifecycle][NO_REPOSITORY_HIDE_OVERLAY]"));
+            Assert.That(controllerSource, Does.Contain("desiredVisible=false actualVisible=false"));
+            Assert.That(controllerSource, Does.Contain("legacyPanelVisible=false farmPanelCount=0 visibleFarmPanelCount=0 persistedFarmSnapshotCount=0"));
+            Assert.That(controllerSource, Does.Contain("actual_visibility_mismatch"));
         }
 
         [Test]

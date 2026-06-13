@@ -2,9 +2,9 @@
 set -u -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/tokenforge-unity-env.sh"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 UNITY_PROJECT_PATH="${UNITY_PROJECT_PATH:-${REPO_ROOT}/UnityClient}"
-UNITY_PATH="${UNITY_PATH:-/Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/MacOS/Unity}"
 EDITMODE_RESULTS="${EDITMODE_RESULTS:-/tmp/tokenforge-editmode-results.xml}"
 PLAYMODE_RESULTS="${PLAYMODE_RESULTS:-/tmp/tokenforge-playmode-results.xml}"
 EDITMODE_LOG="${EDITMODE_LOG:-/tmp/tokenforge-unity-editmode.log}"

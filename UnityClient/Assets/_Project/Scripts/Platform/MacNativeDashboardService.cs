@@ -36,6 +36,12 @@ namespace TokenForge.Client.Platform
                 return false;
             }
 
+            if (NativeSafeModeEnabled || DisableNativeDashboardEnabled)
+            {
+                Debug.Log("INFO [NativeSafeMode][SKIP] function=MacNativeDashboardService.Install reason=" + NativeSkipReason);
+                return false;
+            }
+
             try
             {
                 RegisterDashboardActionCallback(DashboardActionCallback);
@@ -140,6 +146,12 @@ namespace TokenForge.Client.Platform
 
         private bool EnsureInstalled()
         {
+            if (NativeSafeModeEnabled || DisableNativeDashboardEnabled)
+            {
+                Debug.Log("INFO [NativeSafeMode][SKIP] function=MacNativeDashboardService.EnsureInstalled reason=" + NativeSkipReason);
+                return false;
+            }
+
             return installed || Install();
         }
 
@@ -550,6 +562,25 @@ namespace TokenForge.Client.Platform
             value = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
             value = value.Replace('\n', ' ').Replace('\r', ' ');
             return value.Length <= 96 ? value : value.Substring(0, 96);
+        }
+
+        private static bool NativeSafeModeEnabled => IsEnvironmentFlagEnabled("TOKENFORGE_NATIVE_SAFE_MODE");
+        private static bool DisableNativeDashboardEnabled => NativeSafeModeEnabled || IsEnvironmentFlagEnabled("TOKENFORGE_DISABLE_NATIVE_DASHBOARD");
+        private static string NativeSkipReason => NativeSafeModeEnabled ? "TOKENFORGE_NATIVE_SAFE_MODE" : "TOKENFORGE_DISABLE_NATIVE_DASHBOARD";
+
+        private static bool IsEnvironmentFlagEnabled(string name)
+        {
+            var value = Environment.GetEnvironmentVariable(name);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            value = value.Trim();
+            return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "on", StringComparison.OrdinalIgnoreCase);
         }
 
 #if UNITY_STANDALONE_OSX && !UNITY_EDITOR

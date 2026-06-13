@@ -11,10 +11,11 @@ set -u -o pipefail
 # edits are considered.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/tokenforge-unity-env.sh"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${REPO_ROOT}" || exit 1
 
-UNITY="/Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/MacOS/Unity"
+UNITY="${UNITY_PATH}"
 PROJECT="$PWD/UnityClient"
 ARTIFACT_DIR="$PROJECT/TestResults/codex-onepass-$(date +%Y%m%d-%H%M%S)"
 BUILT_APP="/tmp/tokenforge-macos-build/TokenForge.app"

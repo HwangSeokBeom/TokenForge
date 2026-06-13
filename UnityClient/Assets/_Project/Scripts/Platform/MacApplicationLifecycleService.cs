@@ -62,6 +62,12 @@ namespace TokenForge.Client.Platform
         private static void InstallBeforeSceneLoad()
         {
 #if UNITY_STANDALONE_OSX && !UNITY_EDITOR
+            if (NativeSafeModeEnabled || DisableStatusItemEnabled)
+            {
+                Debug.Log("INFO [StartupDiagnostic][STATUS_ITEM_INIT_OK] skipped=true source=RuntimeInitializeOnLoadMethod reason=" + NativeSkipReason);
+                return;
+            }
+
             InstallNativeLifecycle();
 #endif
         }
@@ -70,6 +76,12 @@ namespace TokenForge.Client.Platform
         {
             if (!IsAvailable)
             {
+                return false;
+            }
+
+            if (NativeSafeModeEnabled || DisableStatusItemEnabled)
+            {
+                Debug.Log("INFO [NativeSafeMode][SKIP] function=MacApplicationLifecycleService.Install reason=" + NativeSkipReason);
                 return false;
             }
 
@@ -97,6 +109,12 @@ namespace TokenForge.Client.Platform
         {
             if (!IsAvailable)
             {
+                return;
+            }
+
+            if (NativeSafeModeEnabled || DisableStatusItemEnabled)
+            {
+                Debug.Log("INFO [NativeSafeMode][SKIP] function=MacApplicationLifecycleService.UpdateStatusItem reason=" + NativeSkipReason);
                 return;
             }
 
@@ -297,6 +315,25 @@ namespace TokenForge.Client.Platform
             value = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
             value = value.Replace('\n', ' ').Replace('\r', ' ');
             return value.Length <= 80 ? value : value.Substring(0, 80);
+        }
+
+        private static bool NativeSafeModeEnabled => IsEnvironmentFlagEnabled("TOKENFORGE_NATIVE_SAFE_MODE");
+        private static bool DisableStatusItemEnabled => NativeSafeModeEnabled || IsEnvironmentFlagEnabled("TOKENFORGE_DISABLE_STATUS_ITEM");
+        private static string NativeSkipReason => NativeSafeModeEnabled ? "TOKENFORGE_NATIVE_SAFE_MODE" : "TOKENFORGE_DISABLE_STATUS_ITEM";
+
+        private static bool IsEnvironmentFlagEnabled(string name)
+        {
+            var value = Environment.GetEnvironmentVariable(name);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            value = value.Trim();
+            return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "on", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

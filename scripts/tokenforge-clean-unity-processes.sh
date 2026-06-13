@@ -3,20 +3,25 @@ set -u -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "${SCRIPT_DIR}/tokenforge-unity-env.sh"
 
-UNITY_PATH="${UNITY_PATH:-/Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app/Contents/MacOS/Unity}"
-UNITY_APP_PATH="${UNITY_APP_PATH:-/Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app}"
 ACTION="${1:-cleanup}"
 WAIT_SECONDS="${TOKENFORGE_UNITY_CLEANUP_WAIT_SECONDS:-3}"
 LOG_FILES="${TOKENFORGE_UNITY_CLEANUP_LOGS:-}"
 LOG_MAX_AGE_SECONDS="${TOKENFORGE_UNITY_LOG_MAX_AGE_SECONDS:-900}"
+UNITY_PROJECT_PATH="${UNITY_PROJECT_PATH:-${REPO_ROOT}/UnityClient}"
+LOCK_FILE="${UNITY_PROJECT_PATH}/Temp/UnityLockfile"
 
 unity_pattern() {
   printf '%s' "${UNITY_APP_PATH}"
 }
 
 manual_command() {
-  printf '%s' 'pkill -TERM -f "VBCSCompiler.dll" || true; pkill -TERM -f "Unity.Licensing.Client" || true; pkill -TERM -f "Unity Hub" || true; pkill -TERM -f "/Applications/Unity/Hub/Editor/2022.3.0f1/Unity.app" || true; sleep 3; pgrep -fl "Unity.Licensing.Client|Unity Hub|Unity|VBCSCompiler|dotnet"'
+  printf 'pkill -TERM -f "VBCSCompiler.dll" || true; pkill -TERM -f "Unity.Licensing.Client" || true; pkill -TERM -f "%s" || true; sleep 3; pgrep -fl "Unity.Licensing.Client|Unity Hub|Unity|VBCSCompiler|dotnet"' "${UNITY_APP_PATH}"
+}
+
+unity_batchmode_pattern() {
+  printf '%s' "(${UNITY_PATH}.*-batchmode|-batchmode.*${UNITY_PATH})"
 }
 
 process_lines() {
@@ -95,7 +100,19 @@ print_process_report() {
   local output
   local status
 
-  echo "INFO [RuntimeVerify][ProcessPreflight] label=${label} unityPath=${UNITY_PATH}"
+  echo "INFO [BuildPipeline][PROCESS_PREFLIGHT] label=${label} unityPath=${UNITY_PATH}"
+  echo "INFO [BuildPipeline][UNITY_VERSION_SELECTED] unityVersion=${TOKENFORGE_UNITY_VERSION} unityPath=${UNITY_PATH} unityAppPath=${UNITY_APP_PATH}"
+  if [[ -f "${LOCK_FILE}" ]]; then
+    echo "INFO [BuildPipeline][LOCKFILE_REMOVED] status=blocked path=${LOCK_FILE}"
+    if command -v lsof >/dev/null 2>&1; then
+      echo "TOKENFORGE_VERIFY_LOCKFILE_HOLDERS=$(lsof "${LOCK_FILE}" 2>&1 | tr '\n' ';' | sed 's/;$//')"
+    else
+      echo "TOKENFORGE_VERIFY_LOCKFILE_HOLDERS=lsof_unavailable"
+    fi
+  else
+    echo "INFO [BuildPipeline][LOCKFILE_REMOVED] status=not_present path=${LOCK_FILE}"
+    echo "TOKENFORGE_VERIFY_LOCKFILE_HOLDERS="
+  fi
   local license_output
   local license_status
   license_output="$(license_pids)"
@@ -146,11 +163,12 @@ print_process_report() {
 }
 
 cleanup_processes() {
+  echo "INFO [BuildPipeline][PROCESS_CLEANUP_BEGIN] action=${ACTION}"
   echo "INFO [UnityProcessCleanup] start action=${ACTION}"
   safe_kill_log_pids
   safe_kill_pattern "VBCSCompiler\.dll" "unity_roslyn_compiler_server"
   safe_kill_pattern "Unity\.Licensing\.Client" "unity_licensing_client"
-  safe_kill_pattern "${UNITY_APP_PATH}" "unity_2022_3_0f1_batchmode"
+  safe_kill_pattern "$(unity_batchmode_pattern)" "unity_${TOKENFORGE_UNITY_VERSION}_batchmode"
   if [[ "${TOKENFORGE_CLEAN_UNITY_HUB:-false}" == "true" ]]; then
     safe_kill_pattern "Unity Hub" "unity_hub"
   else
@@ -158,6 +176,7 @@ cleanup_processes() {
   fi
   sleep "${WAIT_SECONDS}"
   print_process_report "post_cleanup"
+  echo "INFO [BuildPipeline][PROCESS_CLEANUP_RESULT] action=${ACTION}"
   echo "INFO [UnityProcessCleanup] done"
 }
 

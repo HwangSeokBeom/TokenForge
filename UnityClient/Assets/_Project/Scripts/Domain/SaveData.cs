@@ -36,8 +36,11 @@ namespace TokenForge.Client.Domain
 
         public string ProjectPathHash { get; set; } = string.Empty;
         public bool IsGitRepository { get; set; }
+        public DateTimeOffset? FirstConnectedAt { get; set; }
         public DateTimeOffset? LastAnalyzedAt { get; set; }
+        public string FirstAnalyzedCommit { get; set; } = string.Empty;
         public string LastAnalyzedCommit { get; set; } = string.Empty;
+        public string CurrentHeadCommit { get; set; } = string.Empty;
         public string FirstCommitAt { get; set; } = string.Empty;
         public int TotalCommitCount { get; set; }
         public string AnalyzedCommitRange { get; set; } = string.Empty;

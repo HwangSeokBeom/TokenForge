@@ -7,6 +7,8 @@ namespace TokenForge.Client.Domain
     public sealed class RepositoryGrowthSummary
     {
         public string RepositoryId { get; set; } = string.Empty;
+        public string SelectedRepositoryId { get; set; } = string.Empty;
+        public string CanonicalRepositoryId { get; set; } = string.Empty;
         public int Code { get; set; }
         public int Focus { get; set; }
         public int Debug { get; set; }
@@ -26,6 +28,12 @@ namespace TokenForge.Client.Domain
         public string ProjectionSource { get; set; } = "none";
         public string LatestSummary { get; set; } = "No growth recorded yet.";
         public List<RepositoryTimelineEvent> TimelineEvents { get; set; } = new List<RepositoryTimelineEvent>();
+        public List<string> MatchedRepositoryAliases { get; set; } = new List<string>();
+        public int MatchedSessionCount { get; set; }
+        public int MatchedApprovedGrowthCount { get; set; }
+        public int MatchedNativeRunCount { get; set; }
+        public int MatchedActivityReviewCount { get; set; }
+        public int MatchedTimelineEventCount { get; set; }
 
         public CompanionStatProfile ToStatProfile()
         {
@@ -45,17 +53,26 @@ namespace TokenForge.Client.Domain
         public static RepositoryGrowthSummary Build(SaveData saveData, string repositoryId, DateTimeOffset? nowUtc = null)
         {
             saveData = saveData ?? SaveData.CreateDefault();
-            repositoryId = string.IsNullOrWhiteSpace(repositoryId) ? saveData.SelectedRepositoryHash ?? string.Empty : repositoryId.Trim();
+            var selectedRepositoryId = string.IsNullOrWhiteSpace(repositoryId) ? saveData.SelectedRepositoryHash ?? string.Empty : repositoryId.Trim();
+            var canonicalSelection = RepositoryCompanionProfileService.CanonicalizeSelectedRepositoryHash(saveData, selectedRepositoryId, false);
+            repositoryId = canonicalSelection.Resolved ? canonicalSelection.ResolvedCanonicalHash : selectedRepositoryId;
             var now = nowUtc ?? DateTimeOffset.UtcNow;
             var weekStart = now.AddDays(-7);
-            var summary = new RepositoryGrowthSummary { RepositoryId = repositoryId };
+            var summary = new RepositoryGrowthSummary
+            {
+                RepositoryId = repositoryId,
+                SelectedRepositoryId = selectedRepositoryId,
+                CanonicalRepositoryId = canonicalSelection.Resolved ? canonicalSelection.ResolvedCanonicalHash : string.Empty
+            };
             if (string.IsNullOrWhiteSpace(repositoryId))
             {
                 return summary;
             }
 
+            var repositoryAliases = RepositoryIdentityAliases(saveData, repositoryId);
+            summary.MatchedRepositoryAliases = repositoryAliases.OrderBy(alias => alias, StringComparer.Ordinal).ToList();
             var sessions = (saveData.WorkSessionSummaries ?? new List<AgentWorkSession>())
-                .Where(session => session != null && string.Equals(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session), repositoryId, StringComparison.Ordinal))
+                .Where(session => session != null && repositoryAliases.Contains(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session)))
                 .OrderBy(session => session.EndedAt)
                 .ToList();
             var sessionById = sessions
@@ -70,20 +87,25 @@ namespace TokenForge.Client.Domain
                 .Where(growth => growth != null && sessionIds.Contains(growth.SessionId))
                 .ToList();
             var savedNativeRuns = (saveData.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>())
-                .Where(run => run != null && string.Equals(run.RepositoryId, repositoryId, StringComparison.Ordinal) && IsSavedNativeRun(run))
+                .Where(run => run != null && repositoryAliases.Contains(run.RepositoryId ?? string.Empty) && IsSavedNativeRun(run))
                 .OrderByDescending(run => run.CreatedAtUtc)
                 .ToList();
             var savedActivityReviews = (saveData.ActivityReviews ?? new List<ActivityReview>())
                 .Where(review => review != null &&
-                                 string.Equals(review.RepositoryId, repositoryId, StringComparison.Ordinal) &&
+                                 repositoryAliases.Contains(review.RepositoryId ?? string.Empty) &&
                                  string.Equals(review.Status, "saved", StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(review => review.SavedAt ?? review.CreatedAt)
                 .ToList();
             var timelineEvents = (saveData.RepositoryTimelineEvents ?? new List<RepositoryTimelineEvent>())
-                .Where(item => item != null && string.Equals(item.RepositoryId, repositoryId, StringComparison.Ordinal))
+                .Where(item => item != null && repositoryAliases.Contains(item.RepositoryId ?? string.Empty))
                 .OrderByDescending(item => item.TimestampUtc)
                 .ToList();
 
+            summary.MatchedSessionCount = sessions.Count;
+            summary.MatchedApprovedGrowthCount = growthRecords.Count;
+            summary.MatchedNativeRunCount = savedNativeRuns.Count;
+            summary.MatchedActivityReviewCount = savedActivityReviews.Count;
+            summary.MatchedTimelineEventCount = timelineEvents.Count;
             summary.TimelineEvents = timelineEvents;
             summary.HasSavedGrowth = growthRecords.Any(growth => Math.Max(0, growth.ExpGained) > 0) ||
                                      savedNativeRuns.Any(run => Math.Max(0, run.XpDelta) > 0) ||
@@ -218,7 +240,149 @@ namespace TokenForge.Client.Domain
             summary.TotalXp = Math.Max(0, summary.TotalXp);
             summary.WeeklyXp = Math.Max(0, summary.WeeklyXp);
             summary.LatestSummary = LatestSummary(timelineEvents, growthRecords, savedNativeRuns, savedActivityReviews, sessions, summary);
+            var excludedOtherRepoCount = ExcludedOtherRepoCount(saveData, repositoryAliases);
+            UnityEngine.Debug.Log("INFO [GrowthSummary][SOURCE_OF_TRUTH] selectedRepoHash=" + selectedRepositoryId +
+                                  " profileRepoHash=" + ProfileHashFor(saveData, repositoryId) +
+                                  " canonicalRepoHash=" + (canonicalSelection.Resolved ? canonicalSelection.ResolvedCanonicalHash : repositoryId) +
+                                  " sessionCount=" + sessions.Count +
+                                  " savedRunCount=" + savedNativeRuns.Count +
+                                  " reviewCount=" + savedActivityReviews.Count +
+                                  " timelineEventCount=" + timelineEvents.Count +
+                                  " xpTotal=" + summary.TotalXp +
+                                  " axisSource=" + summary.ProjectionSource +
+                                  " hasLegacyAxisGap=" + summary.HasLegacyAxisGap +
+                                  " excludedOtherRepoCount=" + excludedOtherRepoCount +
+                                  " sessionsCount=" + sessions.Count +
+                                  " savedGrowthCount=" + growthRecords.Count +
+                                  " timelineEventsCount=" + timelineEvents.Count +
+                                  " legacyGapCount=" + (summary.HasLegacyAxisGap ? 1 : 0) +
+                                  " axisTotals=" + summary.Code + ":" + summary.Focus + ":" + summary.Debug + ":" + summary.Design + ":" + summary.Sync +
+                                  " sourcePriority=" + summary.ProjectionSource);
+            UnityEngine.Debug.Log("INFO [GrowthProjectionDiagnostic] repoHash=" + repositoryId +
+                                  " code=" + summary.Code +
+                                  " focus=" + summary.Focus +
+                                  " debug=" + summary.Debug +
+                                  " design=" + summary.Design +
+                                  " sync=" + summary.Sync +
+                                  " xp=" + summary.TotalXp +
+                                  " level=" + LevelFor(saveData, repositoryId) +
+                                  " stage=" + StageFor(saveData, repositoryId) +
+                                  " usedLegacyGap=" + summary.HasLegacyAxisGap +
+                                  " preventedGlobalFallback=true");
             return summary;
+        }
+
+        private static string ProfileHashFor(SaveData saveData, string repositoryId)
+        {
+            return (saveData?.RepositoryCompanionProfiles ?? new List<RepositoryCompanionProfile>())
+                .FirstOrDefault(profile => profile != null &&
+                                           profile.ArchivedAtUtc == null &&
+                                           string.Equals(profile.RepositoryHash, repositoryId, StringComparison.Ordinal))
+                ?.RepositoryHash ?? string.Empty;
+        }
+
+        private static int ExcludedOtherRepoCount(SaveData saveData, HashSet<string> selectedAliases)
+        {
+            selectedAliases = selectedAliases ?? new HashSet<string>(StringComparer.Ordinal);
+            var sessionCount = (saveData?.WorkSessionSummaries ?? new List<AgentWorkSession>())
+                .Count(session => session != null &&
+                                  !string.IsNullOrWhiteSpace(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session)) &&
+                                  !selectedAliases.Contains(RepositoryCompanionProfileService.SafeRepositoryHashForSession(session)));
+            var nativeRunCount = (saveData?.RecentNativeAnalysisRuns ?? new List<NativeAnalysisRunRecord>())
+                .Count(run => run != null &&
+                              !string.IsNullOrWhiteSpace(run.RepositoryId) &&
+                              !selectedAliases.Contains(run.RepositoryId));
+            var reviewCount = (saveData?.ActivityReviews ?? new List<ActivityReview>())
+                .Count(review => review != null &&
+                                 !string.IsNullOrWhiteSpace(review.RepositoryId) &&
+                                 !selectedAliases.Contains(review.RepositoryId));
+            var timelineCount = (saveData?.RepositoryTimelineEvents ?? new List<RepositoryTimelineEvent>())
+                .Count(item => item != null &&
+                               !string.IsNullOrWhiteSpace(item.RepositoryId) &&
+                               !selectedAliases.Contains(item.RepositoryId));
+            return Math.Max(0, sessionCount + nativeRunCount + reviewCount + timelineCount);
+        }
+
+        private static int LevelFor(SaveData saveData, string repositoryId)
+        {
+            var profile = (saveData?.RepositoryCompanionProfiles ?? new List<RepositoryCompanionProfile>())
+                .FirstOrDefault(item => item != null &&
+                                        item.ArchivedAtUtc == null &&
+                                        string.Equals(item.RepositoryHash, repositoryId, StringComparison.Ordinal));
+            return Math.Max(1, CompanionProgressionRules.Normalize(profile?.CompanionState).Level);
+        }
+
+        private static string StageFor(SaveData saveData, string repositoryId)
+        {
+            var profile = (saveData?.RepositoryCompanionProfiles ?? new List<RepositoryCompanionProfile>())
+                .FirstOrDefault(item => item != null &&
+                                        item.ArchivedAtUtc == null &&
+                                        string.Equals(item.RepositoryHash, repositoryId, StringComparison.Ordinal));
+            return CompanionProgressionRules.Normalize(profile?.CompanionState).Stage.ToString();
+        }
+
+        private static HashSet<string> RepositoryIdentityAliases(SaveData saveData, string repositoryId)
+        {
+            var aliases = new HashSet<string>(StringComparer.Ordinal);
+            AddAlias(aliases, repositoryId);
+            foreach (var project in saveData?.ConnectedProjects ?? new List<ConnectedProject>())
+            {
+                if (project == null)
+                {
+                    continue;
+                }
+
+                var projectIds = new[] { project.Id, project.PathHash, project.ProjectPathHash, project.LocalOnlyProjectId };
+                var matchesRequestedRepository = projectIds.Any(id => !string.IsNullOrWhiteSpace(id) && aliases.Contains(id.Trim())) ||
+                                                 (!string.IsNullOrWhiteSpace(repositoryId) &&
+                                                  !string.IsNullOrWhiteSpace(project.DisplayName) &&
+                                                  string.Equals(project.DisplayName.Trim(), repositoryId.Trim(), StringComparison.OrdinalIgnoreCase));
+                if (!matchesRequestedRepository &&
+                    project.IsActive &&
+                    !project.IsArchived &&
+                    !string.IsNullOrWhiteSpace(saveData?.SelectedRepositoryHash) &&
+                    string.Equals(saveData.SelectedRepositoryHash.Trim(), repositoryId.Trim(), StringComparison.Ordinal))
+                {
+                    matchesRequestedRepository = true;
+                }
+
+                if (!matchesRequestedRepository)
+                {
+                    continue;
+                }
+
+                foreach (var id in projectIds)
+                {
+                    AddAlias(aliases, id);
+                }
+            }
+
+            foreach (var profile in saveData?.RepositoryCompanionProfiles ?? new List<RepositoryCompanionProfile>())
+            {
+                if (profile == null)
+                {
+                    continue;
+                }
+
+                if (aliases.Contains(profile.RepositoryHash ?? string.Empty) ||
+                    (!string.IsNullOrWhiteSpace(profile.SafeRepositoryAlias) &&
+                     string.Equals(profile.SafeRepositoryAlias.Trim(), repositoryId?.Trim(), StringComparison.OrdinalIgnoreCase)))
+                {
+                    AddAlias(aliases, profile.RepositoryHash);
+                }
+            }
+
+            return aliases;
+        }
+
+        private static void AddAlias(HashSet<string> aliases, string value)
+        {
+            if (aliases == null || string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            aliases.Add(value.Trim());
         }
 
         private static AxisScores AxesFromCharacterStats(CharacterStats stats)

@@ -43,6 +43,11 @@ namespace TokenForge.Client.UI
             return overlayService?.IsOverlayDragging(repositoryId) ?? false;
         }
 
+        public bool IsAnyOverlayActuallyVisible()
+        {
+            return overlayService?.IsAnyOverlayActuallyVisible() ?? false;
+        }
+
         public void Initialize(IDesktopCompanionOverlayService service = null, IApplicationLifecycleService lifecycle = null)
         {
             if (overlayService != null)
@@ -187,10 +192,26 @@ namespace TokenForge.Client.UI
                 }
             }
 
+            var actualVisible = overlayService.IsAnyOverlayActuallyVisible();
+            var expectedVisible = farm.enabled && farm.visibleCount > 0;
+            var visibilityReason = expectedVisible == actualVisible ? "farmProjectionApplied" : "actual_visibility_mismatch";
             Debug.Log("INFO [Overlay][Actual] repoHash=" + string.Join(",", overlays.Select(item => item.repositoryId).ToArray()) +
-                      " desiredVisible=" + desiredVisible +
-                      " actualVisible=" + (farm.enabled && farm.visibleCount > 0) +
-                      " panelExists=true panelFrame=farmSnapshot reason=farmProjectionApplied sourceAction=csharp.applyFarmSettings");
+                      " desiredVisible=" + expectedVisible +
+                      " actualVisible=" + actualVisible +
+                      " panelExists=true panelFrame=farmSnapshot reason=" + visibilityReason + " sourceAction=csharp.applyFarmSettings");
+            Debug.Log("INFO [OverlayVisibilityDiagnostic] selectedRepoHash=" + string.Join(",", overlays.Select(item => item.repositoryId).ToArray()) +
+                      " canonicalRepoHash=" + string.Join(",", overlays.Select(item => item.repositoryId).ToArray()) +
+                      " approvedRepoCount=" + overlays.Length +
+                      " desiredVisible=" + expectedVisible +
+                      " actualVisible=" + actualVisible +
+                      " panelExists=true" +
+                      " forcedHiddenByNoRepo=false" +
+                      " legacyPanelExists=" + (overlayService.State == CompanionDesktopOverlayState.Active) +
+                      " legacyPanelVisible=" + actualVisible +
+                      " farmPanelCount=" + overlays.Length +
+                      " visibleFarmPanelCount=" + farm.visibleCount +
+                      " persistedFarmSnapshotCount=" + overlays.Count(item => item.hydratedSnapshot != null && item.hydratedSnapshot.hydrated) +
+                      " reason=" + visibilityReason);
         }
 
         public void HideLegacyOverlay(string source = "csharp.hideLegacy")
@@ -345,6 +366,10 @@ namespace TokenForge.Client.UI
                       " reason=" + reason +
                       " sourceAction=" + sourceAction +
                       " selectedRepoId=none selectedRepoHash=none approvedRepoCount=0");
+            Debug.Log("INFO [OverlayVisibilityDiagnostic] reason=" + reason +
+                      " approvedRepoCount=0 selectedRepoHash=none desiredVisible=false actualVisible=false panelExists=" + panelExists +
+                      " farmPanelCount=0 forcedHiddenByNoRepo=true canonicalRepoHash=none legacyPanelExists=" + panelExists +
+                      " legacyPanelVisible=false visibleFarmPanelCount=0 persistedFarmSnapshotCount=0");
             if (overlayService == null || !overlayService.IsAvailable)
             {
                 return;
