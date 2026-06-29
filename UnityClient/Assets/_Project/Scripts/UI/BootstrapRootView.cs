@@ -6,14 +6,18 @@ using TokenForge.Client.Domain;
 using TokenForge.Client.Platform;
 using UnityEngine;
 using UnityEngine.UI;
+using UIButton = UnityEngine.UI.Button;
+using UIDropdown = UnityEngine.UI.Dropdown;
+using UIText = UnityEngine.UI.Text;
+using UIToggle = UnityEngine.UI.Toggle;
 
 namespace TokenForge.Client.UI
 {
     [RequireComponent(typeof(RectTransform))]
     public sealed class BootstrapRootView : MonoBehaviour
     {
-        [SerializeField] public Text headerStatusLabel;
-        [SerializeField] public Text validationStatusLabel;
+        [SerializeField] public UIText headerStatusLabel;
+        [SerializeField] public UIText validationStatusLabel;
         [SerializeField] public ScrollRect rootScrollRect;
         [SerializeField] public GameObject startScreenRoot;
         [SerializeField] public GameObject gameDashboardRoot;
@@ -21,13 +25,13 @@ namespace TokenForge.Client.UI
         [SerializeField] public GameObject settingsAdvancedRoot;
         [SerializeField] public GameObject developerDiagnosticsRoot;
         [SerializeField] public GameObject conflictBanner;
-        [SerializeField] public Text loginStatusSmallLabel;
-        [SerializeField] public Text onboardingStepIndicatorLabel;
-        [SerializeField] public Text onboardingPrimaryTitleLabel;
-        [SerializeField] public Text onboardingAccountStatusLabel;
-        [SerializeField] public Text onboardingAiAgentsStatusLabel;
-        [SerializeField] public Text onboardingGitStatusLabel;
-        [SerializeField] public Text onboardingReadySummaryLabel;
+        [SerializeField] public UIText loginStatusSmallLabel;
+        [SerializeField] public UIText onboardingStepIndicatorLabel;
+        [SerializeField] public UIText onboardingPrimaryTitleLabel;
+        [SerializeField] public UIText onboardingAccountStatusLabel;
+        [SerializeField] public UIText onboardingAiAgentsStatusLabel;
+        [SerializeField] public UIText onboardingGitStatusLabel;
+        [SerializeField] public UIText onboardingReadySummaryLabel;
         [SerializeField] public GameObject onboardingAccountStepRoot;
         [SerializeField] public GameObject onboardingAiAgentsStepRoot;
         [SerializeField] public GameObject onboardingGitStepRoot;
@@ -35,86 +39,86 @@ namespace TokenForge.Client.UI
         [SerializeField] public InputField onboardingEmailInput;
         [SerializeField] public InputField onboardingDisplayNameInput;
         [SerializeField] public InputField onboardingPasswordInput;
-        [SerializeField] public Button onboardingCreateAccountButton;
-        [SerializeField] public Button onboardingLoginButton;
-        [SerializeField] public Button onboardingContinueOfflineButton;
-        [SerializeField] public Button onboardingBackButton;
-        [SerializeField] public Button onboardingContinueButton;
-        [SerializeField] public Toggle cursorAgentToggle;
-        [SerializeField] public Toggle claudeAgentToggle;
-        [SerializeField] public Toggle codexAgentToggle;
-        [SerializeField] public Toggle copilotAgentToggle;
-        [SerializeField] public Toggle otherAgentToggle;
-        [SerializeField] public Text cursorAgentStatusLabel;
-        [SerializeField] public Text claudeAgentStatusLabel;
-        [SerializeField] public Text codexAgentStatusLabel;
-        [SerializeField] public Text copilotAgentStatusLabel;
-        [SerializeField] public Text otherAgentStatusLabel;
-        [SerializeField] public Button cursorAgentConnectButton;
-        [SerializeField] public Button claudeAgentConnectButton;
-        [SerializeField] public Button codexAgentConnectButton;
-        [SerializeField] public Button copilotAgentConnectButton;
-        [SerializeField] public Button otherAgentSelectLogFolderButton;
-        [SerializeField] public Button onboardingSelectLocalRepositoryButton;
-        [SerializeField] public Button onboardingConnectGitAccountButton;
-        [SerializeField] public Button onboardingSkipGitButton;
-        [SerializeField] public Button onboardingClearLocalRepositoryButton;
-        [SerializeField] public Text runAnalysisTitleLabel;
-        [SerializeField] public Button runAnalysisBackButton;
-        [SerializeField] public Button runAnalysisSettingsButton;
-        [SerializeField] public Text settingsSummaryLabel;
-        [SerializeField] public Text settingsSyncConflictLabel;
-        [SerializeField] public Button settingsDeveloperDiagnosticsButton;
-        [SerializeField] public Button diagnosticsBackButton;
-        [SerializeField] public Text startCharacterLabel;
-        [SerializeField] public Text startStatsLabel;
-        [SerializeField] public Text startGrowthLabel;
-        [SerializeField] public Text startRecentSessionsLabel;
-        [SerializeField] public Text startPrivacySummaryLabel;
-        [SerializeField] public Text startRunStatusLabel;
-        [SerializeField] public Button startGameButton;
-        [SerializeField] public Button continueButton;
-        [SerializeField] public Button startAnalyzeRepositoryButton;
-        [SerializeField] public Button startAnalyzeAgentLogsButton;
-        [SerializeField] public Button startReviewAnalysisButton;
-        [SerializeField] public Button startSaveRunButton;
-        [SerializeField] public Button startCreateSyncAccountButton;
-        [SerializeField] public Button startLoginButton;
-        [SerializeField] public Button startCheckServerButton;
-        [SerializeField] public Button startSyncProgressButton;
-        [SerializeField] public Text dashboardCharacterStatusLabel;
+        [SerializeField] public UIButton onboardingCreateAccountButton;
+        [SerializeField] public UIButton onboardingLoginButton;
+        [SerializeField] public UIButton onboardingContinueOfflineButton;
+        [SerializeField] public UIButton onboardingBackButton;
+        [SerializeField] public UIButton onboardingContinueButton;
+        [SerializeField] public UIToggle cursorAgentToggle;
+        [SerializeField] public UIToggle claudeAgentToggle;
+        [SerializeField] public UIToggle codexAgentToggle;
+        [SerializeField] public UIToggle copilotAgentToggle;
+        [SerializeField] public UIToggle otherAgentToggle;
+        [SerializeField] public UIText cursorAgentStatusLabel;
+        [SerializeField] public UIText claudeAgentStatusLabel;
+        [SerializeField] public UIText codexAgentStatusLabel;
+        [SerializeField] public UIText copilotAgentStatusLabel;
+        [SerializeField] public UIText otherAgentStatusLabel;
+        [SerializeField] public UIButton cursorAgentConnectButton;
+        [SerializeField] public UIButton claudeAgentConnectButton;
+        [SerializeField] public UIButton codexAgentConnectButton;
+        [SerializeField] public UIButton copilotAgentConnectButton;
+        [SerializeField] public UIButton otherAgentSelectLogFolderButton;
+        [SerializeField] public UIButton onboardingSelectLocalRepositoryButton;
+        [SerializeField] public UIButton onboardingConnectGitAccountButton;
+        [SerializeField] public UIButton onboardingSkipGitButton;
+        [SerializeField] public UIButton onboardingClearLocalRepositoryButton;
+        [SerializeField] public UIText runAnalysisTitleLabel;
+        [SerializeField] public UIButton runAnalysisBackButton;
+        [SerializeField] public UIButton runAnalysisSettingsButton;
+        [SerializeField] public UIText settingsSummaryLabel;
+        [SerializeField] public UIText settingsSyncConflictLabel;
+        [SerializeField] public UIButton settingsDeveloperDiagnosticsButton;
+        [SerializeField] public UIButton diagnosticsBackButton;
+        [SerializeField] public UIText startCharacterLabel;
+        [SerializeField] public UIText startStatsLabel;
+        [SerializeField] public UIText startGrowthLabel;
+        [SerializeField] public UIText startRecentSessionsLabel;
+        [SerializeField] public UIText startPrivacySummaryLabel;
+        [SerializeField] public UIText startRunStatusLabel;
+        [SerializeField] public UIButton startGameButton;
+        [SerializeField] public UIButton continueButton;
+        [SerializeField] public UIButton startAnalyzeRepositoryButton;
+        [SerializeField] public UIButton startAnalyzeAgentLogsButton;
+        [SerializeField] public UIButton startReviewAnalysisButton;
+        [SerializeField] public UIButton startSaveRunButton;
+        [SerializeField] public UIButton startCreateSyncAccountButton;
+        [SerializeField] public UIButton startLoginButton;
+        [SerializeField] public UIButton startCheckServerButton;
+        [SerializeField] public UIButton startSyncProgressButton;
+        [SerializeField] public UIText dashboardCharacterStatusLabel;
         [SerializeField] public CompanionView companionView;
         [SerializeField] public CompanionStatusPanelView companionStatusPanel;
-        [SerializeField] public Text dashboardQuestLabel;
-        [SerializeField] public Text dashboardActivityLogLabel;
-        [SerializeField] public Text dashboardGrowthStepConnectLabel;
-        [SerializeField] public Text dashboardGrowthStepAnalyzeLabel;
-        [SerializeField] public Text dashboardGrowthStepReviewLabel;
-        [SerializeField] public Text dashboardGrowthStepSaveLabel;
-        [SerializeField] public Text dashboardConnectedSourcesLabel;
-        [SerializeField] public Text dashboardPendingReviewLabel;
-        [SerializeField] public Text dashboardSyncReasonLabel;
-        [SerializeField] public Text dashboardDesktopCompanionLabel;
-        [SerializeField] public Button dashboardEnableDesktopCompanionButton;
-        [SerializeField] public Button dashboardDisableDesktopCompanionButton;
-        [SerializeField] public Button dashboardResetDesktopCompanionButton;
-        [SerializeField] public Button dashboardOpenDashboardButton;
-        [SerializeField] public Text conflictBannerLabel;
-        [SerializeField] public Button dashboardAnalyzeRepositoryButton;
-        [SerializeField] public Button dashboardSourcesAddRepositoryButton;
-        [SerializeField] public Button dashboardSourcesConnectAgentButton;
-        [SerializeField] public Button dashboardDiscardReviewButton;
-        [SerializeField] public Button dashboardSaveSessionButton;
-        [SerializeField] public Button dashboardSyncButton;
-        [SerializeField] public Button dashboardHistoryButton;
-        [SerializeField] public Button dashboardSettingsButton;
-        [SerializeField] public Button dashboardBackButton;
-        [SerializeField] public Button settingsBackButton;
-        [SerializeField] public Text settingsDesktopCompanionStatusLabel;
-        [SerializeField] public Toggle settingsDesktopCompanionEnabledToggle;
-        [SerializeField] public Toggle settingsDesktopCompanionClickThroughToggle;
-        [SerializeField] public Dropdown settingsDesktopCompanionMotionModeDropdown;
-        [SerializeField] public Button settingsResetOverlayPositionButton;
+        [SerializeField] public UIText dashboardQuestLabel;
+        [SerializeField] public UIText dashboardActivityLogLabel;
+        [SerializeField] public UIText dashboardGrowthStepConnectLabel;
+        [SerializeField] public UIText dashboardGrowthStepAnalyzeLabel;
+        [SerializeField] public UIText dashboardGrowthStepReviewLabel;
+        [SerializeField] public UIText dashboardGrowthStepSaveLabel;
+        [SerializeField] public UIText dashboardConnectedSourcesLabel;
+        [SerializeField] public UIText dashboardPendingReviewLabel;
+        [SerializeField] public UIText dashboardSyncReasonLabel;
+        [SerializeField] public UIText dashboardDesktopCompanionLabel;
+        [SerializeField] public UIButton dashboardEnableDesktopCompanionButton;
+        [SerializeField] public UIButton dashboardDisableDesktopCompanionButton;
+        [SerializeField] public UIButton dashboardResetDesktopCompanionButton;
+        [SerializeField] public UIButton dashboardOpenDashboardButton;
+        [SerializeField] public UIText conflictBannerLabel;
+        [SerializeField] public UIButton dashboardAnalyzeRepositoryButton;
+        [SerializeField] public UIButton dashboardSourcesAddRepositoryButton;
+        [SerializeField] public UIButton dashboardSourcesConnectAgentButton;
+        [SerializeField] public UIButton dashboardDiscardReviewButton;
+        [SerializeField] public UIButton dashboardSaveSessionButton;
+        [SerializeField] public UIButton dashboardSyncButton;
+        [SerializeField] public UIButton dashboardHistoryButton;
+        [SerializeField] public UIButton dashboardSettingsButton;
+        [SerializeField] public UIButton dashboardBackButton;
+        [SerializeField] public UIButton settingsBackButton;
+        [SerializeField] public UIText settingsDesktopCompanionStatusLabel;
+        [SerializeField] public UIToggle settingsDesktopCompanionEnabledToggle;
+        [SerializeField] public UIToggle settingsDesktopCompanionClickThroughToggle;
+        [SerializeField] public UIDropdown settingsDesktopCompanionMotionModeDropdown;
+        [SerializeField] public UIButton settingsResetOverlayPositionButton;
         [SerializeField] public AccountPanelView accountPanel;
         [SerializeField] public ActivityAnalysisPanelView activityAnalysisPanel;
         [SerializeField] public ApprovedLocationsPanelView approvedLocationsPanel;
@@ -165,6 +169,12 @@ namespace TokenForge.Client.UI
 
         private void OnDestroy()
         {
+            Debug.Log("INFO [QuitDiagnostic][REQUEST] request=BootstrapRootView.OnDestroy source=managedOnDestroy reason=unityObjectDestroy thread=managed");
+            Debug.Log("INFO [QuitDiagnostic][SOURCE] source=BootstrapRootView.OnDestroy lifecycleService=" + (lifecycleService != null ? lifecycleService.GetType().Name : "none") + " overlayController=" + (desktopCompanionOverlayController != null ? "present" : "none"));
+            Debug.Log("INFO [QuitDiagnostic][STACK] " + Environment.StackTrace.Replace("\r", " ").Replace("\n", " | "));
+            Debug.Log("INFO [QuitDiagnostic][VERIFICATION_MODE] enabled=" + (IsRuntimeVerificationMode ? "true" : "false") + " source=managedOnDestroy");
+            Debug.Log("INFO [QuitDiagnostic][ALLOW_QUIT] value=false reason=onDestroyIsViewCleanupOnly");
+            Debug.Log("INFO [QuitDiagnostic][PROCEED] request=BootstrapRootView.OnDestroy source=unsubscribe reason=viewCleanupOnly");
             if (lifecycleService != null)
             {
                 lifecycleService.MenuActionRequested -= HandleApplicationMenuAction;
@@ -174,6 +184,31 @@ namespace TokenForge.Client.UI
             {
                 desktopCompanionOverlayController.PositionChanged -= HandleDesktopCompanionPositionChanged;
                 desktopCompanionOverlayController.DashboardRestoreRequested -= HandleDesktopCompanionDashboardRestoreRequested;
+            }
+        }
+
+        private static bool IsRuntimeVerificationMode
+        {
+            get
+            {
+                var env = Environment.GetEnvironmentVariable("TOKENFORGE_VERIFY_RUNTIME");
+                if (string.Equals(env, "1", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(env, "true", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(env, "yes", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                var args = Environment.GetCommandLineArgs();
+                for (var index = 0; index < args.Length; index++)
+                {
+                    if (string.Equals(args[index], "-TokenForgeVerifyRuntime", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
             }
         }
 
@@ -694,7 +729,7 @@ namespace TokenForge.Client.UI
             }
         }
 
-        private void ReplaceToggle(Toggle toggle, ConnectedAgentSourceType sourceType)
+        private void ReplaceToggle(UIToggle toggle, ConnectedAgentSourceType sourceType)
         {
             if (toggle == null)
             {
@@ -709,7 +744,7 @@ namespace TokenForge.Client.UI
             });
         }
 
-        private void ReplaceToggle(Toggle toggle, Action<bool> action)
+        private void ReplaceToggle(UIToggle toggle, Action<bool> action)
         {
             if (toggle == null)
             {
@@ -720,7 +755,7 @@ namespace TokenForge.Client.UI
             toggle.onValueChanged.AddListener(value => action?.Invoke(value));
         }
 
-        private static void ReplaceClick(Button button, UnityEngine.Events.UnityAction action)
+        private static void ReplaceClick(UIButton button, UnityEngine.Events.UnityAction action)
         {
             if (button == null)
             {
@@ -734,7 +769,7 @@ namespace TokenForge.Client.UI
             }
         }
 
-        private static void SetText(Text label, string value)
+        private static void SetText(UIText label, string value)
         {
             if (label != null)
             {
@@ -742,7 +777,7 @@ namespace TokenForge.Client.UI
             }
         }
 
-        private static void SetButton(Button button, bool interactable)
+        private static void SetButton(UIButton button, bool interactable)
         {
             if (button != null)
             {
@@ -750,21 +785,21 @@ namespace TokenForge.Client.UI
             }
         }
 
-        private static void SetButtonLabel(Button button, string label)
+        private static void SetButtonLabel(UIButton button, string label)
         {
             if (button == null)
             {
                 return;
             }
 
-            var text = button.GetComponentInChildren<Text>(true);
+            var text = button.GetComponentInChildren<UIText>(true);
             if (text != null)
             {
                 text.text = label ?? string.Empty;
             }
         }
 
-        private static void SetToggle(Toggle toggle, bool value)
+        private static void SetToggle(UIToggle toggle, bool value)
         {
             if (toggle != null)
             {

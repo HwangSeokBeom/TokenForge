@@ -75,6 +75,12 @@ namespace TokenForge.Client.UI
         public string Branch { get; set; } = string.Empty;
         public DateTimeOffset? LastAnalyzedAt { get; set; }
         public string LastAnalysisScope { get; set; } = string.Empty;
+        public string FirstCommit { get; set; } = string.Empty;
+        public string FirstCommitDate { get; set; } = string.Empty;
+        public string CurrentHead { get; set; } = string.Empty;
+        public string LastAnalyzedCommit { get; set; } = string.Empty;
+        public int CommitsAnalyzed { get; set; }
+        public int FilesChanged { get; set; }
         public CompanionStage Stage { get; set; } = CompanionStage.Egg;
         public CompanionArchetype Archetype { get; set; } = CompanionArchetype.Unknown;
         public int Level { get; set; } = 1;
@@ -133,6 +139,17 @@ namespace TokenForge.Client.UI
         public bool HasGrowthAxisData { get; set; }
         public bool HasLegacyGrowthAxisGap { get; set; }
         public string GrowthAxisDataStatusText { get; set; } = "No axis data recorded yet.";
+        public string GrowthBasis { get; set; } = "Full local Git history";
+        public string GrowthFirstCommit { get; set; } = string.Empty;
+        public string GrowthFirstCommitDate { get; set; } = string.Empty;
+        public string GrowthCurrentHead { get; set; } = string.Empty;
+        public string GrowthLastAnalyzedCommit { get; set; } = string.Empty;
+        public int GrowthCommitsAnalyzed { get; set; }
+        public int GrowthFilesChanged { get; set; }
+        public string GrowthProjectionSource { get; set; } = "none";
+        public bool GrowthFallbackUsed { get; set; }
+        public bool GrowthCacheHit { get; set; }
+        public string GrowthReasonIfUnchanged { get; set; } = string.Empty;
         public string DominantGrowthPath { get; set; } = "Unknown";
         public string SecondaryGrowthTrait { get; set; } = "Unknown";
         public string CurrentEvolutionBias { get; set; } = "Unknown";
@@ -3370,6 +3387,17 @@ namespace TokenForge.Client.UI
                 GrowthAxisDataStatusText = hasConnectedRepository && repositoryGrowth.HasStoredAxisDeltas
                     ? "Axis data recorded from approved activity deltas."
                     : "No axis data recorded yet.",
+                GrowthBasis = "Full local Git history",
+                GrowthFirstCommit = hasConnectedRepository ? repositoryGrowth.FirstCommit : string.Empty,
+                GrowthFirstCommitDate = hasConnectedRepository ? repositoryGrowth.FirstCommitDate : string.Empty,
+                GrowthCurrentHead = hasConnectedRepository ? repositoryGrowth.CurrentHead : string.Empty,
+                GrowthLastAnalyzedCommit = hasConnectedRepository ? repositoryGrowth.LastAnalyzedCommit : string.Empty,
+                GrowthCommitsAnalyzed = hasConnectedRepository ? Math.Max(0, repositoryGrowth.CommitsAnalyzed) : 0,
+                GrowthFilesChanged = hasConnectedRepository ? Math.Max(0, repositoryGrowth.FilesChanged) : 0,
+                GrowthProjectionSource = hasConnectedRepository ? repositoryGrowth.ProjectionSource : "none",
+                GrowthFallbackUsed = hasConnectedRepository && repositoryGrowth.FallbackUsed,
+                GrowthCacheHit = hasConnectedRepository && repositoryGrowth.CacheHit,
+                GrowthReasonIfUnchanged = hasConnectedRepository ? repositoryGrowth.ReasonIfUnchanged : string.Empty,
                 DominantGrowthPath = hasConnectedRepository ? bias.MainPath : "Unknown",
                 SecondaryGrowthTrait = hasConnectedRepository ? bias.SecondaryTrait : "Unknown",
                 CurrentEvolutionBias = hasConnectedRepository ? bias.CurrentBias : "Unknown",
@@ -3449,6 +3477,12 @@ namespace TokenForge.Client.UI
                         Branch = FirstNonEmpty(metadata?.Branch, "unknown"),
                         LastAnalyzedAt = connection.LastAnalyzedAt,
                         LastAnalysisScope = FirstNonEmpty(connection.LastAnalysisScope, connection.LastAnalysisMode, "Not analyzed"),
+                        FirstCommit = FirstNonEmpty(connection.FirstCommitHash, connection.FirstAnalyzedCommit, "none"),
+                        FirstCommitDate = FirstNonEmpty(connection.FirstCommitAt, "none"),
+                        CurrentHead = FirstNonEmpty(connection.CurrentHeadCommit, "none"),
+                        LastAnalyzedCommit = FirstNonEmpty(connection.LastAnalyzedCommit, "none"),
+                        CommitsAnalyzed = Math.Max(0, connection.TotalCommitCount),
+                        FilesChanged = Math.Max(0, connection.FilesChangedAnalyzed),
                         Stage = companion.Stage,
                         Archetype = companion.Archetype,
                         Level = companion.Level,

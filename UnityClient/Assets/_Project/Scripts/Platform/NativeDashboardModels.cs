@@ -143,6 +143,17 @@ namespace TokenForge.Client.Platform
         public int pendingReviewCount;
         public int warningCount;
         public string lastRunSummary = "No saved growth yet. Run Analysis on a repository or AI agent log to generate your first XP.";
+        public string growthBasis = "Full local Git history";
+        public string growthFirstCommit = string.Empty;
+        public string growthFirstCommitDate = string.Empty;
+        public string growthCurrentHead = string.Empty;
+        public string growthLastAnalyzedCommit = string.Empty;
+        public int growthCommitsAnalyzed;
+        public int growthFilesChanged;
+        public string growthProjectionSource = "none";
+        public bool growthFallbackUsed;
+        public bool growthCacheHit;
+        public string growthReasonIfUnchanged = string.Empty;
         public int codeStat;
         public int focusStat;
         public int debugStat;
@@ -169,6 +180,8 @@ namespace TokenForge.Client.Platform
         public bool desiredVisible = true;
         public bool actualVisible;
         public bool movementEnabled = true;
+        public string overlayMode = "allConnectedRepos";
+        public string movementMode = "allConnectedRepos";
         public bool dragEnabled = true;
         public bool panelExists;
         public string panelFrame = string.Empty;
@@ -320,6 +333,14 @@ namespace TokenForge.Client.Platform
         public string statusText = "Not selected";
         public int connectedCount;
         public string lastAnalyzedAt = string.Empty;
+        public string growthBasis = "Full local Git history";
+        public string firstCommit = string.Empty;
+        public string firstCommitDate = string.Empty;
+        public string currentHead = string.Empty;
+        public string lastAnalyzedCommit = string.Empty;
+        public int commitsAnalyzed;
+        public int filesChanged;
+        public string projectionSource = "none";
         public string disabledReason = "Connect a repository first";
         public bool hasValidSource;
         public bool canAnalyze;
@@ -370,6 +391,12 @@ namespace TokenForge.Client.Platform
         public string branch = "unknown";
         public string repositoryId = string.Empty;
         public string lastAnalysisScope = "Not analyzed";
+        public string firstCommit = string.Empty;
+        public string firstCommitDate = string.Empty;
+        public string currentHead = string.Empty;
+        public string lastAnalyzedCommit = string.Empty;
+        public int commitsAnalyzed;
+        public int filesChanged;
         public string companion = "Egg · Lv 1";
         public string lastAnalyzed = "Not analyzed";
         public string status = "connected";
@@ -593,6 +620,7 @@ namespace TokenForge.Client.Platform
         public bool hasSavedReviews;
         public bool hasRepositoryActivity;
         public bool hasAiAgentActivity;
+        public bool hidesZeroDeltaSystemNoise = true;
 
         public static NativeActivityState CreateDefault()
         {
@@ -653,5 +681,8 @@ namespace TokenForge.Client.Platform
         public string warnings = string.Empty;
         public string target = string.Empty;
         public string period = string.Empty;
+        public string commitHash = string.Empty;
+        public string fileCategory = string.Empty;
+        public string deltaReason = string.Empty;
     }
 }

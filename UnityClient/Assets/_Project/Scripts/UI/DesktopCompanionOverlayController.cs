@@ -452,6 +452,12 @@ namespace TokenForge.Client.UI
 
         private void OnDestroy()
         {
+            Debug.Log("INFO [QuitDiagnostic][REQUEST] request=DesktopCompanionOverlayController.OnDestroy source=managedOnDestroy reason=unityObjectDestroy thread=managed");
+            Debug.Log("INFO [QuitDiagnostic][SOURCE] source=DesktopCompanionOverlayController.OnDestroy overlayService=" + (overlayService != null ? overlayService.GetType().Name : "none"));
+            Debug.Log("INFO [QuitDiagnostic][STACK] " + Environment.StackTrace.Replace("\r", " ").Replace("\n", " | "));
+            Debug.Log("INFO [QuitDiagnostic][VERIFICATION_MODE] enabled=" + (IsRuntimeVerificationMode ? "true" : "false") + " source=managedOnDestroy");
+            Debug.Log("INFO [QuitDiagnostic][ALLOW_QUIT] value=false reason=onDestroyIsOverlayCleanupOnly");
+            Debug.Log("INFO [QuitDiagnostic][PROCEED] request=DesktopCompanionOverlayController.OnDestroy source=overlayService.Destroy reason=overlayPanelDestroyOnly");
             if (overlayService != null)
             {
                 if (overlayService is MacDesktopCompanionOverlayService macService)
@@ -464,6 +470,31 @@ namespace TokenForge.Client.UI
             }
 
             overlayService?.Destroy();
+        }
+
+        private static bool IsRuntimeVerificationMode
+        {
+            get
+            {
+                var env = Environment.GetEnvironmentVariable("TOKENFORGE_VERIFY_RUNTIME");
+                if (string.Equals(env, "1", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(env, "true", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(env, "yes", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                var args = Environment.GetCommandLineArgs();
+                for (var index = 0; index < args.Length; index++)
+                {
+                    if (string.Equals(args[index], "-TokenForgeVerifyRuntime", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
         }
 
         private static Vector2 SizeFor(CompanionStage stage)

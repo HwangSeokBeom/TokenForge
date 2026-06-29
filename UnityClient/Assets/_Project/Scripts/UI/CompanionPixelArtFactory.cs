@@ -27,7 +27,7 @@ namespace TokenForge.Client.UI
             var key = CanonicalAssetKey(state, walkFrame, zodiacTypeId, equippedItemIds, repositoryIdentity, previewRole, cosmeticVariant);
             if (Cache.TryGetValue(key, out var cached) && cached != null)
             {
-                LogPixelDiagnostic(state, zodiacTypeId, equippedItemIds, key, "unityCache", true);
+                LogPixelDiagnostic(state, zodiacTypeId, equippedItemIds, key, "unityCache", true, repositoryIdentity, previewRole);
                 return cached;
             }
 
@@ -43,7 +43,7 @@ namespace TokenForge.Client.UI
             var sprite = Sprite.Create(texture, new Rect(0, 0, SpriteSize, SpriteSize), new Vector2(0.5f, 0.5f), SpriteSize);
             sprite.name = texture.name;
             Cache[key] = sprite;
-            LogPixelDiagnostic(state, zodiacTypeId, equippedItemIds, key, "unityFactory", false);
+            LogPixelDiagnostic(state, zodiacTypeId, equippedItemIds, key, "unityFactory", false, repositoryIdentity, previewRole);
             return sprite;
         }
 
@@ -104,19 +104,35 @@ namespace TokenForge.Client.UI
             DrawCosmetics(texture, NormalizeItems(equippedItemIds), palette);
         }
 
-        private static void LogPixelDiagnostic(CompanionState state, string zodiacTypeId, IEnumerable<string> equippedItemIds, string cacheKey, string generatedFrom, bool reusedCache)
+        private static void LogPixelDiagnostic(CompanionState state, string zodiacTypeId, IEnumerable<string> equippedItemIds, string cacheKey, string generatedFrom, bool reusedCache, string repositoryIdentity, string previewRole)
         {
             var zodiac = RepositoryCompanionProfileService.NormalizeZodiacTypeId(zodiacTypeId, state.Archetype.ToString());
             var equippedItemsHash = string.Join(",", NormalizeItems(equippedItemIds));
-            Debug.Log("INFO [PixelDiagnostic] signature=sprite:v4:grid24 repoHash=unity zodiacKey=" + zodiac +
+            var selectedRepoHash = SanitizeKeyPart(repositoryIdentity, "unity");
+            var renderTarget = SanitizeKeyPart(previewRole, "legacy");
+            Debug.Log("INFO [PixelDiagnostic] signature=sprite:v4:grid24 selectedRepoHash=" + selectedRepoHash +
+                      " repoHash=" + selectedRepoHash +
                       " stageKey=" + state.Stage +
+                      " level=" + Math.Max(1, state.Level) +
+                      " zodiac=" + zodiac +
+                      " zodiacKey=" + zodiac +
                       " equippedItemKeys=" + (string.IsNullOrWhiteSpace(equippedItemsHash) ? "none" : equippedItemsHash) +
+                      " equippedCosmetics=" + (string.IsNullOrWhiteSpace(equippedItemsHash) ? "none" : equippedItemsHash) +
                       " wardrobePreviewKey=unitySprite" +
                       " cacheKey=" + cacheKey +
                       " cacheHit=" + reusedCache +
                       " generatedVariant=" + generatedFrom +
-                      " zodiac=" + zodiac +
                       " stage=" + state.Stage +
+                      " stageName=" + state.Stage +
+                      " stageIndex=" + (int)state.Stage +
+                      " stageVisualSignature=" + StageVisualSignature(state.Stage) +
+                      " renderTarget=" + renderTarget +
+                      " sourceRenderer=unityPixelArtFactory" +
+                      " sideBlockDetected=false" +
+                      " bodyShadeMode=contourPattern" +
+                      " finalBounds=0,0,24,24" +
+                      " clipped=false" +
+                      " sourceOfTruth=CompanionPixelArtFactory.CanonicalAssetKey" +
                       " equippedItemsHash=" + (string.IsNullOrWhiteSpace(equippedItemsHash) ? "none" : equippedItemsHash));
         }
 
@@ -137,10 +153,10 @@ namespace TokenForge.Client.UI
 
             if (state.Stage == CompanionStage.Teen || state.Stage == CompanionStage.Adult || state.Stage == CompanionStage.Legendary)
             {
-                Rect(texture, 5, 12, 7, 15, palette.Outline);
-                Rect(texture, 17, 12, 19, 15, palette.Outline);
-                Pixel(texture, 5, 13, palette.Accent);
-                Pixel(texture, 18, 13, palette.Accent);
+                Pixel(texture, 7, 14, palette.Highlight);
+                Pixel(texture, 16, 14, palette.Accent);
+                Pixel(texture, 8, 17, palette.Accent);
+                Pixel(texture, 15, 17, palette.Highlight);
             }
 
             if (state.Stage == CompanionStage.Adult || state.Stage == CompanionStage.Legendary)
@@ -173,6 +189,8 @@ namespace TokenForge.Client.UI
                     Ellipse(texture, 6, 6, 7, 7, palette.Accent);
                     Ellipse(texture, 15, 5, 18, 8, palette.Outline);
                     Ellipse(texture, 16, 6, 17, 7, palette.Accent);
+                    Line(texture, 8, 13, 4, 12, palette.Highlight);
+                    Line(texture, 15, 13, 19, 12, palette.Highlight);
                     Line(texture, 15, 17, 21, 14 + tailOffset, palette.Outline);
                     Line(texture, 16, 17, 21, 15 + tailOffset, palette.Accent);
                     break;
@@ -181,8 +199,12 @@ namespace TokenForge.Client.UI
                     Line(texture, 16, 6, 20, 3, palette.Outline);
                     Line(texture, 7, 7, 4, 4, palette.Accent);
                     Line(texture, 16, 7, 19, 4, palette.Accent);
-                    Rect(texture, 10, 9, 13, 10, palette.Dark);
-                    Rect(texture, 9, 13, 14, 15, palette.Accent);
+                    Rect(texture, 6, 10, 17, 13, palette.Body);
+                    Pixel(texture, 10, 9, palette.Dark);
+                    Pixel(texture, 13, 9, palette.Dark);
+                    Rect(texture, 9, 13, 14, 14, palette.Accent);
+                    Pixel(texture, 11, 15, palette.Highlight);
+                    Pixel(texture, 13, 15, palette.Highlight);
                     break;
                 case "tiger":
                     Rect(texture, 7, 4, 9, 7, palette.Outline);
@@ -216,6 +238,8 @@ namespace TokenForge.Client.UI
                     Pixel(texture, 12, 4, palette.Aura);
                     Pixel(texture, 10, 10, palette.Accent);
                     Pixel(texture, 13, 10, palette.Accent);
+                    Pixel(texture, 8, 16, palette.Highlight);
+                    Pixel(texture, 12, 17, palette.Highlight);
                     Pixel(texture, 16, 16, palette.Accent);
                     break;
                 case "snake":
@@ -228,10 +252,12 @@ namespace TokenForge.Client.UI
                     Pixel(texture, 17, 12, palette.Dark);
                     break;
                 case "horse":
-                    Rect(texture, 11, 3, 14, 9, palette.Dark);
+                    Line(texture, 12, 3, 14, 9, palette.Dark);
+                    Pixel(texture, 11, 5, palette.Accent);
                     Rect(texture, 15, 15, 18, 20, palette.Outline);
                     Rect(texture, 16, 15, 17, 19, palette.Accent);
                     Rect(texture, 8, 9, 15, 11, palette.Body);
+                    Line(texture, 9, 7, 7, 10, palette.Outline);
                     break;
                 case "goat":
                     Line(texture, 8, 6, 4, 4, palette.Outline);
@@ -247,7 +273,8 @@ namespace TokenForge.Client.UI
                     Ellipse(texture, 16, 8, 19, 12, palette.Outline);
                     Rect(texture, 9, 11, 14, 15, palette.Accent);
                     Line(texture, 17, 17, 22, 19 - tailOffset, palette.Outline);
-                    Line(texture, 18, 17, 21, 18 - tailOffset, palette.Accent);
+                    Pixel(texture, 20, 18 - tailOffset, palette.Accent);
+                    Pixel(texture, 21, 19 - tailOffset, palette.Accent);
                     break;
                 case "rooster":
                     Rect(texture, 9, 2, 11, 6, palette.Accent);
@@ -258,9 +285,12 @@ namespace TokenForge.Client.UI
                     Line(texture, 17, 17, 21, 16, palette.Accent);
                     break;
                 case "dog":
-                    Rect(texture, 5, 6, 8, 14, palette.Dark);
-                    Rect(texture, 15, 6, 18, 14, palette.Dark);
+                    Line(texture, 6, 6, 8, 14, palette.Dark);
+                    Line(texture, 17, 6, 15, 14, palette.Dark);
+                    Pixel(texture, 7, 9, palette.Accent);
+                    Pixel(texture, 16, 9, palette.Accent);
                     Rect(texture, 8, 16, 15, 17, palette.Accent);
+                    Pixel(texture, 12, 13, palette.Dark);
                     Line(texture, 16, 17, 21, 15 + tailOffset, palette.Outline);
                     Line(texture, 17, 17, 21, 14 + tailOffset, palette.Accent);
                     break;
@@ -434,6 +464,20 @@ namespace TokenForge.Client.UI
                 .Where(character => char.IsLetterOrDigit(character) || character == '_' || character == '-')
                 .ToArray();
             return new string(chars);
+        }
+
+        private static string StageVisualSignature(CompanionStage stage)
+        {
+            switch (stage)
+            {
+                case CompanionStage.Egg: return "egg-shell-zodiac-mark";
+                case CompanionStage.Hatchling: return "tiny-face-partial-traits";
+                case CompanionStage.Child: return "junior-body-traits";
+                case CompanionStage.Teen: return "expanded-silhouette-expression";
+                case CompanionStage.Adult: return "adult-crown-complete-traits";
+                case CompanionStage.Legendary: return "legend-aura-rare-outline";
+                default: return "unknown";
+            }
         }
 
         private static string SanitizeKeyPart(string value, string fallback)

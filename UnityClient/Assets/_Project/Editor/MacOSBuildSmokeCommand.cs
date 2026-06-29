@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
 
@@ -10,7 +11,7 @@ namespace TokenForge.Editor
     public static class MacOSBuildSmokeCommand
     {
         public const string BootstrapScenePath = TokenForge.Client.Editor.TokenForgeStartupSceneSettings.StartupScenePath;
-        public const string DefaultBuildOutput = "/tmp/tokenforge-macos-build/TokenForge.app";
+        public const string DefaultBuildOutput = "/private/tmp/tokenforge-macos-build/TokenForge.app";
 
         public static void Build()
         {
@@ -45,11 +46,7 @@ namespace TokenForge.Editor
                 throw new ArgumentException("Build output path is required.", nameof(outputPath));
             }
 
-            var outputDirectory = Path.GetDirectoryName(outputPath);
-            if (!string.IsNullOrWhiteSpace(outputDirectory))
-            {
-                Directory.CreateDirectory(outputDirectory);
-            }
+            CleanMacOSBuildOutput(outputPath);
 
             var options = BuildOptions.None;
             if (developmentBuild)
@@ -86,6 +83,35 @@ namespace TokenForge.Editor
             }
 
             return report;
+        }
+
+        public static void CleanMacOSBuildOutput(string outputPath)
+        {
+            if (string.IsNullOrWhiteSpace(outputPath))
+            {
+                throw new ArgumentException("Build output path is required.", nameof(outputPath));
+            }
+
+            var outputDirectory = Path.GetDirectoryName(outputPath);
+            if (string.IsNullOrWhiteSpace(outputDirectory))
+            {
+                throw new ArgumentException("Build output directory is required.", nameof(outputPath));
+            }
+
+            Directory.CreateDirectory(outputDirectory);
+            Debug.Log("INFO [BuildPipeline][CLEAN_OUTPUT] directory=" + outputDirectory + " canonicalOutput=" + outputPath);
+
+            foreach (var appBundle in Directory.GetDirectories(outputDirectory, "TokenForge*.app", SearchOption.TopDirectoryOnly))
+            {
+                Debug.Log("INFO [BuildPipeline][CLEAN_OUTPUT] removeApp=" + appBundle);
+                Directory.Delete(appBundle, true);
+            }
+
+            foreach (var monoCrash in Directory.GetFiles(outputDirectory, "mono_crash*.json", SearchOption.TopDirectoryOnly))
+            {
+                Debug.Log("INFO [BuildPipeline][CLEAN_OUTPUT] removeMonoCrash=" + monoCrash);
+                File.Delete(monoCrash);
+            }
         }
 
         public static void ValidateProjectState()
@@ -141,6 +167,26 @@ namespace TokenForge.Editor
             return message
                 .Replace(Environment.UserName, "<user>")
                 .Replace(Directory.GetCurrentDirectory(), "<project>");
+        }
+    }
+
+    public sealed class MacOSBuildOutputCleaner : IPreprocessBuildWithReport
+    {
+        public int callbackOrder => -1000;
+
+        public void OnPreprocessBuild(BuildReport report)
+        {
+            if (report == null || report.summary.platform != BuildTarget.StandaloneOSX)
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(report.summary.outputPath))
+            {
+                return;
+            }
+
+            MacOSBuildSmokeCommand.CleanMacOSBuildOutput(report.summary.outputPath);
         }
     }
 }

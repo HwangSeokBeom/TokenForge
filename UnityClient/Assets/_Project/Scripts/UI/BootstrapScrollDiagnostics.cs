@@ -2,25 +2,30 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using UIEventSystem = UnityEngine.EventSystems.EventSystem;
+using UIIScrollHandler = UnityEngine.EventSystems.IScrollHandler;
+using UIPointerEventData = UnityEngine.EventSystems.PointerEventData;
+using UIRaycastResult = UnityEngine.EventSystems.RaycastResult;
+using UIScrollRect = UnityEngine.UI.ScrollRect;
 
 namespace TokenForge.Client.UI
 {
-    [RequireComponent(typeof(ScrollRect))]
-    public sealed class BootstrapScrollDiagnostics : MonoBehaviour, IScrollHandler
+    [RequireComponent(typeof(UIScrollRect))]
+    public sealed class BootstrapScrollDiagnostics : MonoBehaviour, UIIScrollHandler
     {
-        private ScrollRect scrollRect;
+        private UIScrollRect scrollRect;
 
         private void Awake()
         {
-            scrollRect = GetComponent<ScrollRect>();
+            scrollRect = GetComponent<UIScrollRect>();
         }
 
-        public void OnScroll(PointerEventData eventData)
+        public void OnScroll(UIPointerEventData eventData)
         {
 #if DEBUG || UNITY_EDITOR
             if (scrollRect == null)
             {
-                scrollRect = GetComponent<ScrollRect>();
+                scrollRect = GetComponent<UIScrollRect>();
             }
 
             var viewport = scrollRect != null ? scrollRect.viewport : null;
@@ -42,15 +47,15 @@ namespace TokenForge.Client.UI
         }
 
 #if DEBUG || UNITY_EDITOR
-        private static string FindTopRaycastTarget(PointerEventData eventData)
+        private static string FindTopRaycastTarget(UIPointerEventData eventData)
         {
-            if (EventSystem.current == null || eventData == null)
+            if (UIEventSystem.current == null || eventData == null)
             {
                 return "<none>";
             }
 
-            var results = new List<RaycastResult>();
-            EventSystem.current.RaycastAll(eventData, results);
+            var results = new List<UIRaycastResult>();
+            UIEventSystem.current.RaycastAll(eventData, results);
             return results.Count > 0 && results[0].gameObject != null
                 ? results[0].gameObject.name
                 : "<none>";

@@ -197,6 +197,7 @@ namespace TokenForge.Client.Platform
             if (!IsAvailable)
             {
                 Debug.Log("INFO [AppLifecycle][QUIT_REQUESTED] source=managed_fallback");
+                LogQuitDiagnostic("managed_fallback", "Application.Quit", allowQuit: true, blocked: false, reason: "managedFallback");
                 Application.Quit();
                 return;
             }
@@ -204,13 +205,50 @@ namespace TokenForge.Client.Platform
             try
             {
                 Debug.Log("INFO [AppLifecycle][QUIT_REQUESTED] source=nativeBridge traceId=managed-native");
+                LogQuitDiagnostic("nativeBridge", "QuitTokenForgeApp", allowQuit: true, blocked: false, reason: "explicitNativeBridge");
                 NativeQuit();
             }
             catch (Exception exception)
             {
                 Debug.LogWarning("WARN " + LogPrefix + " native quit failed: " + exception.GetType().Name);
                 Debug.Log("INFO [AppLifecycle][QUIT_REQUESTED] source=managed_native_failure_fallback");
+                LogQuitDiagnostic("managed_native_failure_fallback", "Application.Quit", allowQuit: true, blocked: false, reason: "nativeBridgeFailureFallback");
                 Application.Quit();
+            }
+        }
+
+        private static void LogQuitDiagnostic(string request, string source, bool allowQuit, bool blocked, string reason)
+        {
+            Debug.Log("INFO [QuitDiagnostic][REQUEST] request=" + request + " source=" + source + " reason=" + reason + " thread=managed");
+            Debug.Log("INFO [QuitDiagnostic][SOURCE] source=" + source + " explicitFlag=true terminating=unknown lastExplicitSource=managed lastProjectionSource=managed");
+            Debug.Log("INFO [QuitDiagnostic][STACK] " + Environment.StackTrace.Replace("\r", " ").Replace("\n", " | "));
+            Debug.Log("INFO [QuitDiagnostic][VERIFICATION_MODE] enabled=" + (IsRuntimeVerificationMode ? "true" : "false") + " source=managed");
+            Debug.Log("INFO [QuitDiagnostic][ALLOW_QUIT] value=" + (allowQuit ? "true" : "false") + " reason=" + reason);
+            Debug.Log((blocked ? "WARN " : "INFO ") + "[QuitDiagnostic][" + (blocked ? "BLOCKED" : "PROCEED") + "] request=" + request + " source=" + source + " reason=" + reason);
+        }
+
+        private static bool IsRuntimeVerificationMode
+        {
+            get
+            {
+                var env = Environment.GetEnvironmentVariable("TOKENFORGE_VERIFY_RUNTIME");
+                if (string.Equals(env, "1", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(env, "true", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(env, "yes", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                var args = Environment.GetCommandLineArgs();
+                for (var index = 0; index < args.Length; index++)
+                {
+                    if (string.Equals(args[index], "-TokenForgeVerifyRuntime", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
             }
         }
 

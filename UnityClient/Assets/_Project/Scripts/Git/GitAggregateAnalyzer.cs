@@ -118,6 +118,14 @@ namespace TokenForge.Client.Git
             aggregate.AnalyzedEndCommit = SafeCommit(headResult.Output);
             aggregate.LastAnalyzedCommit = aggregate.AnalyzedEndCommit;
 
+            var firstCommitHashResult = await RunRequiredAsync(canonicalRootPath, "rev-list --max-parents=0 HEAD", cancellationToken);
+            if (!firstCommitHashResult.IsSuccess)
+            {
+                return firstCommitHashResult;
+            }
+
+            aggregate.FirstCommitHash = SafeCommit(firstCommitHashResult.Output);
+
             var firstCommitResult = await RunRequiredAsync(canonicalRootPath, "log --all --reverse --format=%cI -n 1", cancellationToken);
             if (!firstCommitResult.IsSuccess)
             {
@@ -381,6 +389,7 @@ namespace TokenForge.Client.Git
             public string ProjectPathHash { get; set; } = string.Empty;
             public GitAnalysisMode AnalysisMode { get; set; } = GitAnalysisMode.FullBaseline;
             public int AnalysisWindowDays { get; set; }
+            public string FirstCommitHash { get; set; } = string.Empty;
             public string FirstCommitAtUtc { get; set; } = string.Empty;
             public int TotalCommitsAnalyzed { get; set; }
             public int IncrementalCommitCount { get; set; }
@@ -479,6 +488,7 @@ namespace TokenForge.Client.Git
                     HasUncommittedChanges = HasUncommittedChanges,
                     AnalysisWindowDays = AnalysisWindowDays,
                     AnalysisMode = AnalysisMode == GitAnalysisMode.FullBaseline ? "full-baseline" : AnalysisMode.ToString().ToLowerInvariant(),
+                    FirstCommitHash = FirstCommitHash,
                     FirstCommitAtUtc = FirstCommitAtUtc,
                     TotalCommitsAnalyzed = TotalCommitsAnalyzed,
                     IncrementalCommitCount = IncrementalCommitCount,

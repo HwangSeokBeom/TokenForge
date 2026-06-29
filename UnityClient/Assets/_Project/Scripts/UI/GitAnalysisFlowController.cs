@@ -406,18 +406,23 @@ namespace TokenForge.Client.UI
 
             connection.LastAnalyzedCommit = summary.LastAnalyzedCommit ?? string.Empty;
             connection.CurrentHeadCommit = summary.AnalyzedEndCommit ?? summary.LastAnalyzedCommit ?? string.Empty;
+            connection.FirstCommitHash = summary.FirstCommitHash ?? string.Empty;
             connection.FirstCommitAt = summary.FirstCommitAtUtc ?? string.Empty;
             connection.TotalCommitCount = Math.Max(0, summary.TotalCommitsAnalyzed);
+            connection.FilesChangedAnalyzed = Math.Max(0, summary.ChangedFileCount);
             connection.AnalyzedCommitRange = (summary.AnalyzedStartCommit ?? string.Empty) + ".." + (summary.AnalyzedEndCommit ?? string.Empty);
             connection.LastAnalysisMode = summary.AnalysisMode ?? string.Empty;
             connection.LastAnalysisScope = AnalysisScopeLabel(summary);
             UnityEngine.Debug.Log("INFO [GrowthSummary][GIT_BASELINE] repositoryId=" + repositoryHash +
                                   " firstConnectedAt=" + (connection.FirstConnectedAt?.UtcDateTime.ToString("O") ?? "none") +
+                                  " firstCommit=" + connection.FirstCommitHash +
+                                  " firstCommitDate=" + connection.FirstCommitAt +
                                   " firstAnalyzedCommit=" + connection.FirstAnalyzedCommit +
                                   " lastAnalyzedCommit=" + connection.LastAnalyzedCommit +
                                   " currentHead=" + connection.CurrentHeadCommit +
                                   " analysisMode=" + connection.LastAnalysisMode +
                                   " totalCommitCount=" + connection.TotalCommitCount +
+                                  " filesChanged=" + connection.FilesChangedAnalyzed +
                                   " analyzedRange=" + connection.AnalyzedCommitRange);
         }
 

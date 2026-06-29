@@ -2,6 +2,7 @@ using System.Linq;
 using TokenForge.Client.Sync;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityButton = UnityEngine.UI.Button;
 
 namespace TokenForge.Client.UI
 {
@@ -10,42 +11,42 @@ namespace TokenForge.Client.UI
         [SerializeField] public Text noticeLabel;
         [SerializeField] public Text statusLabel;
         [SerializeField] public InputField baseUrlInput;
-        [SerializeField] public Button healthButton;
-        [SerializeField] public Button syncButton;
-        [SerializeField] public Button fetchButton;
+        [SerializeField] public UnityButton healthButton;
+        [SerializeField] public UnityButton syncButton;
+        [SerializeField] public UnityButton fetchButton;
         [SerializeField] public Dropdown remoteSessionsDropdown;
-        [SerializeField] public Button deleteRemoteButton;
+        [SerializeField] public UnityButton deleteRemoteButton;
         [SerializeField] public Text retryQueueLabel;
         [SerializeField] public Text conflictLabel;
         [SerializeField] public Text tombstoneLabel;
         [SerializeField] public Dropdown retryEntriesDropdown;
-        [SerializeField] public Button retryPendingButton;
-        [SerializeField] public Button forceRetryButton;
-        [SerializeField] public Button cancelRetryButton;
-        [SerializeField] public Button cancelAllFailedRetryButton;
-        [SerializeField] public Button clearSucceededButton;
-        [SerializeField] public Button pauseAllPendingRetryButton;
-        [SerializeField] public Button resumeAllPausedRetryButton;
+        [SerializeField] public UnityButton retryPendingButton;
+        [SerializeField] public UnityButton forceRetryButton;
+        [SerializeField] public UnityButton cancelRetryButton;
+        [SerializeField] public UnityButton cancelAllFailedRetryButton;
+        [SerializeField] public UnityButton clearSucceededButton;
+        [SerializeField] public UnityButton pauseAllPendingRetryButton;
+        [SerializeField] public UnityButton resumeAllPausedRetryButton;
         [SerializeField] public Dropdown tombstonesDropdown;
-        [SerializeField] public Button enqueueTombstoneDeletesButton;
-        [SerializeField] public Button processTombstoneDeletesButton;
-        [SerializeField] public Button cancelTombstoneButton;
-        [SerializeField] public Button cancelAllFailedTombstonesButton;
-        [SerializeField] public Button clearResolvedTombstonesButton;
+        [SerializeField] public UnityButton enqueueTombstoneDeletesButton;
+        [SerializeField] public UnityButton processTombstoneDeletesButton;
+        [SerializeField] public UnityButton cancelTombstoneButton;
+        [SerializeField] public UnityButton cancelAllFailedTombstonesButton;
+        [SerializeField] public UnityButton clearResolvedTombstonesButton;
         [SerializeField] public Dropdown conflictsDropdown;
-        [SerializeField] public Button keepLocalButton;
-        [SerializeField] public Button keepRemoteButton;
-        [SerializeField] public Button applyMergePolicyButton;
-        [SerializeField] public Button markConflictResolvedButton;
-        [SerializeField] public Button clearConflictAuditButton;
-        [SerializeField] public Button cancelConflictResolutionButton;
+        [SerializeField] public UnityButton keepLocalButton;
+        [SerializeField] public UnityButton keepRemoteButton;
+        [SerializeField] public UnityButton applyMergePolicyButton;
+        [SerializeField] public UnityButton markConflictResolvedButton;
+        [SerializeField] public UnityButton clearConflictAuditButton;
+        [SerializeField] public UnityButton cancelConflictResolutionButton;
         [SerializeField] public GameObject confirmationPanel;
         [SerializeField] public Text confirmationTitleLabel;
         [SerializeField] public Text confirmationBodyLabel;
         [SerializeField] public Text confirmationPreviewLabel;
         [SerializeField] public InputField confirmationTypedPhraseInput;
-        [SerializeField] public Button confirmationConfirmButton;
-        [SerializeField] public Button confirmationCancelButton;
+        [SerializeField] public UnityButton confirmationConfirmButton;
+        [SerializeField] public UnityButton confirmationCancelButton;
 
         private ApprovedActivityAnalysisViewModel viewModel;
 
@@ -271,9 +272,9 @@ namespace TokenForge.Client.UI
             return input;
         }
 
-        private Button RuntimeButton(string label, Transform parent)
+        private UnityButton RuntimeButton(string label, Transform parent)
         {
-            var go = new GameObject(label, typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
+            var go = new GameObject(label, typeof(RectTransform), typeof(Image), typeof(UnityButton), typeof(LayoutElement));
             go.transform.SetParent(parent, false);
             go.GetComponent<Image>().color = new Color(0.93f, 0.58f, 0.26f, 1f);
             go.GetComponent<LayoutElement>().preferredWidth = 140f;
@@ -281,10 +282,10 @@ namespace TokenForge.Client.UI
             var labelText = RuntimeText("Label", go.transform, 13, FontStyle.Bold, 30f);
             labelText.alignment = TextAnchor.MiddleCenter;
             labelText.text = label;
-            return go.GetComponent<Button>();
+            return go.GetComponent<UnityButton>();
         }
 
-        private static Text ButtonLabel(Button button)
+        private static Text ButtonLabel(UnityButton button)
         {
             return button == null ? null : button.GetComponentInChildren<Text>(true);
         }

@@ -33,7 +33,7 @@ namespace TokenForge.Client
         private const string LogPrefix = "[TokenForgeBootstrap]";
         private const string HierarchyLogPrefix = "[TokenForgeHierarchy]";
         private const string AppBootstrapperVersionMarker = "app-bootstrapper-overlay-projection-v9";
-        private const string RuntimeBuildIdentityMarker = "tokenforge_runtime_fix_20260609_230131";
+        private const string RuntimeBuildIdentityMarker = "tokenforge_runtime_fix_20260613_mono_crash";
         private const string RuntimeBuildIdentityGitMarker = "git=ef8500e workingTreeHash=167daf548046abe649ba56bd1c67ee1a22fba25ce963be0abfdf8063d8ccf0af";
         private const string BootstrapRootPrefabPath = "Assets/_Project/Prefabs/UI/BootstrapRoot.prefab";
         private const string StartupScenePath = "Assets/_Project/Scenes/TokenForgeMain.unity";
@@ -148,8 +148,21 @@ namespace TokenForge.Client
             }
         }
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void LogManagedStartupEnter()
+        {
+            Debug.Log("INFO [ManagedStartup][ENTER] phase=BeforeSceneLoad runtimeMarker=" + RuntimeBuildIdentityMarker +
+                      " csharpMarker=" + AppBootstrapperVersionMarker +
+                      " " + RuntimeBuildIdentityGitMarker);
+            Debug.Log("INFO [BuildIdentity][RUNTIME_CODE_VERSION] " + RuntimeBuildIdentityMarker +
+                      " csharpMarker=" + AppBootstrapperVersionMarker +
+                      " " + RuntimeBuildIdentityGitMarker +
+                      " phase=BeforeSceneLoad");
+        }
+
         private void Awake()
         {
+            Debug.Log("INFO [ManagedStartup][ENTER] phase=AppBootstrapper.Awake runtimeMarker=" + RuntimeBuildIdentityMarker);
             Debug.Log("INFO [StartupDiagnostic][BEGIN]");
             Debug.Log("INFO [StartupDiagnostic][CSharpBootstrap_BEGIN]");
             unityMainThreadId = Thread.CurrentThread.ManagedThreadId;
@@ -236,6 +249,10 @@ namespace TokenForge.Client
                     Debug.LogError("ERROR " + LogPrefix + " BootstrapRootView missing");
                 }
             }
+
+            Debug.Log("INFO [ManagedStartup][AFTER_BOOTSTRAP] phase=AppBootstrapper.Awake bootstrapComplete=" + IsBootstrapComplete +
+                      " nativeShell=" + UseNativeMacDashboardShell +
+                      " runtimeVerificationMode=" + runtimeVerificationMode);
         }
 
         private void Update()
@@ -765,6 +782,17 @@ namespace TokenForge.Client
             state.pendingEstimatedXP = Math.Max(0, pendingNativeReview?.EstimatedXpDelta ?? 0);
             state.warningCount = Math.Max(0, (approvedActivityAnalysis?.RetryQueueSummary?.PendingCount ?? 0) + (approvedActivityAnalysis?.TombstoneSummary?.PendingDeleteCount ?? 0));
             state.lastRunSummary = FriendlyNativeSummary(dashboard.LatestSafeSessionSummary, "No saved growth yet. Run Analysis on a repository or AI agent log to generate your first XP.");
+            state.growthBasis = SafeNativeText(dashboard.GrowthBasis, "Full local Git history");
+            state.growthFirstCommit = SafeNativeText(dashboard.GrowthFirstCommit, string.Empty);
+            state.growthFirstCommitDate = SafeNativeText(dashboard.GrowthFirstCommitDate, string.Empty);
+            state.growthCurrentHead = SafeNativeText(dashboard.GrowthCurrentHead, string.Empty);
+            state.growthLastAnalyzedCommit = SafeNativeText(dashboard.GrowthLastAnalyzedCommit, string.Empty);
+            state.growthCommitsAnalyzed = Math.Max(0, dashboard.GrowthCommitsAnalyzed);
+            state.growthFilesChanged = Math.Max(0, dashboard.GrowthFilesChanged);
+            state.growthProjectionSource = SafeNativeText(dashboard.GrowthProjectionSource, "none");
+            state.growthFallbackUsed = dashboard.GrowthFallbackUsed;
+            state.growthCacheHit = dashboard.GrowthCacheHit;
+            state.growthReasonIfUnchanged = SafeNativeText(dashboard.GrowthReasonIfUnchanged, string.Empty);
             state.codeStat = Math.Max(0, dashboard.Code);
             state.focusStat = Math.Max(0, dashboard.Focus);
             state.debugStat = Math.Max(0, dashboard.Debug);
@@ -793,6 +821,8 @@ namespace TokenForge.Client
             state.desiredVisible = repositoryConnected && (nativeCompanionDesiredVisibleInitialized ? nativeCompanionDesiredVisible : settings.IsDesktopCompanionEnabled);
             state.actualVisible = NativeOverlayActuallyVisible();
             state.movementEnabled = state.wanderEnabled;
+            state.overlayMode = connectedRepositories.Count > 1 ? "allConnectedRepos" : "selectedRepoCompanion";
+            state.movementMode = state.overlayMode;
             state.dragEnabled = !state.clickThroughEnabled;
             state.panelExists = nativeDesktopCompanionController != null &&
                                 nativeDesktopCompanionController.OverlayState != CompanionDesktopOverlayState.Unavailable;
@@ -854,6 +884,14 @@ namespace TokenForge.Client
             state.repositoryStatus = state.repository.status;
             state.repository.connectedCount = connectedRepositories.Count;
             state.repository.statusText = repositoryConnected ? "Active repository" : "No repository connected";
+            state.repository.growthBasis = state.growthBasis;
+            state.repository.firstCommit = state.growthFirstCommit;
+            state.repository.firstCommitDate = state.growthFirstCommitDate;
+            state.repository.currentHead = state.growthCurrentHead;
+            state.repository.lastAnalyzedCommit = state.growthLastAnalyzedCommit;
+            state.repository.commitsAnalyzed = state.growthCommitsAnalyzed;
+            state.repository.filesChanged = state.growthFilesChanged;
+            state.repository.projectionSource = state.growthProjectionSource;
             state.repository.disabledReason = repositoryConnected ? string.Empty : "Connect a repository first";
             state.repository.hasValidSource = repositoryConnected;
             state.repository.canAnalyze = repositoryConnected && !nativeAnalysisInProgress;
@@ -939,6 +977,7 @@ namespace TokenForge.Client
             state.activity.hasSavedReviews = activeRepositoryHasSavedRun;
             state.activity.hasRepositoryActivity = HasSavedRepositoryActivity(state.repository.id) || activeRepositoryHasSavedRun;
             state.activity.hasAiAgentActivity = HasSavedAgentActivity();
+            state.activity.hidesZeroDeltaSystemNoise = true;
             state.activity.runningJobs = BuildNativeRunningJobs();
             state.activity.pendingReviews = BuildNativePendingReviews(pendingNativeReview);
             state.activity.recentRuns = BuildNativeRecentRuns(state.repository.id);
@@ -1010,6 +1049,12 @@ namespace TokenForge.Client
                     branch = SafeNativeText(item.Branch, "unknown"),
                     repositoryId = item.RepositoryHash,
                     lastAnalysisScope = SafeNativeText(item.LastAnalysisScope, "Not analyzed"),
+                    firstCommit = SafeNativeText(item.FirstCommit, string.Empty),
+                    firstCommitDate = SafeNativeText(item.FirstCommitDate, string.Empty),
+                    currentHead = SafeNativeText(item.CurrentHead, string.Empty),
+                    lastAnalyzedCommit = SafeNativeText(item.LastAnalyzedCommit, string.Empty),
+                    commitsAnalyzed = Math.Max(0, item.CommitsAnalyzed),
+                    filesChanged = Math.Max(0, item.FilesChanged),
                     companion = item.CanLevelUp
                         ? item.Stage + " · Lv " + Math.Max(1, item.Level) + " · Level Up Ready"
                         : item.Stage + " · Lv " + Math.Max(1, item.Level) + " · " + Math.Max(0, item.CurrentXp) + "/" + Math.Max(1, item.XpRequiredForNextLevel) + " XP",
@@ -2022,7 +2067,10 @@ namespace TokenForge.Client
                         xpDelta = Math.Max(0, run.XpDelta),
                         categoryBreakdown = CategoryBreakdownText(run.StatDeltas ?? CharacterStats.Zero()),
                         target = SafeNativeText(run.RepositoryAlias, repositoryId),
-                        period = run.CreatedAtUtc.UtcDateTime.ToString("yyyy-MM-dd")
+                        period = run.CreatedAtUtc.UtcDateTime.ToString("yyyy-MM-dd"),
+                        commitHash = SafeNativeText(run.CommitRange, string.Empty),
+                        fileCategory = CategoryBreakdownText(run.StatDeltas ?? CharacterStats.Zero()),
+                        deltaReason = Math.Max(0, run.XpDelta) > 0 ? "growth-producing saved analysis" : "diagnostic-only zero delta"
                     }
                 }));
             items.AddRange(TimelineEventsForRepository(repositoryId)
@@ -2042,15 +2090,51 @@ namespace TokenForge.Client
                         xpDelta = Math.Max(0, timelineEvent.DeltaXp),
                         categoryBreakdown = TimelineCategoryBreakdownText(timelineEvent),
                         target = SafeNativeText(timelineEvent.RepositoryAlias, repositoryId),
-                        period = timelineEvent.TimestampUtc.UtcDateTime.ToString("yyyy-MM-dd")
+                        period = timelineEvent.TimestampUtc.UtcDateTime.ToString("yyyy-MM-dd"),
+                        commitHash = SafeNativeText(timelineEvent.MetadataJson, string.Empty),
+                        fileCategory = TimelineCategoryBreakdownText(timelineEvent),
+                        deltaReason = HasTimelineAxisDelta(timelineEvent) || Math.Max(0, timelineEvent.DeltaXp) > 0
+                            ? "growth-producing repository event"
+                            : "diagnostic-only zero delta"
                     }
                 }));
 
             return items
                 .OrderByDescending(item => item.TimestampUtc)
+                .Where(item => IsGrowthProducingRecentActivity(item.Item))
                 .Take(8)
                 .Select(item => item.Item)
                 .ToArray();
+        }
+
+        private static bool IsGrowthProducingRecentActivity(NativeActivityItem item)
+        {
+            if (item == null)
+            {
+                return false;
+            }
+
+            return Math.Max(0, item.xpDelta) > 0 ||
+                   HasPositiveCategoryBreakdown(item.categoryBreakdown) ||
+                   string.Equals(item.type, "levelUp", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool HasPositiveCategoryBreakdown(string categoryBreakdown)
+        {
+            if (string.IsNullOrWhiteSpace(categoryBreakdown))
+            {
+                return false;
+            }
+
+            return categoryBreakdown.IndexOf("+1", StringComparison.Ordinal) >= 0 ||
+                   categoryBreakdown.IndexOf("+2", StringComparison.Ordinal) >= 0 ||
+                   categoryBreakdown.IndexOf("+3", StringComparison.Ordinal) >= 0 ||
+                   categoryBreakdown.IndexOf("+4", StringComparison.Ordinal) >= 0 ||
+                   categoryBreakdown.IndexOf("+5", StringComparison.Ordinal) >= 0 ||
+                   categoryBreakdown.IndexOf("+6", StringComparison.Ordinal) >= 0 ||
+                   categoryBreakdown.IndexOf("+7", StringComparison.Ordinal) >= 0 ||
+                   categoryBreakdown.IndexOf("+8", StringComparison.Ordinal) >= 0 ||
+                   categoryBreakdown.IndexOf("+9", StringComparison.Ordinal) >= 0;
         }
 
         private string SavedGrowthHistorySummary(string repositoryId)
@@ -2224,6 +2308,16 @@ namespace TokenForge.Client
                    " · Debug +" + Math.Max(0, item.DebugDelta) +
                    " · Design +" + Math.Max(0, item.DesignDelta) +
                    " · Sync +" + Math.Max(0, item.SyncDelta);
+        }
+
+        private static bool HasTimelineAxisDelta(RepositoryTimelineEvent item)
+        {
+            return item != null &&
+                   (item.CodeDelta != 0 ||
+                    item.FocusDelta != 0 ||
+                    item.DebugDelta != 0 ||
+                    item.DesignDelta != 0 ||
+                    item.SyncDelta != 0);
         }
 
         private sealed class NativeActivityProjectionItem

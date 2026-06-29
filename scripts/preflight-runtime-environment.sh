@@ -12,6 +12,7 @@ LSREGISTER="${LSREGISTER:-/System/Library/Frameworks/CoreServices.framework/Fram
 RUN_OPEN_PROBES="${RUN_OPEN_PROBES:-true}"
 RUN_TOKENFORGE_OPEN_PROBE="${RUN_TOKENFORGE_OPEN_PROBE:-false}"
 REQUIRE_APP_INTEGRITY="${REQUIRE_APP_INTEGRITY:-true}"
+CHECK_UNITY_LOCK="${CHECK_UNITY_LOCK:-true}"
 
 LOCK_BLOCKED=0
 LS_UNAVAILABLE=0
@@ -59,7 +60,9 @@ row "shell" "INFO" "${SHELL:-unknown}"
 row "date" "INFO" "$(date '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || date)"
 
 section "Unity Lock"
-if [[ -f "${LOCK_FILE}" ]]; then
+if [[ "${CHECK_UNITY_LOCK}" != "true" ]]; then
+  row "UnityLockfile exists" "SKIPPED" "CHECK_UNITY_LOCK=false"
+elif [[ -f "${LOCK_FILE}" ]]; then
   LOCK_BLOCKED=1
   row "UnityLockfile exists" "BLOCKED" "${LOCK_FILE}"
   if command -v lsof >/dev/null 2>&1; then
@@ -67,6 +70,7 @@ if [[ -f "${LOCK_FILE}" ]]; then
     LSOF_STATUS=$?
     if [[ ${LSOF_STATUS} -eq 0 ]]; then
       printf '%s\n' "${LSOF_OUTPUT}" | sed 's/^/  /'
+      row "lsof holder" "INFO" "listed above"
       if printf '%s\n' "${LSOF_OUTPUT}" | grep -qi '^Unity'; then
         row "Unity lock holder" "BLOCKED" "Unity process holds UnityLockfile"
       fi
@@ -84,20 +88,31 @@ else
 fi
 
 section "Unity Processes"
-if command -v pgrep >/dev/null 2>&1; then
-  PGREP_OUTPUT="$(pgrep -fl "Unity|Unity Hub|Unity Licensing|LicensingClient" 2>&1)"
+if [[ "${CHECK_UNITY_LOCK}" != "true" ]]; then
+  row "Unity-related processes" "SKIPPED" "CHECK_UNITY_LOCK=false"
+elif command -v pgrep >/dev/null 2>&1; then
+  PGREP_OUTPUT="$(pgrep -fl "Unity|Unity Hub|Unity Package Manager|UPM|Unity Licensing|LicensingClient|AssetImportWorker" 2>&1)"
   PGREP_STATUS=$?
   if [[ ${PGREP_STATUS} -eq 0 ]]; then
     LOCK_BLOCKED=1
-    row "Unity-related processes" "BLOCKED" "visible processes remain"
+    row "Unity/UPM/Licensing/AssetImportWorker" "BLOCKED" "visible processes remain"
     printf '%s\n' "${PGREP_OUTPUT}" | sed 's/^/  /'
   else
-    row "Unity-related processes" "OK" "none visible, or process listing returned no matches"
+    row "Unity/UPM/Licensing/AssetImportWorker" "OK" "none visible, or process listing returned no matches"
+  fi
+  FILEPROVIDER_OUTPUT="$(pgrep -fl "fileproviderd|FileProvider" 2>&1)"
+  FILEPROVIDER_STATUS=$?
+  if [[ ${FILEPROVIDER_STATUS} -eq 0 ]]; then
+    row "fileproviderd possibility" "INFO" "File Provider sync process visible; avoid synced project paths for Unity rebuilds"
+    printf '%s\n' "${FILEPROVIDER_OUTPUT}" | sed 's/^/  /'
+  else
+    row "fileproviderd possibility" "OK" "no fileproviderd/FileProvider process visible"
   fi
 else
   row "Unity-related processes" "UNKNOWN" "pgrep is not available"
 fi
 row "manual quit/kill performed" "NO" "script is read-only; use Activity Monitor or normal Terminal if needed"
+row "safe manual delete" "INFO" "quit Unity Editor/Hub/UPM/Licensing/AssetImportWorker first; if lsof shows no holder, remove ${LOCK_FILE} manually"
 
 section "LaunchServices System Comparison"
 if [[ -x "${LSREGISTER}" ]]; then

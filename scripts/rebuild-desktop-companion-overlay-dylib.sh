@@ -9,7 +9,7 @@ OUTPUT_DYLIB="${OUTPUT_DYLIB:-${UNITY_PROJECT_PATH}/Assets/Plugins/macOS/libDesk
 SDK_PATH="${SDK_PATH:-$(xcrun --sdk macosx --show-sdk-path)}"
 MACOS_MIN_VERSION="${MACOS_MIN_VERSION:-10.15}"
 ARCHS="${ARCHS:-arm64}"
-RUNTIME_MARKER="${RUNTIME_MARKER:-tokenforge_runtime_fix_20260609_230131}"
+RUNTIME_MARKER="${RUNTIME_MARKER:-tokenforge_runtime_fix_20260613_mono_crash}"
 
 if [[ ! -f "${SOURCE_MM}" ]]; then
   echo "DesktopCompanionOverlay source not found: ${SOURCE_MM}" >&2

@@ -41,8 +41,10 @@ namespace TokenForge.Client.Domain
         public string FirstAnalyzedCommit { get; set; } = string.Empty;
         public string LastAnalyzedCommit { get; set; } = string.Empty;
         public string CurrentHeadCommit { get; set; } = string.Empty;
+        public string FirstCommitHash { get; set; } = string.Empty;
         public string FirstCommitAt { get; set; } = string.Empty;
         public int TotalCommitCount { get; set; }
+        public int FilesChangedAnalyzed { get; set; }
         public string AnalyzedCommitRange { get; set; } = string.Empty;
         public string LastAnalysisMode { get; set; } = string.Empty;
         public string LastAnalysisScope { get; set; } = string.Empty;

@@ -1503,6 +1503,66 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void QuitGuardHarness_VerificationModeBlocksImplicitQuit()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("TokenForgeLogQuitDiagnostic(@\"applicationShouldTerminate\"", source);
+            StringAssert.Contains("TokenForgeVerificationAllowsImplicitVerifierCleanup()", source);
+            StringAssert.Contains("verificationBlocksImplicitQuit", source);
+            StringAssert.Contains("return NSTerminateCancel;", source);
+            StringAssert.Contains("[QuitDiagnostic][BLOCKED]", source);
+            StringAssert.Contains("[AppLifecycle][SUPPRESS_QUIT] reason=verificationMode source=applicationShouldTerminate implicit=true", source);
+        }
+
+        [Test]
+        public void OverlayHideDoesNotDestroyAppHarness()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+            var controller = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/UI/DesktopCompanionOverlayController.cs"));
+
+            StringAssert.Contains("[OverlayVisibilityDiagnostic] state=overlayHidden", source);
+            StringAssert.Contains("TokenForgeHideDesktopCompanionOverlayWithTrace", source);
+            StringAssert.Contains("orderOut:nil", source);
+            StringAssert.Contains("[OverlayLifecycle][PANEL_DESTROY]", source);
+            StringAssert.Contains("reason=overlayPanelDestroyOnly", controller);
+            Assert.Less(source.IndexOf("[OverlayVisibilityDiagnostic] state=overlayHidden", StringComparison.Ordinal), source.IndexOf("extern \"C\" void DestroyDesktopCompanionOverlay()", StringComparison.Ordinal));
+        }
+
+        [Test]
+        public void StatusItemUpdateDoesNotTriggerShutdownHarness()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("- (void)updateStatusItemMenu", source);
+            StringAssert.Contains("[StatusItem][UPDATE_BEGIN]", source);
+            StringAssert.Contains("TokenForgeStatusItemLaunchPathAllowed(@\"TokenForgeAppLifecycleDelegate.updateStatusItemMenu\"", source);
+            StringAssert.Contains("self.statusItem.button.image = newImage;", source);
+            Assert.IsFalse(source.Contains("updateStatusItemMenu]\n{\n    [NSApp terminate:nil];"));
+            Assert.IsFalse(source.Contains("updateStatusItemMenu]\n{\n    TokenForgeRequestExplicitQuit"));
+        }
+
+        [Test]
+        public void RuntimeLifecycleDiagnosticsIncludeShutdownSource()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+            var lifecycleService = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/Platform/MacApplicationLifecycleService.cs"));
+            var rootView = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/UI/BootstrapRootView.cs"));
+
+            StringAssert.Contains("[QuitDiagnostic][REQUEST]", source);
+            StringAssert.Contains("[QuitDiagnostic][SOURCE]", source);
+            StringAssert.Contains("[QuitDiagnostic][STACK]", source);
+            StringAssert.Contains("[QuitDiagnostic][VERIFICATION_MODE]", source);
+            StringAssert.Contains("[QuitDiagnostic][ALLOW_QUIT]", source);
+            StringAssert.Contains("[QuitDiagnostic][PROCEED]", source);
+            StringAssert.Contains("runtimeVerifierCleanup", source);
+            StringAssert.Contains("verificationCleanupAfterRuntimeWindow", source);
+            StringAssert.Contains("DestroyDesktopCompanionOverlay", source);
+            StringAssert.Contains("[QuitDiagnostic][REQUEST]", lifecycleService);
+            StringAssert.Contains("BootstrapRootView.OnDestroy", rootView);
+        }
+
+        [Test]
         public void NativeMotionCardProvidesImmediateRuntimeActions()
         {
             var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));

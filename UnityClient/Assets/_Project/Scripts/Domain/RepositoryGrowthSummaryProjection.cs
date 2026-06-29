@@ -26,6 +26,15 @@ namespace TokenForge.Client.Domain
         public bool HasStoredAxisDeltas { get; set; }
         public bool HasLegacyAxisGap { get; set; }
         public string ProjectionSource { get; set; } = "none";
+        public string FirstCommit { get; set; } = string.Empty;
+        public string FirstCommitDate { get; set; } = string.Empty;
+        public string CurrentHead { get; set; } = string.Empty;
+        public string LastAnalyzedCommit { get; set; } = string.Empty;
+        public int CommitsAnalyzed { get; set; }
+        public int FilesChanged { get; set; }
+        public bool FallbackUsed { get; set; }
+        public bool CacheHit { get; set; }
+        public string ReasonIfUnchanged { get; set; } = string.Empty;
         public string LatestSummary { get; set; } = "No growth recorded yet.";
         public List<RepositoryTimelineEvent> TimelineEvents { get; set; } = new List<RepositoryTimelineEvent>();
         public List<string> MatchedRepositoryAliases { get; set; } = new List<string>();
@@ -100,6 +109,19 @@ namespace TokenForge.Client.Domain
                 .Where(item => item != null && repositoryAliases.Contains(item.RepositoryId ?? string.Empty))
                 .OrderByDescending(item => item.TimestampUtc)
                 .ToList();
+            var connectedProject = SelectedConnectedProject(saveData, repositoryAliases);
+            var aiTokenUsageCount = sessions.Count(session => session != null && session.TokenUsageBucket != TokenUsageBucket.Unknown);
+            summary.FirstCommit = FirstNonEmpty(connectedProject?.FirstCommitHash, connectedProject?.FirstAnalyzedCommit, "none");
+            summary.FirstCommitDate = FirstNonEmpty(connectedProject?.FirstCommitAt, "none");
+            summary.CurrentHead = FirstNonEmpty(connectedProject?.CurrentHeadCommit, "none");
+            summary.LastAnalyzedCommit = FirstNonEmpty(connectedProject?.LastAnalyzedCommit, "none");
+            summary.CommitsAnalyzed = Math.Max(0, connectedProject?.TotalCommitCount ?? 0);
+            summary.FilesChanged = Math.Max(0, connectedProject?.FilesChangedAnalyzed ?? SummedChangedFiles(sessions));
+            summary.FallbackUsed = false;
+            summary.CacheHit = false;
+            summary.ReasonIfUnchanged = summary.CurrentHead == summary.LastAnalyzedCommit && summary.CurrentHead != "none"
+                ? "already_at_current_head"
+                : "head_or_analysis_checkpoint_changed";
 
             summary.MatchedSessionCount = sessions.Count;
             summary.MatchedApprovedGrowthCount = growthRecords.Count;
@@ -242,6 +264,29 @@ namespace TokenForge.Client.Domain
             summary.LatestSummary = LatestSummary(timelineEvents, growthRecords, savedNativeRuns, savedActivityReviews, sessions, summary);
             var excludedOtherRepoCount = ExcludedOtherRepoCount(saveData, repositoryAliases);
             UnityEngine.Debug.Log("INFO [GrowthSummary][SOURCE_OF_TRUTH] selectedRepoHash=" + selectedRepositoryId +
+                                  " repoPath=approvedLocalFolder" +
+                                  " repoDisplayName=" + SafeLogValue(connectedProject?.DisplayName, repositoryId) +
+                                  " firstCommit=" + SafeLogValue(summary.FirstCommit, "none") +
+                                  " firstCommitDate=" + SafeLogValue(summary.FirstCommitDate, "none") +
+                                  " firstConnectedAt=" + (connectedProject?.FirstConnectedAt?.UtcDateTime.ToString("O") ?? "none") +
+                                  " firstAnalyzedCommit=" + SafeLogValue(connectedProject?.FirstAnalyzedCommit, "none") +
+                                  " currentHead=" + SafeLogValue(connectedProject?.CurrentHeadCommit, "none") +
+                                  " lastAnalyzedCommit=" + SafeLogValue(summary.LastAnalyzedCommit, "none") +
+                                  " commitsAnalyzed=" + summary.CommitsAnalyzed +
+                                  " filesChanged=" + summary.FilesChanged +
+                                  " projectionSource=" + summary.ProjectionSource +
+                                  " code=" + summary.Code +
+                                  " focus=" + summary.Focus +
+                                  " debug=" + summary.Debug +
+                                  " design=" + summary.Design +
+                                  " sync=" + summary.Sync +
+                                  " legacyGapCount=" + (summary.HasLegacyAxisGap ? 1 : 0) +
+                                  " fallbackUsed=" + summary.FallbackUsed +
+                                  " cacheHit=" + summary.CacheHit +
+                                  " reasonIfUnchanged=" + summary.ReasonIfUnchanged +
+                                  " timelineEventCount=" + timelineEvents.Count +
+                                  " savedGrowthCount=" + growthRecords.Count +
+                                  " aiTokenUsageCount=" + aiTokenUsageCount +
                                   " profileRepoHash=" + ProfileHashFor(saveData, repositoryId) +
                                   " canonicalRepoHash=" + (canonicalSelection.Resolved ? canonicalSelection.ResolvedCanonicalHash : repositoryId) +
                                   " sessionCount=" + sessions.Count +
@@ -279,6 +324,44 @@ namespace TokenForge.Client.Domain
                                            profile.ArchivedAtUtc == null &&
                                            string.Equals(profile.RepositoryHash, repositoryId, StringComparison.Ordinal))
                 ?.RepositoryHash ?? string.Empty;
+        }
+
+        private static ConnectedProject SelectedConnectedProject(SaveData saveData, HashSet<string> repositoryAliases)
+        {
+            repositoryAliases = repositoryAliases ?? new HashSet<string>(StringComparer.Ordinal);
+            return (saveData?.ConnectedProjects ?? new List<ConnectedProject>())
+                .Where(project => project != null && !project.IsArchived)
+                .OrderByDescending(project => project.IsActive)
+                .FirstOrDefault(project =>
+                    repositoryAliases.Contains(project.Id ?? string.Empty) ||
+                    repositoryAliases.Contains(project.PathHash ?? string.Empty) ||
+                    repositoryAliases.Contains(project.ProjectPathHash ?? string.Empty) ||
+                    repositoryAliases.Contains(project.LocalOnlyProjectId ?? string.Empty));
+        }
+
+        private static string SafeLogValue(string value, string fallback)
+        {
+            return string.IsNullOrWhiteSpace(value) ? fallback : value.Trim().Replace(" ", "_");
+        }
+
+        private static string FirstNonEmpty(params string[] values)
+        {
+            foreach (var value in values ?? Array.Empty<string>())
+            {
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    return value.Trim();
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static int SummedChangedFiles(IEnumerable<AgentWorkSession> sessions)
+        {
+            return Math.Max(0, (sessions ?? Enumerable.Empty<AgentWorkSession>())
+                .Where(session => session?.GitChangeSummary != null)
+                .Sum(session => Math.Max(0, session.GitChangeSummary.ChangedFileCount)));
         }
 
         private static int ExcludedOtherRepoCount(SaveData saveData, HashSet<string> selectedAliases)

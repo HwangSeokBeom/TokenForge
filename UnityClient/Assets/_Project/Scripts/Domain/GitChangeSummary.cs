@@ -43,6 +43,7 @@ namespace TokenForge.Client.Domain
         public bool HasUncommittedChanges { get; set; }
         public int AnalysisWindowDays { get; set; }
         public string AnalysisMode { get; set; } = string.Empty;
+        public string FirstCommitHash { get; set; } = string.Empty;
         public string FirstCommitAtUtc { get; set; } = string.Empty;
         public int TotalCommitsAnalyzed { get; set; }
         public int IncrementalCommitCount { get; set; }

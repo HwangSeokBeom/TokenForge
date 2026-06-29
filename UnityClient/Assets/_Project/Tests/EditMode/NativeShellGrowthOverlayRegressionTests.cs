@@ -619,6 +619,325 @@ namespace TokenForge.Client.Tests
             Assert.That(bootstrapper, Does.Contain("state.activity.hasAxisData = dashboard.HasGrowthAxisData"));
         }
 
+        [Test]
+        public void PixelArtRenderHarness_ZodiacStagesRolesAndPlaceholderSideBlocks()
+        {
+            var zodiacs = new[] { "rat", "ox", "tiger", "rabbit", "dragon", "snake", "horse", "goat", "monkey", "rooster", "dog", "pig" };
+            var roles = new[] { "dashboardMascot", "desktopOverlay", "wardrobePreview", "tokenShopPreview" };
+            var states = new[]
+            {
+                new CompanionState { Stage = CompanionStage.Child, Archetype = CompanionArchetype.Builder, Level = 4 },
+                new CompanionState { Stage = CompanionStage.Adult, Archetype = CompanionArchetype.Debugger, Level = 16 }
+            };
+            var keys = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var zodiac in zodiacs)
+            {
+                foreach (var state in states)
+                {
+                    foreach (var role in roles)
+                    {
+                        var key = CompanionPixelArtFactory.SpriteSignature(
+                            state,
+                            false,
+                            zodiac,
+                            new[] { "agent_outfit_work_jacket", "effect_soft_glow" },
+                            "repo-" + zodiac,
+                            role,
+                            "equipped");
+                        Assert.That(key, Does.Contain("repo=repo-" + zodiac), key);
+                        Assert.That(key, Does.Contain("role=" + role.ToLowerInvariant()), key);
+                        Assert.That(key, Does.Contain("zodiac=" + zodiac), key);
+                        Assert.That(key, Does.Contain("equippedItemsHash=agent_outfit_work_jacket,effect_soft_glow"), key);
+                        keys.Add(key);
+                    }
+                }
+            }
+
+            Assert.AreEqual(zodiacs.Length * states.Length * roles.Length, keys.Count);
+            var pixelSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "UI", "CompanionPixelArtFactory.cs"));
+            var nativeSource = NativeSource();
+            Assert.That(pixelSource, Does.Contain("sourceOfTruth=CompanionPixelArtFactory.CanonicalAssetKey"));
+            Assert.That(pixelSource, Does.Not.Contain("Rect(texture, 5, 12, 7, 15"));
+            Assert.That(pixelSource, Does.Not.Contain("Rect(texture, 17, 12, 19, 15"));
+            Assert.That(nativeSource, Does.Contain("TokenForgeDrawSharedZodiacSprite"));
+            Assert.That(nativeSource, Does.Contain("sourceOfTruth=TokenForgeShopPreviewView.drawZodiacMascot"));
+            Assert.That(nativeSource, Does.Not.Contain("fill(bodyX + bodyW - 4, bodyY + 2, 3, bodyH - 3, 'D')"));
+        }
+
+        [Test]
+        public void PixelArtRenderHarness_NoPlaceholderSideBlocksAcrossTargets()
+        {
+            var pixelSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "UI", "CompanionPixelArtFactory.cs"));
+            var nativeSource = NativeSource();
+
+            Assert.That(pixelSource, Does.Contain("sideBlockDetected=false"));
+            Assert.That(pixelSource, Does.Contain("bodyShadeMode=contourPattern"));
+            Assert.That(nativeSource, Does.Contain("sideBlockDetected=false"));
+            Assert.That(nativeSource, Does.Contain("bodyShadeMode=contourPattern"));
+            Assert.That(pixelSource, Does.Not.Contain("Pixel(texture, 5, 14, palette.Outline)"));
+            Assert.That(pixelSource, Does.Not.Contain("Pixel(texture, 18, 14, palette.Outline)"));
+        }
+
+        [Test]
+        public void PixelArtStageHarness_SixStagesHaveDistinctVisualSignatures()
+        {
+            var pixelSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "UI", "CompanionPixelArtFactory.cs"));
+            var nativeSource = NativeSource();
+
+            Assert.That(pixelSource, Does.Contain("egg-shell-zodiac-mark"));
+            Assert.That(pixelSource, Does.Contain("tiny-face-partial-traits"));
+            Assert.That(pixelSource, Does.Contain("junior-body-traits"));
+            Assert.That(pixelSource, Does.Contain("expanded-silhouette-expression"));
+            Assert.That(pixelSource, Does.Contain("adult-crown-complete-traits"));
+            Assert.That(pixelSource, Does.Contain("legend-aura-rare-outline"));
+            Assert.That(nativeSource, Does.Contain("TokenForgeCompanionStageVisualSignature"));
+        }
+
+        [Test]
+        public void GrowthSummaryProjectionHarness_RepoScopedInputsRejectLegacyGlobalFallback()
+        {
+            var saveData = SaveData.CreateDefault();
+            saveData.CharacterProfile.Stats = new CharacterStats { Logic = 4, Efficiency = 5, Debug = 2, Design = 2, Stability = 0 };
+            saveData.SelectedRepositoryHash = "repo-a";
+            saveData.ConnectedProjects.Add(new ConnectedProject
+            {
+                Id = "repo-a",
+                PathHash = "repo-a",
+                DisplayName = "TokenForge",
+                IsActive = true,
+                FirstConnectedAt = DateTimeOffset.UtcNow.AddDays(-6),
+                FirstAnalyzedCommit = "A_FIRST",
+                CurrentHeadCommit = "A_HEAD"
+            });
+            saveData.ConnectedProjects.Add(new ConnectedProject
+            {
+                Id = "repo-b",
+                PathHash = "repo-b",
+                DisplayName = "OtherRepo",
+                FirstConnectedAt = DateTimeOffset.UtcNow.AddDays(-2),
+                FirstAnalyzedCommit = "B_FIRST",
+                CurrentHeadCommit = "B_HEAD"
+            });
+            saveData.WorkSessionSummaries.Add(Session("repo-a", "a-session", WorkType.Feature, CountBucket.Small, false, false));
+            saveData.WorkSessionSummaries.Last().TokenUsageBucket = TokenUsageBucket.Medium;
+            saveData.WorkSessionSummaries.Add(Session("repo-b", "b-session", WorkType.UIUX, CountBucket.Large, false, true));
+            saveData.WorkSessionSummaries.Last().TokenUsageBucket = TokenUsageBucket.Huge;
+            saveData.GrowthHistory.Add(new CharacterGrowthResult { SessionId = "a-session", ExpGained = 30, StatDeltas = new CharacterStats { Logic = 2, Architecture = 1 } });
+            saveData.GrowthHistory.Add(new CharacterGrowthResult { SessionId = "b-session", ExpGained = 45, StatDeltas = new CharacterStats { Design = 5, Creativity = 1 } });
+            saveData.RepositoryTimelineEvents.Add(new RepositoryTimelineEvent { RepositoryId = "repo-a", EventType = "growth_saved", Title = "Repo A growth", Summary = "Code axis.", DeltaXp = 30, CodeDelta = 3 });
+            saveData.RepositoryTimelineEvents.Add(new RepositoryTimelineEvent { RepositoryId = "repo-b", EventType = "growth_saved", Title = "Repo B growth", Summary = "Design axis.", DeltaXp = 45, DesignDelta = 6 });
+            RepositoryCompanionProfileService.RecordTimelineEvent(saveData, "growth_saved", "Legacy growth", "No axis delta.", "repo-legacy", "Legacy", "legacy", 99);
+
+            var repoA = RepositoryGrowthSummaryProjection.Build(saveData, "repo-a");
+            var repoB = RepositoryGrowthSummaryProjection.Build(saveData, "repo-b");
+            var legacy = RepositoryGrowthSummaryProjection.Build(saveData, "repo-legacy");
+
+            Assert.AreNotEqual(VectorKey(repoA), VectorKey(repoB));
+            Assert.AreEqual("3:0:0:0:0", VectorKey(repoA));
+            Assert.AreEqual("0:0:0:6:0", VectorKey(repoB));
+            Assert.AreEqual("0:0:0:0:0", VectorKey(legacy));
+            Assert.IsTrue(legacy.HasLegacyAxisGap);
+            Assert.AreEqual("legacyAxisMissing", legacy.ProjectionSource);
+            Assert.AreNotEqual("4:5:2:2:0", VectorKey(repoA));
+            Assert.AreNotEqual("4:5:2:2:0", VectorKey(repoB));
+
+            var projectionSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Domain", "RepositoryGrowthSummaryProjection.cs"));
+            Assert.That(projectionSource, Does.Contain("firstConnectedAt="));
+            Assert.That(projectionSource, Does.Contain("firstAnalyzedCommit="));
+            Assert.That(projectionSource, Does.Contain("currentHead="));
+            Assert.That(projectionSource, Does.Contain("aiTokenUsageCount="));
+            Assert.That(projectionSource, Does.Contain("projectionSource="));
+        }
+
+        [Test]
+        public void GrowthSummaryHarness_FullGitHistoryFromFirstCommit()
+        {
+            var gitSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Git", "GitAggregateAnalyzer.cs"));
+            var projectionSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Domain", "RepositoryGrowthSummaryProjection.cs"));
+
+            Assert.That(gitSource, Does.Contain("rev-list --max-parents=0 HEAD"));
+            Assert.That(gitSource, Does.Contain("log --all --numstat"));
+            Assert.That(projectionSource, Does.Contain("firstCommit="));
+            Assert.That(projectionSource, Does.Contain("commitsAnalyzed="));
+            Assert.That(projectionSource, Does.Contain("filesChanged="));
+        }
+
+        [Test]
+        public void GrowthSummaryHarness_CommitsChangeProjection()
+        {
+            var saveData = SaveData.CreateDefault();
+            saveData.ConnectedProjects.Add(new ConnectedProject { Id = "repo-a", PathHash = "repo-a", ApprovedAt = DateTimeOffset.UtcNow, IsActive = true, FirstCommitHash = "A_FIRST", LastAnalyzedCommit = "A_HEAD_1", CurrentHeadCommit = "A_HEAD_2", TotalCommitCount = 2, FilesChangedAnalyzed = 4 });
+            saveData.WorkSessionSummaries.Add(Session("repo-a", "a1", WorkType.Feature, CountBucket.Small, false, false));
+            saveData.GrowthHistory.Add(new CharacterGrowthResult { SessionId = "a1", ExpGained = 20, StatDeltas = new CharacterStats { Logic = 1 } });
+
+            var summary = RepositoryGrowthSummaryProjection.Build(saveData, "repo-a");
+
+            Assert.AreEqual("A_FIRST", summary.FirstCommit);
+            Assert.AreEqual("A_HEAD_2", summary.CurrentHead);
+            Assert.AreEqual(2, summary.CommitsAnalyzed);
+            Assert.AreEqual(4, summary.FilesChanged);
+            Assert.AreEqual("head_or_analysis_checkpoint_changed", summary.ReasonIfUnchanged);
+        }
+
+        [Test]
+        public void GrowthSummaryHarness_RejectsFixedFallback_4_5_2_2_0()
+        {
+            var saveData = SaveData.CreateDefault();
+            saveData.CharacterProfile.Stats = new CharacterStats { Logic = 4, Efficiency = 5, Debug = 2, Design = 2, Stability = 0 };
+            saveData.WorkSessionSummaries.Add(Session("repo-a", "a1", WorkType.Feature, CountBucket.Small, false, false));
+            saveData.GrowthHistory.Add(new CharacterGrowthResult { SessionId = "a1", ExpGained = 20, StatDeltas = new CharacterStats { Logic = 1 } });
+
+            var summary = RepositoryGrowthSummaryProjection.Build(saveData, "repo-a");
+
+            Assert.AreNotEqual("4:5:2:2:0", VectorKey(summary));
+            Assert.IsFalse(summary.FallbackUsed);
+            Assert.IsFalse(summary.CacheHit);
+        }
+
+        [Test]
+        public void NativeLayoutHarness_SafeInsetsClippingAndModalBoundsAreDiagnosed()
+        {
+            var source = NativeSource();
+
+            Assert.That(source, Does.Contain("screen=%@ windowFrame=%@ contentFrame=%@ sidebarFrame=TokenForge.FixedLeftSidebar headerFrame=%@ scrollFrame=%@ contentSize=%@ bottomInset=%.0f dockSafeAreaGuess=%.0f clippedViewCount=%d clippedViewNames=%@"));
+            Assert.That(source, Does.Contain("scrollView.contentInsets = NSEdgeInsetsMake(0, 0, TokenForgeTabSafeBottomInset, 0);"));
+            Assert.That(source, Does.Contain("TokenForgePinSubview(content, document, TokenForgeTabContentTopInset, TokenForgeTabContentSideInset, TokenForgeTabSafeBottomInset, TokenForgeTabContentSideInset)"));
+            Assert.That(source, Does.Contain("tokenShopScreen"));
+            Assert.That(source, Does.Contain("wardrobeScreen"));
+            Assert.That(source, Does.Contain("TokenForge.Wardrobe.ContentRoot"));
+            Assert.That(source, Does.Contain("clippedViewNames"));
+        }
+
+        [Test]
+        public void LayoutHarness_NoBottomDockClippingAcrossScreens()
+        {
+            var source = NativeSource();
+
+            Assert.That(source, Does.Contain("[LayoutDiagnostic]"));
+            Assert.That(source, Does.Contain("dockSafeAreaGuess"));
+            Assert.That(source, Does.Contain("clippedViewCount"));
+            Assert.That(source, Does.Contain("isBottomClipped"));
+            Assert.That(source, Does.Contain("TokenForgeTabSafeBottomInset"));
+        }
+
+        [Test]
+        public void OnboardingLayoutHarness_AllStepsFitAndDoNotClip()
+        {
+            var source = NativeSource();
+
+            Assert.That(source, Does.Contain("[OnboardingLayoutDiagnostic]"));
+            Assert.That(source, Does.Contain("stepIndex=%ld"));
+            Assert.That(source, Does.Contain("clippedTextCount=0"));
+            Assert.That(source, Does.Contain("clippedImageCount=0"));
+        }
+
+        [Test]
+        public void WardrobeLayoutHarness_NoTopGapNoBottomClip()
+        {
+            var source = NativeSource();
+
+            Assert.That(source, Does.Contain("[WardrobeLayoutDiagnostic]"));
+            Assert.That(source, Does.Contain("topGap=%.0f"));
+            Assert.That(source, Does.Contain("bottomClipped=false"));
+            Assert.That(source, Does.Contain("TokenForge.Wardrobe.ContentRoot"));
+        }
+
+        [Test]
+        public void RecentActivityHarness_HidesZeroDeltaSystemNoise()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "AppBootstrapper.cs"));
+            var model = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Platform", "NativeDashboardModels.cs"));
+
+            Assert.That(source, Does.Contain("IsGrowthProducingRecentActivity"));
+            Assert.That(source, Does.Contain("diagnostic-only zero delta"));
+            Assert.That(source, Does.Contain("HasPositiveCategoryBreakdown"));
+            Assert.That(model, Does.Contain("hidesZeroDeltaSystemNoise"));
+            Assert.That(model, Does.Contain("deltaReason"));
+        }
+
+        [Test]
+        public void OverlayStateHarness_CompanionFarmAndControlsStayExplicit()
+        {
+            var source = NativeSource();
+            var controller = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "UI", "DesktopCompanionOverlayController.cs"));
+            var service = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Platform", "MacDesktopCompanionOverlayService.cs"));
+
+            Assert.That(source, Does.Contain("Overlay: Active"));
+            Assert.That(source, Does.Contain("Overlay: Disabled"));
+            Assert.That(source, Does.Contain("Visible: %@"));
+            Assert.That(source, Does.Contain("Movement: %@"));
+            Assert.That(source, Does.Contain("Show Overlay"));
+            Assert.That(source, Does.Contain("Hide Overlay"));
+            Assert.That(source, Does.Contain("Pause Movement"));
+            Assert.That(source, Does.Contain("Resume Movement"));
+            Assert.That(source, Does.Contain("Disable Drag"));
+            Assert.That(source, Does.Contain("Disable Click-through"));
+            Assert.That(source, Does.Contain("targetCompanionCount=%ld movingCompanionCount=%ld"));
+            Assert.That(controller, Does.Contain("SetCompanionFarmSnapshots"));
+            Assert.That(controller, Does.Contain("ShowAllRepositoryCompanions"));
+            Assert.That(service, Does.Contain("globalMotionEnabled"));
+            Assert.That(service, Does.Contain("movementEnabled"));
+        }
+
+        [Test]
+        public void OverlayMovementHarness_AllConnectedCompanionsMoveWhenTargetAll()
+        {
+            var source = NativeSource();
+            var model = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Platform", "NativeDashboardModels.cs"));
+            var bootstrapper = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "AppBootstrapper.cs"));
+
+            Assert.That(model, Does.Contain("overlayMode"));
+            Assert.That(model, Does.Contain("movementMode"));
+            Assert.That(bootstrapper, Does.Contain("\"allConnectedRepos\""));
+            Assert.That(source, Does.Contain("connectedRepoCount=%ld targetCompanionCount=%ld movingCompanionCount=%ld overlayMode=%@ movementMode=%@ tickTargetHashes=%@ panelFrames=%@"));
+            Assert.That(source, Does.Contain("Target Mode: %@"));
+        }
+
+        [Test]
+        public void OverlayMovementHarness_SelectedOnlyModeIsExplicit()
+        {
+            var source = NativeSource();
+            var bootstrapper = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "AppBootstrapper.cs"));
+
+            Assert.That(bootstrapper, Does.Contain("\"selectedRepoCompanion\""));
+            Assert.That(source, Does.Contain("selectedRepoCompanion"));
+            Assert.That(source, Does.Contain("selected repo"));
+        }
+
+        [Test]
+        public void StatusBarWindowHarness_HeaderMenuAndStateDiagnosticsPersist()
+        {
+            var source = NativeSource();
+
+            Assert.That(source, Does.Contain("TokenForge.FixedTopShellHeader"));
+            Assert.That(source, Does.Contain("TokenForge.PersistentStatusBar"));
+            Assert.That(source, Does.Contain("[StatusBarDiagnostic] activeScreen=%@ selectedRepoHash=%@ aiAgentCount=%ld overlayState=%@ syncMode=%@ activeMascot=%@ headerFrame=fixed92 statusItemExists=%@ windowMenuAction=Dashboard/ShowOverlay/HideOverlay/Settings/Quit nativeStateSynced=%@"));
+            Assert.That(source, Does.Contain("persistent-status-dashboard-action"));
+            Assert.That(source, Does.Contain("persistent-status-overlay-action"));
+            Assert.That(source, Does.Contain("persistent-status-settings-action"));
+            Assert.That(source, Does.Contain("verifyPersistentStatusBarForContext"));
+            Assert.That(source, Does.Contain("[[self.statusItem.menu itemWithTag:1017] setTitle:TokenForgeMenuMovementEnabled ? @\"Pause Movement\" : @\"Resume Movement\""));
+            Assert.That(source, Does.Contain("showTokenForgeFromStatusItem"));
+            Assert.That(source, Does.Contain("hideTokenForgeFromStatusItem"));
+            Assert.That(source, Does.Contain("enableDesktopCompanionFromStatusItem"));
+            Assert.That(source, Does.Contain("disableDesktopCompanionFromStatusItem"));
+        }
+
+        [Test]
+        public void StatusBarHarness_BadgesAndWindowMenuActionsSyncState()
+        {
+            var source = NativeSource();
+
+            Assert.That(source, Does.Contain("[StatusBarDiagnostic]"));
+            Assert.That(source, Does.Contain("activeScreen=%@"));
+            Assert.That(source, Does.Contain("selectedRepoHash=%@"));
+            Assert.That(source, Does.Contain("aiAgentCount=%ld"));
+            Assert.That(source, Does.Contain("overlayState=%@"));
+            Assert.That(source, Does.Contain("windowMenuAction=Dashboard/ShowOverlay/HideOverlay/Settings/Quit"));
+            Assert.That(source, Does.Contain("nativeStateSynced=%@"));
+        }
+
         private static string NativeSource()
         {
             var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, "..", ".."));

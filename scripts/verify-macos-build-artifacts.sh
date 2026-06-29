@@ -5,17 +5,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 source "${SCRIPT_DIR}/tokenforge-unity-env.sh"
 UNITY_PROJECT_PATH="${UNITY_PROJECT_PATH:-${REPO_ROOT}/UnityClient}"
-BUILD_OUTPUT="${BUILD_OUTPUT:-${UNITY_PROJECT_PATH}/builds/macOS/TokenForge.app}"
+BUILD_OUTPUT="${BUILD_OUTPUT:-/private/tmp/tokenforge-macos-build/TokenForge.app}"
 APP_BUNDLE_PATH="${APP_BUNDLE_PATH:-${BUILD_OUTPUT}}"
+LOG_FILE="${LOG_FILE:-/private/tmp/tokenforge-macos-build.log}"
 SOURCE_DYLIB="${SOURCE_DYLIB:-${UNITY_PROJECT_PATH}/Assets/Plugins/macOS/libDesktopCompanionOverlay.dylib}"
 BUNDLED_DYLIB="${BUNDLED_DYLIB:-${APP_BUNDLE_PATH}/Contents/PlugIns/libDesktopCompanionOverlay.dylib}"
 PROJECT_MANAGED_DLL="${PROJECT_MANAGED_DLL:-${UNITY_PROJECT_PATH}/Library/ScriptAssemblies/TokenForge.Client.dll}"
 BUNDLED_MANAGED_DLL="${BUNDLED_MANAGED_DLL:-${APP_BUNDLE_PATH}/Contents/Resources/Data/Managed/TokenForge.Client.dll}"
 SOURCE_CS_ROOT="${SOURCE_CS_ROOT:-${UNITY_PROJECT_PATH}/Assets/_Project/Scripts}"
-RUNTIME_MARKER="${RUNTIME_MARKER:-tokenforge_runtime_fix_20260609_230131}"
+BUILD_OUTPUT_DIR="$(dirname "${BUILD_OUTPUT}")"
+BUILD_STATUS_FILE="${BUILD_STATUS_FILE:-${BUILD_OUTPUT_DIR}/tokenforge-build-status.env}"
+RUNTIME_MARKER="${RUNTIME_MARKER:-tokenforge_runtime_fix_20260613_mono_crash}"
 LEGACY_RUNTIME_MARKER="${LEGACY_RUNTIME_MARKER:-app-bootstrapper-overlay-projection-v9}"
 
 FAILED=0
+APP_BUNDLE_CLASSIFICATION="UNKNOWN"
 
 section() {
   printf '\n== %s ==\n' "$1"
@@ -40,6 +44,67 @@ info() {
 
 warn() {
   row "$1" "WARN" "$2"
+}
+
+status_value() {
+  local key="$1"
+  [[ -f "${BUILD_STATUS_FILE}" ]] || return 1
+  awk -F= -v key="${key}" '$1 == key {print substr($0, index($0, "=") + 1); exit}' "${BUILD_STATUS_FILE}"
+}
+
+log_contains() {
+  local pattern="$1"
+  [[ -f "${LOG_FILE}" ]] || return 1
+  LC_ALL=C grep -aEq "${pattern}" "${LOG_FILE}"
+}
+
+classify_missing_app_bundle() {
+  local result
+  local previous_app_present
+  result="$(status_value RESULT || true)"
+  previous_app_present="$(status_value PREVIOUS_APP_PRESENT || true)"
+
+  case "${result}" in
+    ARTIFACT_MISSING_AFTER_BLOCKED_BUILD)
+      echo "ARTIFACT_MISSING_AFTER_BLOCKED_BUILD"
+      return 0
+      ;;
+    UPM_BLOCKED)
+      echo "UPM_BLOCKED_BEFORE_BUILD"
+      return 0
+      ;;
+    UNITY_LOCK_BLOCKED)
+      echo "UNITY_LOCK_BLOCKED_BEFORE_BUILD"
+      return 0
+      ;;
+  esac
+
+  if [[ "${previous_app_present}" == "true" && "${result}" == "BUILD_FAILED" ]]; then
+    echo "DELETED_BY_FAILED_CLEAN_REBUILD"
+    return 0
+  fi
+
+  if log_contains 'CLEAN_OUTPUT.*removeApp=.*TokenForge.*\.app' &&
+     ! log_contains 'ATOMIC_REPLACE|canonical_app_replaced_from_staging|Result: success'; then
+    echo "DELETED_BY_FAILED_CLEAN_REBUILD"
+    return 0
+  fi
+
+  if log_contains '(Unity Package Manager|UPM|Unity-Upm|/tmp/Unity-Upm-[^[:space:]]+\.sock).*(EPERM|Operation not permitted|listen)|((EPERM|Operation not permitted).*(Unity Package Manager|UPM|Unity-Upm|/tmp/Unity-Upm-[^[:space:]]+\.sock))'; then
+    echo "UPM_BLOCKED_BEFORE_BUILD"
+    return 0
+  fi
+
+  if [[ ! -d "${BUILD_OUTPUT_DIR}" && ! -f "${BUILD_STATUS_FILE}" && ! -f "${LOG_FILE}" ]]; then
+    echo "NEVER_BUILT"
+    return 0
+  fi
+
+  if [[ -z "${result}" ]]; then
+    echo "NEVER_BUILT"
+  else
+    echo "ARTIFACT_MISSING_AFTER_${result}"
+  fi
 }
 
 sha256_for_file() {
@@ -126,12 +191,36 @@ info "repo root" "${REPO_ROOT}"
 info "unity project path" "${UNITY_PROJECT_PATH}"
 info "build output path" "${BUILD_OUTPUT}"
 info "app bundle path" "${APP_BUNDLE_PATH}"
+info "build status path" "${BUILD_STATUS_FILE}"
+if [[ -f "${BUILD_STATUS_FILE}" ]]; then
+  info "last build status" "$(status_value RESULT || echo unknown)"
+fi
 
 section "App Bundle"
 if [[ ! -d "${APP_BUNDLE_PATH}" ]]; then
-  fail "app bundle exists" "no app was produced at ${APP_BUNDLE_PATH}"
+  APP_BUNDLE_CLASSIFICATION="$(classify_missing_app_bundle)"
+  fail "app bundle exists" "classification=${APP_BUNDLE_CLASSIFICATION}; no app bundle at ${APP_BUNDLE_PATH}"
 else
   ok "app bundle exists" "${APP_BUNDLE_PATH}"
+  APP_BUNDLE_CLASSIFICATION="PRESENT"
+fi
+
+if [[ -d "${BUILD_OUTPUT_DIR}" ]]; then
+  APP_BUNDLE_COUNT="$(find "${BUILD_OUTPUT_DIR}" -maxdepth 1 -type d -name 'TokenForge*.app' -print 2>/dev/null | wc -l | tr -d ' ')"
+  if [[ "${APP_BUNDLE_COUNT}" == "1" ]]; then
+    ok "single app bundle" "$(find "${BUILD_OUTPUT_DIR}" -maxdepth 1 -type d -name 'TokenForge*.app' -print 2>/dev/null)"
+  else
+    fail "single app bundle" "expected one TokenForge*.app in ${BUILD_OUTPUT_DIR}, found ${APP_BUNDLE_COUNT}: $(find "${BUILD_OUTPUT_DIR}" -maxdepth 1 -type d -name 'TokenForge*.app' -print 2>/dev/null | tr '\n' ' ')"
+  fi
+
+  MONO_CRASH_COUNT="$(find "${BUILD_OUTPUT_DIR}" -maxdepth 1 -type f -name 'mono_crash*.json' -print 2>/dev/null | wc -l | tr -d ' ')"
+  if [[ "${MONO_CRASH_COUNT}" == "0" ]]; then
+    ok "build dir mono crash" "none"
+  else
+    fail "build dir mono crash" "found stale/runtime mono crash files: $(find "${BUILD_OUTPUT_DIR}" -maxdepth 1 -type f -name 'mono_crash*.json' -print 2>/dev/null | tr '\n' ' ')"
+  fi
+else
+  warn "build output directory" "missing: ${BUILD_OUTPUT_DIR}"
 fi
 
 section "Native Dylib"
@@ -239,8 +328,13 @@ fi
 
 section "Verdict"
 if [[ "${FAILED}" -ne 0 ]]; then
+  if [[ "${APP_BUNDLE_CLASSIFICATION}" == "PRESENT" ]]; then
+    APP_BUNDLE_CLASSIFICATION="STALE_ARTIFACT"
+  fi
+  echo "Artifact classification: ${APP_BUNDLE_CLASSIFICATION}"
   echo "Artifact freshness: STALE"
   exit 1
 fi
 
+echo "Artifact classification: OK"
 echo "Artifact freshness: OK"
