@@ -107,6 +107,16 @@ typedef NS_ENUM(NSInteger, TokenForgePendingOverlayAction) {
 @property(nonatomic) NSPoint mouseDownScreenPoint;
 @property(nonatomic) NSPoint panelOriginAtMouseDown;
 @property(nonatomic) BOOL firstVisibleFrameLogged;
+// Per-panel wander state so every connected repository's companion moves on its
+// own anchor/target/velocity, independent of the selected/legacy companion that
+// is driven by the global TokenForgeCompanion* motion variables.
+@property(nonatomic) NSPoint independentMotionAnchor;
+@property(nonatomic) NSPoint independentMotionVelocity;
+@property(nonatomic) NSPoint independentMotionTarget;
+@property(nonatomic) NSTimeInterval independentMotionNextDecisionAt;
+@property(nonatomic) NSTimeInterval independentMotionLastTick;
+@property(nonatomic) CGFloat independentMotionPhaseOffset;
+@property(nonatomic) BOOL independentMotionInitialized;
 - (void)quitFromContextMenu:(id)sender;
 @end
 
@@ -169,6 +179,7 @@ static BOOL TokenForgeNSApplicationAvailable = NO;
 static BOOL TokenForgeAppDidFinishLaunchingObserved = NO;
 static BOOL TokenForgeMainThreadReady = NO;
 static BOOL TokenForgeDashboardAllowed = NO;
+static BOOL TokenForgeDashboardStateHydrated = NO;
 static BOOL TokenForgeOverlayAllowed = NO;
 static BOOL TokenForgeStatusItemAllowed = NO;
 static BOOL TokenForgeNativeOverlayDisabledAtLaunch = NO;
@@ -2984,10 +2995,10 @@ static NSRect TokenForgeClampFrameToVisibleFrame(NSRect frame)
 static NSRect TokenForgeNormalizeDashboardFrame(NSRect frame, NSString *source)
 {
     NSRect visible = TokenForgeVisibleFrameForFrame(frame);
-    CGFloat minimumWidth = 920.0;
-    CGFloat minimumHeight = 620.0;
-    CGFloat maximumWidth = MAX(minimumWidth, visible.size.width - 24.0);
-    CGFloat maximumHeight = MAX(minimumHeight, visible.size.height - 24.0);
+    CGFloat maximumWidth = MAX(320.0, visible.size.width - 24.0);
+    CGFloat maximumHeight = MAX(320.0, visible.size.height - 24.0);
+    CGFloat minimumWidth = MIN(920.0, maximumWidth);
+    CGFloat minimumHeight = MIN(620.0, maximumHeight);
     BOOL invalid = !isfinite(frame.origin.x) ||
                    !isfinite(frame.origin.y) ||
                    !isfinite(frame.size.width) ||
@@ -3024,6 +3035,37 @@ static NSRect TokenForgeNormalizeDashboardFrame(NSRect frame, NSString *source)
           visible.size.height,
           invalid ? @"true" : @"false");
     return frame;
+}
+
+static void TokenForgeConfigureAndLogWindowChrome(NSWindow *window, NSString *source)
+{
+    if (window == nil) {
+        return;
+    }
+
+    window.styleMask |= NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable;
+    window.titleVisibility = NSWindowTitleVisible;
+    window.titlebarAppearsTransparent = NO;
+    window.movableByWindowBackground = NO;
+    NSButton *closeButton = [window standardWindowButton:NSWindowCloseButton];
+    NSButton *miniButton = [window standardWindowButton:NSWindowMiniaturizeButton];
+    NSButton *zoomButton = [window standardWindowButton:NSWindowZoomButton];
+    closeButton.hidden = NO;
+    miniButton.hidden = NO;
+    zoomButton.hidden = NO;
+    closeButton.enabled = YES;
+    miniButton.enabled = YES;
+    zoomButton.enabled = YES;
+    NSLog(@"INFO [WindowChromeDiagnostic] source=%@ titleVisibility=%ld titlebarAppearsTransparent=%@ styleMask=%lu toolbarExists=%@ toolbarVisible=%@ closeButtonFrame=%@ minimizeButtonFrame=%@ zoomButtonFrame=%@",
+          source ?: @"unknown",
+          (long)window.titleVisibility,
+          window.titlebarAppearsTransparent ? @"true" : @"false",
+          (unsigned long)window.styleMask,
+          window.toolbar != nil ? @"true" : @"false",
+          window.toolbar != nil && window.toolbar.isVisible ? @"true" : @"false",
+          closeButton != nil ? NSStringFromRect(closeButton.frame) : @"none",
+          miniButton != nil ? NSStringFromRect(miniButton.frame) : @"none",
+          zoomButton != nil ? NSStringFromRect(zoomButton.frame) : @"none");
 }
 
 static void TokenForgeLogDashboardLaunchDiagnostic(NSString *reason, BOOL requestedOpen, NSWindow *window, NSRect normalizedFrame)
@@ -3369,8 +3411,142 @@ static void TokenForgeChooseNextCompanionMotion(NSTimeInterval now)
           MAX(0.8, TokenForgeCompanionDecisionInterval));
 }
 
+static void TokenForgeAdvanceIndependentCompanionPanel(NSString *repo,
+                                                       NSPanel *panel,
+                                                       TokenForgeDesktopOverlayCompanionView *view,
+                                                       NSTimeInterval now)
+{
+    if (panel == nil || view == nil || !panel.isVisible) {
+        return;
+    }
+
+    // A companion currently being dragged owns its own frame; never fight the user.
+    if (TokenForgeIsOverlayDraggingForRepository(repo)) {
+        view.independentMotionLastTick = now;
+        view.independentMotionAnchor = panel.frame.origin;
+        return;
+    }
+
+    NSSize size = panel.frame.size;
+    if (!view.independentMotionInitialized) {
+        view.independentMotionAnchor = panel.frame.origin;
+        view.independentMotionTarget = panel.frame.origin;
+        view.independentMotionVelocity = NSMakePoint(0, 0);
+        view.independentMotionNextDecisionAt = now + 0.6 + ((CGFloat)arc4random_uniform(1200) / 1000.0);
+        view.independentMotionPhaseOffset = (CGFloat)arc4random_uniform(6283) / 1000.0;
+        view.independentMotionLastTick = now;
+        view.independentMotionInitialized = YES;
+    }
+
+    NSTimeInterval delta = view.independentMotionLastTick <= 0.0 ? 0.016 : MIN(0.05, now - view.independentMotionLastTick);
+    view.independentMotionLastTick = now;
+
+    CGFloat phase = now * 2.7 + view.independentMotionPhaseOffset;
+    BOOL wandering = TokenForgeCompanionAllowsWandering && TokenForgeCompanionMotionMode != 0;
+
+    if (wandering && now >= view.independentMotionNextDecisionAt) {
+        view.independentMotionNextDecisionAt = now + MAX(0.8, TokenForgeCompanionDecisionInterval);
+        CGFloat radius = MAX(80.0, TokenForgeCompanionWanderRadius);
+        CGFloat dx = ((CGFloat)arc4random_uniform(2001) / 1000.0 - 1.0) * radius;
+        CGFloat dy = ((CGFloat)arc4random_uniform(2001) / 1000.0 - 1.0) * radius * 0.35;
+        if (fabs(dx) < 52.0) {
+            dx = dx < 0.0 ? -52.0 : 52.0;
+        }
+        NSRect requested = NSMakeRect(view.independentMotionAnchor.x + dx,
+                                      view.independentMotionAnchor.y + dy,
+                                      size.width,
+                                      size.height);
+        NSRect clamped = TokenForgeClampFrameToVisibleFrame(requested);
+        view.independentMotionTarget = clamped.origin;
+    }
+
+    if (wandering) {
+        NSPoint anchor = view.independentMotionAnchor;
+        NSPoint target = view.independentMotionTarget;
+        CGFloat remainingX = target.x - anchor.x;
+        CGFloat remainingY = target.y - anchor.y;
+        CGFloat remaining = hypot(remainingX, remainingY);
+        NSPoint velocity = NSMakePoint(0, 0);
+        if (remaining > 5.0) {
+            CGFloat speed = MAX(22.0, TokenForgeCompanionWanderSpeed);
+            velocity = NSMakePoint(remainingX / remaining * speed, remainingY / remaining * speed);
+            view.facingLeft = velocity.x < 0.0;
+        }
+        anchor.x += velocity.x * delta;
+        anchor.y += velocity.y * delta;
+
+        NSRect anchorFrame = NSMakeRect(anchor.x, anchor.y, size.width, size.height);
+        NSRect visible = TokenForgeVisibleFrameForFrame(anchorFrame);
+        if (anchor.x < NSMinX(visible) || anchor.x > NSMaxX(visible) - size.width) {
+            velocity.x *= -1.0;
+            view.facingLeft = velocity.x < 0.0;
+        }
+        view.independentMotionVelocity = velocity;
+        anchorFrame = TokenForgeClampFrameToVisibleFrame(anchorFrame);
+        view.independentMotionAnchor = anchorFrame.origin;
+    }
+
+    CGFloat idleX = sin(phase) * TokenForgeCompanionIdleRadius;
+    CGFloat idleY = fabs(sin(phase * 0.75)) * 3.0;
+    NSRect displayFrame = NSMakeRect(view.independentMotionAnchor.x + idleX,
+                                     view.independentMotionAnchor.y,
+                                     size.width,
+                                     size.height);
+    displayFrame = TokenForgeClampFrameToVisibleFrame(displayFrame);
+    [panel setFrameOrigin:displayFrame.origin];
+    TokenForgeOverlayFramesByRepositoryId[repo] = [NSValue valueWithRect:panel.frame];
+
+    view.visualOffsetY = idleY;
+    view.visualRotation = sin(phase * 0.8) * 1.8;
+    view.visualScale = 1.0 + sin(phase * 0.85) * 0.018;
+    [view setNeedsDisplay:YES];
+}
+
+static void TokenForgeAdvanceIndependentCompanionPanels(NSTimeInterval now)
+{
+    if (TokenForgeOverlayPanelsByRepositoryId.count == 0) {
+        return;
+    }
+
+    NSInteger advancedCount = 0;
+    for (NSString *repo in [[TokenForgeOverlayPanelsByRepositoryId allKeys] copy]) {
+        NSPanel *panel = TokenForgeOverlayPanelsByRepositoryId[repo];
+        // The selected/legacy companion shares the global TokenForgeCompanion* motion
+        // state and is advanced by the single-companion tick below; skip it here so it
+        // is not moved twice per frame.
+        if (panel == nil || panel == TokenForgeCompanionWindow) {
+            continue;
+        }
+        TokenForgeDesktopOverlayCompanionView *view = TokenForgeOverlayViewsByRepositoryId[repo];
+        if (![view isKindOfClass:[TokenForgeDesktopOverlayCompanionView class]]) {
+            continue;
+        }
+        if (!panel.isVisible) {
+            continue;
+        }
+
+        TokenForgeAdvanceIndependentCompanionPanel(repo, panel, view, now);
+        advancedCount += 1;
+    }
+
+    static NSTimeInterval TokenForgeLastIndependentMotionLogAt = 0.0;
+    if (advancedCount > 0 && now - TokenForgeLastIndependentMotionLogAt > 2.0) {
+        TokenForgeLastIndependentMotionLogAt = now;
+        NSLog(@"INFO [OverlayMovementDiagnostic] role=farmIndependent advancedCompanionCount=%ld selectedCompanionTickedSeparately=%@ allowsWandering=%@ source=independentTick",
+              (long)advancedCount,
+              (TokenForgeCompanionWindow != nil && TokenForgeCompanionWindow.isVisible) ? @"true" : @"false",
+              TokenForgeCompanionAllowsWandering ? @"true" : @"false");
+    }
+}
+
 static void TokenForgeCompanionMotionTick(NSTimer *timer)
 {
+    // Advance every non-selected repository companion on its own independent motion
+    // state first, regardless of whether the selected/legacy companion window is
+    // visible. Previously only the single selected companion moved, so connected
+    // repositories beyond the active tab stayed frozen.
+    TokenForgeAdvanceIndependentCompanionPanels([NSDate timeIntervalSinceReferenceDate]);
+
     if (TokenForgeCompanionWindow == nil || TokenForgeCompanionContentView == nil || !TokenForgeCompanionWindow.isVisible) {
         return;
     }
@@ -5680,6 +5856,8 @@ static NSButton *TokenForgeDashboardButton(NSString *title, id target, SEL actio
     button.bezelStyle = NSBezelStyleRounded;
     button.controlSize = NSControlSizeRegular;
     button.font = [NSFont systemFontOfSize:13.0 weight:NSFontWeightMedium];
+    button.cell.lineBreakMode = NSLineBreakByTruncatingTail;
+    [button setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
     if (@available(macOS 10.14, *)) {
         button.contentTintColor = TokenForgeLightCardPrimaryTextColor();
     }
@@ -5737,7 +5915,7 @@ static NSView *TokenForgeDashboardCard(void)
     view.translatesAutoresizingMaskIntoConstraints = NO;
     view.wantsLayer = YES;
     view.layer.backgroundColor = TokenForgeCardBackgroundColor().CGColor;
-    view.layer.cornerRadius = 8.0;
+    view.layer.cornerRadius = 10.0;
     view.layer.borderColor = [NSColor colorWithCalibratedWhite:0.0 alpha:0.08].CGColor;
     view.layer.borderWidth = 1.0;
     return view;
@@ -5768,7 +5946,9 @@ static NSStackView *TokenForgeDashboardHorizontalStack(CGFloat spacing)
 
 static const CGFloat TokenForgeTabContentTopInset = 8.0;
 static const CGFloat TokenForgeTabContentSideInset = 28.0;
-static const CGFloat TokenForgeTabSafeBottomInset = 124.0;
+static const CGFloat TokenForgeTabSafeBottomInset = 32.0;
+static const CGFloat TokenForgePageMaxContentWidth = 1040.0;
+static const CGFloat TokenForgePageSectionSpacing = 20.0;
 
 static void TokenForgePinSubview(NSView *child, NSView *parent, CGFloat top, CGFloat leading, CGFloat bottom, CGFloat trailing)
 {
@@ -5778,6 +5958,24 @@ static void TokenForgePinSubview(NSView *child, NSView *parent, CGFloat top, CGF
         [child.leadingAnchor constraintEqualToAnchor:parent.leadingAnchor constant:leading],
         [child.trailingAnchor constraintEqualToAnchor:parent.trailingAnchor constant:-trailing],
         [child.bottomAnchor constraintEqualToAnchor:parent.bottomAnchor constant:-bottom]
+    ]];
+}
+
+static void TokenForgeConstrainPageStack(NSView *page, NSView *document, CGFloat top, CGFloat side, CGFloat bottom)
+{
+    NSLayoutConstraint *fillWidth = [page.widthAnchor constraintEqualToAnchor:document.widthAnchor constant:-(side * 2.0)];
+    fillWidth.priority = 999;
+    NSLayoutConstraint *preferredMaxWidth = [page.widthAnchor constraintEqualToConstant:TokenForgePageMaxContentWidth];
+    preferredMaxWidth.priority = 998;
+    [NSLayoutConstraint activateConstraints:@[
+        [page.topAnchor constraintEqualToAnchor:document.topAnchor constant:top],
+        [page.leadingAnchor constraintGreaterThanOrEqualToAnchor:document.leadingAnchor constant:side],
+        [page.trailingAnchor constraintLessThanOrEqualToAnchor:document.trailingAnchor constant:-side],
+        [page.centerXAnchor constraintEqualToAnchor:document.centerXAnchor],
+        [page.widthAnchor constraintLessThanOrEqualToConstant:TokenForgePageMaxContentWidth],
+        fillWidth,
+        preferredMaxWidth,
+        [page.bottomAnchor constraintEqualToAnchor:document.bottomAnchor constant:-bottom]
     ]];
 }
 
@@ -6042,6 +6240,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     [NSApp activateIgnoringOtherApps:YES];
     BOOL wasMiniaturized = self.dashboardWindow.isMiniaturized;
     NSRect normalizedFrame = TokenForgeNormalizeDashboardFrame(self.dashboardWindow.frame, openSource);
+    TokenForgeConfigureAndLogWindowChrome(self.dashboardWindow, [@"open." stringByAppendingString:openSource]);
     if (!NSEqualRects(normalizedFrame, self.dashboardWindow.frame)) {
         [self.dashboardWindow setFrame:normalizedFrame display:NO];
         NSLog(@"INFO [DashboardLifecycle][FRAME_REPAIR_APPLIED] source=%@ frame=(%.2f,%.2f %.2fx%.2f)",
@@ -6200,6 +6399,8 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     }
 
     self.state = TokenForgeMergeDashboardState(self.state, state);
+    BOOL wasHydrated = TokenForgeDashboardStateHydrated;
+    TokenForgeDashboardStateHydrated = YES;
     NSMutableDictionary *actualized = [self.state mutableCopy];
     BOOL nativeActualVisible = TokenForgeAnyDesktopOverlayActuallyVisible();
     actualized[@"actualVisible"] = @(nativeActualVisible);
@@ -6222,6 +6423,20 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
                                        @"dashboardState");
     self.selectedNavItem = TokenForgeDashboardString(self.state, @"selectedNavItem", self.selectedNavItem ?: @"dashboard");
     TokenForgeCurrentDashboardTab = self.selectedNavItem;
+    if (!wasHydrated) {
+        NSDictionary *repository = TokenForgeDashboardDictionary(self.state, @"repository");
+        BOOL hasActiveRepository = TokenForgeDashboardBool(self.state, @"hasActiveRepository", NO) &&
+            TokenForgeDashboardBool(repository, @"connected", NO);
+        NSDictionary *onboarding = TokenForgeDashboardDictionary(self.state, @"onboarding");
+        NSString *firstRoute = !hasActiveRepository && TokenForgeDashboardBool(onboarding, @"shouldPresentFirstRunGuide", NO)
+            ? @"onboarding"
+            : @"dashboard";
+        NSLog(@"INFO [LaunchRouteDiagnostic] nativeHydrationComplete=true loadedRepositoriesCount=%lu activeRepositoryId=%@ activeRepositoryName=%@ firstVisibleRoute=%@",
+              (unsigned long)TokenForgeDashboardArray(self.state, @"repositories").count,
+              TokenForgeDashboardString(repository, @"id", @"none"),
+              TokenForgeDashboardString(repository, @"name", @"none"),
+              firstRoute);
+    }
     [self rebuildDashboardIfNeeded];
     [self verifyPersistentStatusBarForContext:@"repositoryProjectionUpdate" repairIfMissing:YES];
     [self rebuildSettingsIfNeeded];
@@ -6237,6 +6452,25 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
           TokenForgeDashboardString(TokenForgeDashboardDictionary(self.state, @"repository"), @"statusText", @"Not selected"),
           TokenForgeDashboardString(TokenForgeDashboardDictionary(self.state, @"codexAgent"), @"statusText", @"Not connected"),
           (long)TokenForgeDashboardInteger(self.state, @"pendingReviewCount", 0));
+    if (TokenForgePendingExplicitDashboardOpenSource.length > 0) {
+        NSString *pendingSource = [TokenForgePendingExplicitDashboardOpenSource copy];
+        TokenForgePendingExplicitDashboardOpenSource = nil;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            TokenForgeOpenOrFocusDashboard(pendingSource);
+        });
+    } else if (TokenForgeDashboardStateHydrated &&
+               !TokenForgeRuntimeVerificationMode &&
+               !TokenForgeExplicitQuitRequested &&
+               !TokenForgeTerminating &&
+               !TokenForgeIsDashboardVisible()) {
+        // Some Unity/AppKit combinations activate from a Dock click without delivering
+        // applicationShouldHandleReopen when a non-activating companion panel is visible.
+        // Treat the activation transition as a fallback reopen path as well.
+        NSLog(@"INFO [DockReopenDiagnostic] activationFallbackReceived=true mainWindowVisible=false activationRequested=true");
+        dispatch_async(dispatch_get_main_queue(), ^{
+            TokenForgeOpenOrFocusDashboard(@"dock.reopen");
+        });
+    }
 }
 
 - (void)setMenuBarStatus:(NSDictionary *)state
@@ -6308,6 +6542,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     }
 
     if (self.dashboardWindow != nil) {
+        TokenForgeConfigureAndLogWindowChrome(self.dashboardWindow, @"ensureDashboardWindow.reuse");
         [self rebuildDashboardIfNeeded];
         [self verifyPersistentStatusBarForContext:@"initialDashboardOpen" repairIfMissing:YES];
         return;
@@ -6326,12 +6561,16 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
                                                          backing:NSBackingStoreBuffered
                                                            defer:NO];
     self.dashboardWindow.title = @"TokenForge";
-    self.dashboardWindow.minSize = NSMakeSize(1080, 720);
+    NSRect dashboardVisibleFrame = TokenForgeVisibleFrameForFrame(frame);
+    self.dashboardWindow.minSize = NSMakeSize(MIN(1080.0, MAX(320.0, dashboardVisibleFrame.size.width - 24.0)),
+                                              MIN(720.0, MAX(320.0, dashboardVisibleFrame.size.height - 24.0)));
     self.dashboardWindow.delegate = self;
     self.dashboardWindow.releasedWhenClosed = NO;
     self.dashboardWindow.restorable = NO;
     self.dashboardWindow.restorationClass = nil;
     self.dashboardWindow.identifier = TokenForgeDashboardWindowIdentifier;
+    [self.dashboardWindow setFrame:frame display:NO];
+    TokenForgeConfigureAndLogWindowChrome(self.dashboardWindow, @"ensureDashboardWindow.create");
     TokenForgeNativeDashboardWindow = self.dashboardWindow;
     NSLog(@"INFO [DashboardLifecycle][CREATE] window=%p source=ensureDashboardWindow", self.dashboardWindow);
     TokenForgeLogWindowLifecycle(@"created", self.dashboardWindow, @"dashboard");
@@ -6345,6 +6584,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
 - (void)ensureSettingsWindow
 {
     if (self.settingsWindow != nil) {
+        TokenForgeConfigureAndLogWindowChrome(self.settingsWindow, @"ensureSettingsWindow.reuse");
         [self rebuildSettingsIfNeeded];
         return;
     }
@@ -6359,13 +6599,20 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
                                                         backing:NSBackingStoreBuffered
                                                           defer:NO];
     self.settingsWindow.title = @"TokenForge Settings";
-    self.settingsWindow.minSize = NSMakeSize(760, 560);
+    NSRect settingsVisibleFrame = TokenForgeVisibleFrameForFrame(frame);
+    self.settingsWindow.minSize = NSMakeSize(MIN(760.0, MAX(320.0, settingsVisibleFrame.size.width - 24.0)),
+                                             MIN(560.0, MAX(320.0, settingsVisibleFrame.size.height - 24.0)));
     self.settingsWindow.level = NSFloatingWindowLevel + 1;
     self.settingsWindow.delegate = self;
     self.settingsWindow.releasedWhenClosed = NO;
     self.settingsWindow.restorable = NO;
     self.settingsWindow.restorationClass = nil;
     self.settingsWindow.identifier = @"TokenForge.NativeSettings";
+    frame.size.width = MIN(frame.size.width, MAX(320.0, settingsVisibleFrame.size.width - 24.0));
+    frame.size.height = MIN(frame.size.height, MAX(320.0, settingsVisibleFrame.size.height - 24.0));
+    frame = TokenForgeClampFrameToVisibleFrame(frame);
+    [self.settingsWindow setFrame:frame display:NO];
+    TokenForgeConfigureAndLogWindowChrome(self.settingsWindow, @"ensureSettingsWindow.create");
     TokenForgeLogWindowLifecycle(@"created", self.settingsWindow, @"settings");
     if (savedFrame.length == 0) {
         [self.settingsWindow center];
@@ -6632,10 +6879,10 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
         [guideDocument.widthAnchor constraintEqualToAnchor:guideScroll.contentView.widthAnchor].active = YES;
         [guideDocument.heightAnchor constraintGreaterThanOrEqualToAnchor:guideScroll.contentView.heightAnchor].active = YES;
 
-        NSStackView *guideContent = TokenForgeDashboardVerticalStack(18.0);
+        NSStackView *guideContent = TokenForgeDashboardVerticalStack(TokenForgePageSectionSpacing);
         guideContent.alignment = NSLayoutAttributeWidth;
         [guideDocument addSubview:guideContent];
-        TokenForgePinSubview(guideContent, guideDocument, 20, 32, TokenForgeTabSafeBottomInset, 32);
+        TokenForgeConstrainPageStack(guideContent, guideDocument, 20, TokenForgeTabContentSideInset, TokenForgeTabSafeBottomInset);
         [guideContent addArrangedSubview:[self onboardingScreen]];
         NSLog(@"INFO [RuntimeUIPath][FirstLaunch] renderer=dedicatedGuide sidebar=false normalDashboard=false");
         NSLog(@"INFO [RuntimeUIPath][FirstRunTutorial] renderer=dedicatedGuide sidebar=false normalDashboard=false");
@@ -6693,8 +6940,11 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     scrollView.verticalScrollElasticity = NSScrollElasticityAllowed;
     scrollView.identifier = @"TokenForge.DashboardTabScrollView";
     scrollView.accessibilityLabel = @"TokenForge.BodyScroll";
-    scrollView.contentInsets = NSEdgeInsetsMake(0, 0, TokenForgeTabSafeBottomInset, 0);
-    scrollView.scrollerInsets = NSEdgeInsetsMake(0, 0, TokenForgeTabSafeBottomInset, 0);
+    // The window frame is already clamped to NSScreen.visibleFrame, so the Dock is handled at
+    // the window boundary. Keep one document-level bottom inset here; applying the same inset to
+    // both NSScrollView and its document creates a double dead zone and inconsistent tab heights.
+    scrollView.contentInsets = NSEdgeInsetsMake(0, 0, 0, 0);
+    scrollView.scrollerInsets = NSEdgeInsetsMake(0, 0, 0, 0);
     [bodyContainer addArrangedSubview:scrollView];
 
     TokenForgeFlippedView *document = [[TokenForgeFlippedView alloc] initWithFrame:NSMakeRect(0, 0, 900, 1200)];
@@ -6704,10 +6954,10 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     [document.widthAnchor constraintEqualToAnchor:scrollView.contentView.widthAnchor].active = YES;
     [document.heightAnchor constraintGreaterThanOrEqualToAnchor:scrollView.contentView.heightAnchor].active = YES;
 
-    NSStackView *content = TokenForgeDashboardVerticalStack(22.0);
+    NSStackView *content = TokenForgeDashboardVerticalStack(TokenForgePageSectionSpacing);
     content.alignment = NSLayoutAttributeWidth;
     [document addSubview:content];
-    TokenForgePinSubview(content, document, TokenForgeTabContentTopInset, TokenForgeTabContentSideInset, TokenForgeTabSafeBottomInset, TokenForgeTabContentSideInset);
+    TokenForgeConstrainPageStack(content, document, TokenForgeTabContentTopInset, TokenForgeTabContentSideInset, TokenForgeTabSafeBottomInset);
     document.accessibilityLabel = @"TokenForge.BottomTabBar";
     self.dashboardRootView = root;
     self.dashboardTabDocumentView = document;
@@ -6721,7 +6971,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
           NSStringFromRect(self.dashboardWindow.screen != nil ? self.dashboardWindow.screen.visibleFrame : TokenForgeVisibleFrame()),
           NSStringFromRect(self.dashboardWindow.frame),
           TokenForgeTabSafeBottomInset,
-          scrollView.contentInsets.bottom,
+          TokenForgeTabSafeBottomInset,
           scrollView.contentInsets.bottom,
           TokenForgeTabContentTopInset);
     NSLog(@"INFO [LayoutDiagnostic] screenFrame=%@ visibleFrame=%@ windowFrame=%@ contentFrame=auto scrollFrame=bodyFill documentFrame=minContent bottomChromeHeight=%.0f safeBottomInset=%.0f contentInsets={top:0,left:0,bottom:%.0f,right:0} clippedSubviewCount=0 clippedSubviewNames=none",
@@ -6729,12 +6979,12 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
           NSStringFromRect(self.dashboardWindow.screen != nil ? self.dashboardWindow.screen.visibleFrame : TokenForgeVisibleFrame()),
           NSStringFromRect(self.dashboardWindow.frame),
           TokenForgeTabSafeBottomInset,
-          scrollView.contentInsets.bottom,
+          TokenForgeTabSafeBottomInset,
           scrollView.contentInsets.bottom);
     NSLog(@"INFO [LayoutDiagnostic] screen=%@ windowFrame=%@ contentFrame=auto sidebarFrame=TokenForge.FixedLeftSidebar headerFrame=TokenForge.FixedTopShellHeader scrollFrame=TokenForge.DashboardTabScrollView contentSize=documentMinHeight bottomInset=%.0f dockSafeAreaGuess=%.0f clippedViewCount=0 clippedViewNames=none",
           self.selectedNavItem ?: @"dashboard",
           NSStringFromRect(self.dashboardWindow.frame),
-          scrollView.contentInsets.bottom,
+          TokenForgeTabSafeBottomInset,
           TokenForgeTabSafeBottomInset);
     NSLog(@"INFO [LayoutDiagnostic] dashboardFrame=%@ shellHeaderFrame=fixed92 scrollContentFrame=bodyFill bottomTabFrame=TokenForge.BottomTabBar safeBottomInset=%.0f visibleContentHeight=0 contentBottomY=0 bottomTabTopY=0 isBottomClipped=false wardrobeRootId=TokenForge.Wardrobe.ContentRoot selectedTab=%@",
           NSStringFromRect(self.dashboardWindow.frame),
@@ -6750,7 +7000,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
         NSRect dashboardFrame = self.dashboardWindow != nil ? self.dashboardWindow.frame : NSZeroRect;
         NSRect shellHeaderFrame = [fixedTopShellHeader convertRect:fixedTopShellHeader.bounds toView:root];
         NSRect scrollContentFrame = [scrollView.contentView convertRect:scrollView.contentView.bounds toView:root];
-        CGFloat safeBottomInset = scrollView.contentInsets.bottom;
+        CGFloat safeBottomInset = TokenForgeTabSafeBottomInset;
         CGFloat visibleContentHeight = MAX(0.0, NSHeight(scrollContentFrame) - safeBottomInset);
         NSRect bottomTabFrame = NSMakeRect(NSMinX(scrollContentFrame), NSMaxY(scrollContentFrame) - safeBottomInset, NSWidth(scrollContentFrame), safeBottomInset);
         NSRect contentFrame = [content convertRect:content.bounds toView:root];
@@ -6766,7 +7016,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
               NSStringFromRect([document convertRect:document.bounds toView:root]),
               TokenForgeTabSafeBottomInset,
               safeBottomInset,
-              safeBottomInset,
+              scrollView.contentInsets.bottom,
               isBottomClipped ? 1 : 0,
               isBottomClipped ? @"bottomChrome" : @"none");
         NSLog(@"INFO [LayoutDiagnostic] screen=%@ windowFrame=%@ contentFrame=%@ sidebarFrame=TokenForge.FixedLeftSidebar headerFrame=%@ scrollFrame=%@ contentSize=%@ bottomInset=%.0f dockSafeAreaGuess=%.0f clippedViewCount=%d clippedViewNames=%@",
@@ -7063,7 +7313,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     NSDictionary *activity = TokenForgeDashboardDictionary(self.state, @"activity");
     NSDictionary *review = TokenForgeDashboardDictionary(self.state, @"review");
 
-    NSStackView *grid = TokenForgeDashboardVerticalStack(22.0);
+    NSStackView *grid = TokenForgeDashboardVerticalStack(TokenForgePageSectionSpacing);
     grid.identifier = @"clean-grid-v4";
     grid.alignment = NSLayoutAttributeWidth;
     [grid setContentHuggingPriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
@@ -7120,20 +7370,26 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
         return;
     }
 
-    NSStackView *quickTop = TokenForgeDashboardHorizontalStack(22.0);
+    NSStackView *quickTop = TokenForgeDashboardHorizontalStack(TokenForgePageSectionSpacing);
     quickTop.distribution = NSStackViewDistributionFillEqually;
+    // Top-align card rows (the shared helper defaults to centerY, which makes
+    // cards of unequal height look ragged) so the dashboard grid reads as one
+    // consistent set of cards.
+    quickTop.alignment = NSLayoutAttributeTop;
     [quickTop addArrangedSubview:[self repositoryStatusCardWithRepository:repository]];
     [quickTop addArrangedSubview:[self aiAgentsStatusCardWithAgents:agents]];
     [grid addArrangedSubview:quickTop];
 
-    NSStackView *quickBottom = TokenForgeDashboardHorizontalStack(22.0);
+    NSStackView *quickBottom = TokenForgeDashboardHorizontalStack(TokenForgePageSectionSpacing);
     quickBottom.distribution = NSStackViewDistributionFillEqually;
+    quickBottom.alignment = NSLayoutAttributeTop;
     [quickBottom addArrangedSubview:[self reviewCardWithActivity:activity review:review]];
     [quickBottom addArrangedSubview:[self companionMotionCardWithCompanion:companion]];
     [grid addArrangedSubview:quickBottom];
 
-    NSStackView *bottom = TokenForgeDashboardHorizontalStack(22.0);
+    NSStackView *bottom = TokenForgeDashboardHorizontalStack(TokenForgePageSectionSpacing);
     bottom.distribution = NSStackViewDistributionFillEqually;
+    bottom.alignment = NSLayoutAttributeTop;
     [bottom addArrangedSubview:[self growthSummaryCardWithActivity:activity]];
     [bottom addArrangedSubview:[self recentActivityTimelineCardWithActivity:activity review:review]];
     [grid addArrangedSubview:bottom];
@@ -7398,7 +7654,10 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
 {
     NSStackView *stack = nil;
     NSView *card = TokenForgeCardWithStack(&stack, 16.0, 8.0);
-    [card.heightAnchor constraintEqualToConstant:176.0].active = YES;
+    // Min-height (not fixed) so the card grows to fit its title/state/detail/button
+    // content instead of clipping. The card lives inside the dashboard scroll
+    // document, so extra height scrolls cleanly rather than getting cut off.
+    [card.heightAnchor constraintGreaterThanOrEqualToConstant:176.0].active = YES;
     [stack addArrangedSubview:TokenForgeDashboardLabel(title, 13.0, NSFontWeightSemibold, accent ?: [NSColor systemBlueColor], 1)];
     [stack addArrangedSubview:TokenForgeDashboardLabel(state ?: @"Not connected", 19.0, NSFontWeightBold, TokenForgeLightCardPrimaryTextColor(), 2)];
     [stack addArrangedSubview:TokenForgeLightCardCaptionLabel(detail ?: @"", 4)];
@@ -7470,7 +7729,10 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     NSString *targetLabel = [overlayMode isEqualToString:@"allConnectedRepos"] ? @"all connected repos" : ([overlayMode isEqualToString:@"farm"] ? @"farm" : @"selected repo");
     NSStackView *stack = nil;
     NSView *card = TokenForgeCardWithStack(&stack, 16.0, 8.0);
-    [card.heightAnchor constraintEqualToConstant:244.0].active = YES;
+    // This card stacks a title, state line, detail, five status rows and three
+    // button rows — well over the old fixed 244pt, which clipped the bottom
+    // controls. Use a min-height floor and let it grow + scroll instead.
+    [card.heightAnchor constraintGreaterThanOrEqualToConstant:244.0].active = YES;
     [stack addArrangedSubview:TokenForgeDashboardLabel(@"Desktop Companion", 13.0, NSFontWeightSemibold, [NSColor systemGreenColor], 1)];
     if (!repositoryConnected) {
         desiredVisible = NO;
@@ -7569,7 +7831,10 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     NSString *summary = pending
         ? [NSString stringWithFormat:@"%@ · +%ld XP", TokenForgeDashboardString(review, @"summary", TokenForgeDashboardString(activity, @"todaySummary", @"Aggregate activity ready for review.")), (long)TokenForgeDashboardInteger(review, @"estimatedXpDelta", 0)]
         : TokenForgeDashboardString(activity, @"todaySummary", @"No activity yet");
-    [stack addArrangedSubview:TokenForgeLightCardCaptionLabel(TokenForgeFriendlyDashboardSummary(summary, @"No activity yet"), 4)];
+    // 0 = unlimited lines: let the review summary wrap fully so it is never
+    // truncated. The card uses a min-height and lives in the scroll document,
+    // so the extra wrapped lines grow the card instead of clipping the text.
+    [stack addArrangedSubview:TokenForgeLightCardCaptionLabel(TokenForgeFriendlyDashboardSummary(summary, @"No activity yet"), 0)];
     NSStackView *buttons = TokenForgeDashboardHorizontalStack(8.0);
     if (pending && TokenForgeDashboardBool(review, @"canSaveGrowth", NO)) {
         [buttons addArrangedSubview:TokenForgePrimaryButton(@"Approve", self, @selector(approveReview:))];
@@ -8570,6 +8835,7 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     scrollView.hasVerticalScroller = YES;
     scrollView.hasHorizontalScroller = NO;
     scrollView.drawsBackground = NO;
+    scrollView.contentInsets = NSEdgeInsetsMake(0, 0, 0, 0);
     [root addSubview:scrollView];
     TokenForgePinSubview(scrollView, root, 0, 0, 0, 0);
 
@@ -8577,20 +8843,16 @@ static NSView *TokenForgeCardWithStack(NSStackView **stackOut, CGFloat padding, 
     document.translatesAutoresizingMaskIntoConstraints = NO;
     scrollView.documentView = document;
     [document.widthAnchor constraintEqualToAnchor:scrollView.contentView.widthAnchor].active = YES;
+    [document.heightAnchor constraintGreaterThanOrEqualToAnchor:scrollView.contentView.heightAnchor].active = YES;
 
-    NSStackView *content = TokenForgeDashboardVerticalStack(14.0);
+    NSStackView *content = TokenForgeDashboardVerticalStack(TokenForgePageSectionSpacing);
     content.alignment = NSLayoutAttributeWidth;
     [document addSubview:content];
-    NSLayoutConstraint *contentFillWidth = [content.widthAnchor constraintEqualToAnchor:document.widthAnchor constant:-48.0];
-    contentFillWidth.priority = NSLayoutPriorityDefaultHigh;
-    [NSLayoutConstraint activateConstraints:@[
-        [content.topAnchor constraintEqualToAnchor:document.topAnchor constant:28.0],
-        [content.centerXAnchor constraintEqualToAnchor:document.centerXAnchor],
-        [content.widthAnchor constraintLessThanOrEqualToConstant:720.0],
-        [content.widthAnchor constraintLessThanOrEqualToAnchor:document.widthAnchor constant:-48.0],
-        contentFillWidth,
-        [content.bottomAnchor constraintLessThanOrEqualToAnchor:document.bottomAnchor constant:-28.0]
-    ]];
+    TokenForgeConstrainPageStack(content, document, 28.0, 24.0, TokenForgeTabSafeBottomInset);
+    NSLog(@"INFO [LayoutDiagnostic] activeTab=settings windowSize=%@ scrollViewportRect=auto contentRect=auto bottomSafePadding=%.0f maxContentWidth=%.0f",
+          NSStringFromSize(self.settingsWindow.frame.size),
+          TokenForgeTabSafeBottomInset,
+          TokenForgePageMaxContentWidth);
 
     NSDictionary *companion = TokenForgeDashboardDictionary(self.state, @"companion");
     [content addArrangedSubview:TokenForgeDashboardLabel(@"Zodiac Mascot Settings", 25.0, NSFontWeightBold, [NSColor whiteColor], 1)];
@@ -9342,6 +9604,12 @@ static void TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(NSStrin
         return;
     }
 
+    if (!TokenForgeDashboardStateHydrated) {
+        TokenForgePendingExplicitDashboardOpenSource = [openSourceForLog copy];
+        NSLog(@"INFO [LaunchRouteDiagnostic] firstVisibleRoute=deferred reason=nativeDashboardStateNotHydrated source=%@", openSourceForLog);
+        return;
+    }
+
     if (TokenForgeShouldSuppressDashboardOpen(source ?: @"unknown", explicitUserOpen)) {
         return;
     }
@@ -9941,16 +10209,9 @@ static void TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(NSStrin
     if ([NSApp delegate] == self && self.originalAppDelegate != nil && [self.originalAppDelegate respondsToSelector:@selector(applicationDidFinishLaunching:)]) {
         [self.originalAppDelegate applicationDidFinishLaunching:notification];
     }
-    if (!TokenForgeRuntimeVerificationMode) {
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.20 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            if (TokenForgePendingInitialDashboardOpen) {
-                NSLog(@"INFO [LaunchDashboard][REPLAY] source=launch.initial");
-                TokenForgePendingInitialDashboardOpen = NO;
-            }
-            TokenForgeOpenOrFocusDashboard(@"launch.initial");
-            TokenForgeDumpWindowClassifications(@"AFTER_LAUNCH_INITIAL_DASHBOARD");
-        });
-    }
+    // Managed persistence hydration owns the initial route. Auto-opening here races the first
+    // saved-state projection and briefly renders the native controller's default onboarding state.
+    NSLog(@"INFO [LaunchRouteDiagnostic] appKitReady=true firstVisibleRoute=deferred reason=waitingForManagedHydration");
 }
 
 - (void)applicationWillResignActive:(NSNotification *)notification
@@ -9985,6 +10246,13 @@ static void TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(NSStrin
     BOOL dashboardVisible = TokenForgeIsDashboardVisible();
     BOOL overlayVisible = TokenForgeIsCompanionOverlayVisible();
     BOOL unityVisible = TokenForgeVisibleUnityWindowCount() > 0;
+    NSWindow *dashboardWindowBefore = TokenForgeNativeDashboardWindow;
+    NSLog(@"INFO [DockReopenDiagnostic] dockReopenEventReceived=true hasVisibleWindows=%@", flag ? @"true" : @"false");
+    NSLog(@"INFO [DockReopenDiagnostic] mainWindowFound=%@ miniaturized=%@ visible=%@ key=%@ before=true",
+          dashboardWindowBefore != nil ? @"true" : @"false",
+          dashboardWindowBefore != nil && dashboardWindowBefore.isMiniaturized ? @"true" : @"false",
+          dashboardWindowBefore != nil && dashboardWindowBefore.isVisible ? @"true" : @"false",
+          dashboardWindowBefore != nil && dashboardWindowBefore.isKeyWindow ? @"true" : @"false");
     NSLog(@"INFO [DockReopen][CLASSIFY] dashboardVisible=%@ overlayVisible=%@ unityVisible=%@",
           dashboardVisible ? @"true" : @"false",
           overlayVisible ? @"true" : @"false",
@@ -9994,7 +10262,16 @@ static void TokenForgeOpenNativeDashboardOnMainWithSourceAndExplicitness(NSStrin
           flag ? @"true" : @"false");
     TokenForgeDumpDashboardWindows(@"beforeReopen");
     NSLog(@"INFO [DockReopen][ACTION] openOrFocusDashboard source=dock.reopen");
+    NSLog(@"INFO [DockReopenDiagnostic] activationRequested=true source=dock.reopen");
     TokenForgeOpenOrFocusDashboard(@"dock.reopen");
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.16 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        NSWindow *dashboardWindowAfter = TokenForgeNativeDashboardWindow;
+        NSLog(@"INFO [DockReopenDiagnostic] mainWindowFound=%@ miniaturized=%@ visible=%@ key=%@ after=true",
+              dashboardWindowAfter != nil ? @"true" : @"false",
+              dashboardWindowAfter != nil && dashboardWindowAfter.isMiniaturized ? @"true" : @"false",
+              dashboardWindowAfter != nil && dashboardWindowAfter.isVisible ? @"true" : @"false",
+              dashboardWindowAfter != nil && dashboardWindowAfter.isKeyWindow ? @"true" : @"false");
+    });
     return NO;
 }
 

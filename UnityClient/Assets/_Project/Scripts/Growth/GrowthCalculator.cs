@@ -212,7 +212,30 @@ namespace TokenForge.Client.Growth
             };
 
             ApplyGitAggregateStatSignals(deltas, session);
+            ApplyGitHistoryAxisScores(deltas, session);
             return deltas;
+        }
+
+        private static void ApplyGitHistoryAxisScores(CharacterStats deltas, AgentWorkSession session)
+        {
+            var summary = session?.GitChangeSummary;
+            if (summary == null || !string.Equals(summary.GrowthScoringVersion, "git-growth-axes-v2", StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            // A full repository analysis owns the five displayed axes. Do not blend these scores
+            // with the generic WorkType rule weights: that blend was the source of identical,
+            // fixed-looking summaries across unrelated repositories.
+            deltas.Logic = Math.Max(0, summary.GrowthCodeScore);
+            deltas.Architecture = 0;
+            deltas.Velocity = 0;
+            deltas.Efficiency = Math.Max(0, summary.GrowthFocusScore);
+            deltas.Stability = 0;
+            deltas.Debug = Math.Max(0, summary.GrowthDebugScore);
+            deltas.Design = Math.Max(0, summary.GrowthDesignScore);
+            deltas.Creativity = 0;
+            deltas.Sync = Math.Max(0, summary.GrowthSyncScore);
         }
 
         private static void ApplyGitAggregateStatSignals(CharacterStats deltas, AgentWorkSession session)
@@ -272,6 +295,7 @@ namespace TokenForge.Client.Growth
         private static bool IsGitAggregateSession(AgentWorkSession session)
         {
             return string.Equals(session?.GitChangeSummary?.AnalyzerVersion, "git-aggregate-v1", StringComparison.Ordinal) ||
+                   string.Equals(session?.GitChangeSummary?.AnalyzerVersion, "git-aggregate-v2", StringComparison.Ordinal) ||
                    string.Equals(session?.SourceProvider, "GIT", StringComparison.OrdinalIgnoreCase);
         }
 

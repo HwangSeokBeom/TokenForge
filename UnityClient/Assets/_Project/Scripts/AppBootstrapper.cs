@@ -111,6 +111,7 @@ namespace TokenForge.Client
         private bool nativeExplicitQuitRequested;
         private bool runtimeVerificationMode;
         private bool startupIdleLogged;
+        private bool nativeStartupStateHydrated;
 
 #if UNITY_EDITOR
         public static bool DisableEditorAssetPrefabLookupForTests { get; set; }
@@ -223,10 +224,12 @@ namespace TokenForge.Client
                 Debug.Log("INFO [NativeDashboard] mode=macOSPlayer source=AppKit");
                 Debug.Log("INFO [BootstrapRoot] productUI=disabled reason=nativeShell");
                 EnsureNativeDashboardShell();
-                if (!NativeSafeModeEnabled)
-                {
-                    ApplyNativeShellState(showDashboardIfNeeded: true);
-                }
+                // The persisted repository projection is loaded asynchronously in Start(). Opening
+                // the AppKit window here exposes the default, unhydrated onboarding state for a
+                // frame (or longer on a cold disk) even when an approved repository already exists.
+                // Keep the native shell installed but invisible until RefreshDashboardAsync has
+                // loaded and normalized persisted state and selected the first real route.
+                Debug.Log("INFO [LaunchRouteDiagnostic] bootState=waitingForPersistedRepository firstVisibleRoute=deferred");
             }
             else if (bootstrapRoot != null)
             {
@@ -314,7 +317,7 @@ namespace TokenForge.Client
             {
                 if (approvedActivityAnalysis != null)
                 {
-                    await RefreshDashboardAsync(loadAuthSessionOnStart, false);
+                    await RefreshDashboardAsync(loadAuthSessionOnStart, UseNativeMacDashboardShell);
                 }
 
                 return new StartupResult(true, "TokenForge safe bootstrap completed.");
@@ -355,6 +358,26 @@ namespace TokenForge.Client
                 Debug.Log("INFO [Startup] Save load end");
             }
 
+            if (startupScope && UseNativeMacDashboardShell)
+            {
+                nativeStartupStateHydrated = true;
+                var connectedRepositories = approvedActivityAnalysis?.RepositoryCompanions ?? new List<RepositoryCompanionDisplayItem>();
+                var activeRepository = approvedActivityAnalysis?.CharacterDashboard;
+                var hasActiveApprovedRepository = ActiveRepositoryReadyForNative();
+                nativeSelectedNavItem = "dashboard";
+                var onboardingPreferences = approvedActivityAnalysis?.CurrentSaveData?.OnboardingPreferences ?? new OnboardingPreferences();
+                var firstVisibleRoute = !hasActiveApprovedRepository &&
+                                        !onboardingPreferences.FirstRunOnboardingCompleted &&
+                                        !onboardingPreferences.FirstRunOnboardingDismissedForNow
+                    ? "onboarding"
+                    : "dashboard";
+                Debug.Log("INFO [LaunchRouteDiagnostic] loadedRepositoriesCount=" + connectedRepositories.Count);
+                Debug.Log("INFO [LaunchRouteDiagnostic] activeRepositoryId=" + SafeNativeText(activeRepository?.CurrentRepositoryHash, "none") +
+                          " activeRepositoryName=" + SafeNativeText(activeRepository?.CurrentRepositoryAlias, "none") +
+                          " approved=" + hasActiveApprovedRepository);
+                Debug.Log("INFO [LaunchRouteDiagnostic] firstVisibleRoute=" + firstVisibleRoute + " hydrationComplete=true");
+            }
+
             if (bootstrapRoot != null)
             {
                 bootstrapRoot.Bind(localStatus, approvedActivityAnalysis);
@@ -370,6 +393,14 @@ namespace TokenForge.Client
                 ApplyNativeShellState(showDashboardIfNeeded: startupScope);
                 if (startupScope)
                 {
+                    var finalPreferences = approvedActivityAnalysis?.CurrentSaveData?.OnboardingPreferences ?? new OnboardingPreferences();
+                    var finalRoute = !ActiveRepositoryReadyForNative() &&
+                                     !finalPreferences.FirstRunOnboardingCompleted &&
+                                     !finalPreferences.FirstRunOnboardingDismissedForNow
+                        ? "onboarding"
+                        : "dashboard";
+                    Debug.Log("INFO [LaunchRouteDiagnostic] finalRouteAfterHydration=" + finalRoute +
+                              " windowRequested=" + (!runtimeVerificationMode));
                     Debug.Log("INFO [Startup] State projection end");
                 }
             }
@@ -620,6 +651,12 @@ namespace TokenForge.Client
             if (nativeExplicitQuitRequested)
             {
                 Debug.Log("INFO [DashboardLifecycle][SUPPRESS_REOPEN] reason=explicitQuit source=applyNativeShellState");
+                return;
+            }
+
+            if (showDashboardIfNeeded && !nativeStartupStateHydrated)
+            {
+                Debug.Log("INFO [LaunchRouteDiagnostic] firstVisibleRoute=deferred reason=persistedStateNotHydrated");
                 return;
             }
 
@@ -945,7 +982,7 @@ namespace TokenForge.Client
             state.repositories = BuildNativeRepositoryItems(dashboard);
             state.companionFarm = BuildNativeCompanionFarmState(state.repositories, settings, state.desiredVisible);
             state.tokenShop = BuildNativeTokenShopState(state.repositories.FirstOrDefault(item => item != null && item.selected), repositoryConnected, projectionSaveData, state.agentProviders);
-            state.onboarding = BuildNativeOnboardingState(projectionSaveData);
+            state.onboarding = BuildNativeOnboardingState(projectionSaveData, repositoryConnected);
             state.agents.connectedCount = state.agentProviders.Count(provider => provider.connected && provider.hasValidSource);
             state.agents.warningCount = state.agentProviders.Sum(provider => Math.Max(0, provider.warningCount));
             state.agents.lastProvider = state.agentProviders.FirstOrDefault(provider => provider.connected && provider.hasValidSource)?.displayName ?? "None";
@@ -1528,7 +1565,7 @@ namespace TokenForge.Client
             return string.Equals(itemCategory, category, StringComparison.Ordinal);
         }
 
-        private static NativeOnboardingState BuildNativeOnboardingState(SaveData saveData)
+        private static NativeOnboardingState BuildNativeOnboardingState(SaveData saveData, bool hasActiveApprovedRepository)
         {
             var prefs = saveData?.OnboardingPreferences ?? new OnboardingPreferences();
             var steps = NativeOnboardingStepTitles();
@@ -1537,7 +1574,9 @@ namespace TokenForge.Client
             {
                 firstRunCompleted = prefs.FirstRunOnboardingCompleted,
                 dismissedForNow = prefs.FirstRunOnboardingDismissedForNow,
-                shouldPresentFirstRunGuide = !prefs.FirstRunOnboardingCompleted && !prefs.FirstRunOnboardingDismissedForNow,
+                shouldPresentFirstRunGuide = !hasActiveApprovedRepository &&
+                                             !prefs.FirstRunOnboardingCompleted &&
+                                             !prefs.FirstRunOnboardingDismissedForNow,
                 presentationMode = "guidedTutorial",
                 currentStep = "step_" + (stepIndex + 1),
                 currentStepIndex = stepIndex,
@@ -3752,6 +3791,31 @@ namespace TokenForge.Client
             await RunNativeAnalysisAsync(string.Empty, ProviderTypeForNative(ready.SourceType).ToString());
         }
 
+        private string ResolveActiveRepositoryHashForAnalysis(string explicitRepositoryHash)
+        {
+            if (!string.IsNullOrWhiteSpace(explicitRepositoryHash))
+            {
+                return explicitRepositoryHash;
+            }
+
+            var activeRepositoryHash = approvedActivityAnalysis?.CharacterDashboard?.CurrentRepositoryHash ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(activeRepositoryHash))
+            {
+                return explicitRepositoryHash;
+            }
+
+            var currentAnalysisPath = gitAnalysisFlow?.GetSelectedRepositoryPathForLocalOnlyApproval() ?? string.Empty;
+            var currentAnalysisHash = string.IsNullOrWhiteSpace(currentAnalysisPath)
+                ? string.Empty
+                : RepositoryCompanionProfileService.HashRepositoryPath(currentAnalysisPath);
+            var stale = !string.Equals(activeRepositoryHash, currentAnalysisHash, StringComparison.Ordinal);
+            Debug.Log("INFO [RepositoryStateDiagnostic] action=resolveAnalysisRepository" +
+                      " activeRepositoryStableId=" + SafeNativeText(activeRepositoryHash, "none") +
+                      " analysisPathStableId=" + SafeNativeText(currentAnalysisHash, "none") +
+                      " stale=" + stale);
+            return stale ? activeRepositoryHash : explicitRepositoryHash;
+        }
+
         private async Task RunNativeAnalysisAsync(string repositoryHash = "", string providerValue = "", bool repositoryOnly = false, GitAnalysisMode? requestedGitAnalysisMode = null)
         {
             if (approvedActivityAnalysis == null)
@@ -3772,6 +3836,13 @@ namespace TokenForge.Client
 
             await approvedActivityAnalysis.RefreshApprovedLocationsAsync();
             await approvedActivityAnalysis.RestoreLocalSelectionsFromApprovedLocationsAsync();
+
+            // When no explicit repository was passed (Dashboard/Activity "Analyze"), make sure the
+            // git analysis path follows the currently active repository. RestoreLocalSelections only
+            // populates the path when none is selected, so a previously loaded repository would keep
+            // being analyzed after switching the active repository — leaving each repository's growth
+            // summary frozen at its last-saved values. Re-point to the active repository when stale.
+            repositoryHash = ResolveActiveRepositoryHashForAnalysis(repositoryHash);
 
             if (!string.IsNullOrWhiteSpace(repositoryHash))
             {

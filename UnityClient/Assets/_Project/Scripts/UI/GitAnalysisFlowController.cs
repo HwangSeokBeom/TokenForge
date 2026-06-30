@@ -413,6 +413,17 @@ namespace TokenForge.Client.UI
             connection.AnalyzedCommitRange = (summary.AnalyzedStartCommit ?? string.Empty) + ".." + (summary.AnalyzedEndCommit ?? string.Empty);
             connection.LastAnalysisMode = summary.AnalysisMode ?? string.Empty;
             connection.LastAnalysisScope = AnalysisScopeLabel(summary);
+            connection.GrowthCodeScore = Math.Max(0, summary.GrowthCodeScore);
+            connection.GrowthFocusScore = Math.Max(0, summary.GrowthFocusScore);
+            connection.GrowthDebugScore = Math.Max(0, summary.GrowthDebugScore);
+            connection.GrowthDesignScore = Math.Max(0, summary.GrowthDesignScore);
+            connection.GrowthSyncScore = Math.Max(0, summary.GrowthSyncScore);
+            connection.GrowthNumstatRowsAnalyzed = Math.Max(0, summary.NumstatRowsAnalyzed);
+            connection.GrowthScoringVersion = summary.GrowthScoringVersion ?? string.Empty;
+            connection.GrowthResultId = summary.AnalysisIdempotencyKey ?? string.Empty;
+            UnityEngine.Debug.Log("INFO [GrowthSummaryDiagnostic] persistedResultId=" + connection.GrowthResultId +
+                                  " persistedTimestamp=" + connection.LastAnalyzedAt?.UtcDateTime.ToString("O") +
+                                  " repositoryId=" + repositoryHash);
             UnityEngine.Debug.Log("INFO [GrowthSummary][GIT_BASELINE] repositoryId=" + repositoryHash +
                                   " firstConnectedAt=" + (connection.FirstConnectedAt?.UtcDateTime.ToString("O") ?? "none") +
                                   " firstCommit=" + connection.FirstCommitHash +

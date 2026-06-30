@@ -593,6 +593,32 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void NativeLaunchWaitsForPersistedRepositoryHydrationBeforeFirstWindow()
+        {
+            var bootstrapperSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/AppBootstrapper.cs"));
+            var nativeSource = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("[LaunchRouteDiagnostic] bootState=waitingForPersistedRepository firstVisibleRoute=deferred", bootstrapperSource);
+            StringAssert.Contains("BuildNativeOnboardingState(projectionSaveData, repositoryConnected)", bootstrapperSource);
+            StringAssert.Contains("!hasActiveApprovedRepository", bootstrapperSource);
+            StringAssert.Contains("TokenForgeDashboardStateHydrated", nativeSource);
+            StringAssert.Contains("reason=waitingForManagedHydration", nativeSource);
+            StringAssert.Contains("reason=nativeDashboardStateNotHydrated", nativeSource);
+        }
+
+        [Test]
+        public void NativeWindowChromeKeepsTrafficLightsAndNativeTitlebarVisible()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("TokenForgeConfigureAndLogWindowChrome", source);
+            StringAssert.Contains("window.titleVisibility = NSWindowTitleVisible", source);
+            StringAssert.Contains("window.titlebarAppearsTransparent = NO", source);
+            StringAssert.Contains("standardWindowButton:NSWindowCloseButton", source);
+            StringAssert.Contains("[WindowChromeDiagnostic]", source);
+        }
+
+        [Test]
         public void NativeDashboardNoRepositoryStateClearsCompanionGrowthAndReviewUi()
         {
             var bootstrapperSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project/Scripts/AppBootstrapper.cs"));
@@ -1463,6 +1489,9 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("[DockReopen][ENTER] hasVisibleWindows=", source);
             StringAssert.Contains("[DockReopen][CLASSIFY] dashboardVisible=", source);
             StringAssert.Contains("[DockReopen][ACTION] openOrFocusDashboard source=dock.reopen", source);
+            StringAssert.Contains("[DockReopenDiagnostic] dockReopenEventReceived=true", source);
+            StringAssert.Contains("[DockReopenDiagnostic] activationRequested=true", source);
+            StringAssert.Contains("[DockReopenDiagnostic] activationFallbackReceived=true", source);
             StringAssert.Contains("TokenForgeDumpWindowClassifications(@\"AFTER_DOCK_REOPEN\")", source);
             StringAssert.Contains("TokenForgeDumpWindowClassifications(@\"AFTER_MENUBAR_OPEN\")", source);
             StringAssert.Contains("TokenForgeDumpWindowClassifications(@\"AFTER_DASHBOARD_CLOSE\")", source);
@@ -1816,8 +1845,8 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("TokenForgeTabContentTopInset", source);
             StringAssert.Contains("TokenForgeTabContentSideInset", source);
             StringAssert.Contains("scrollView.contentInsets", source);
-            StringAssert.Contains("TokenForgePinSubview(content, document, TokenForgeTabContentTopInset, TokenForgeTabContentSideInset, TokenForgeTabSafeBottomInset, TokenForgeTabContentSideInset);", source);
-            StringAssert.Contains("TokenForgePinSubview(guideContent, guideDocument, 20, 32, TokenForgeTabSafeBottomInset, 32);", source);
+            StringAssert.Contains("TokenForgeConstrainPageStack(content, document, TokenForgeTabContentTopInset, TokenForgeTabContentSideInset, TokenForgeTabSafeBottomInset);", source);
+            StringAssert.Contains("TokenForgeConstrainPageStack(guideContent, guideDocument, 20, TokenForgeTabContentSideInset, TokenForgeTabSafeBottomInset);", source);
             StringAssert.Contains("[LayoutBounds]", source);
             StringAssert.Contains("bottomInset=%.0f", source);
         }

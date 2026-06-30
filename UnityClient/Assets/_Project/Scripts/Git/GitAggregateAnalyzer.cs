@@ -12,8 +12,10 @@ namespace TokenForge.Client.Git
 {
     public sealed class GitAggregateAnalyzer
     {
-        public const string Version = "git-aggregate-v1";
+        public const string Version = "git-aggregate-v2";
         private const string CommitBoundary = "--TOKENFORGE-COMMIT--";
+        private const string CommitTimestampPrefix = "--TOKENFORGE-TIMESTAMP--";
+        private const string CommitSubjectPrefix = "--TOKENFORGE-SUBJECT--";
 
         private readonly IGitCommandRunner commandRunner;
         private readonly PrivacySanitizer privacySanitizer;
@@ -89,9 +91,28 @@ namespace TokenForge.Client.Git
                 var logResult = await RunRequiredAsync(canonicalRootPath, logArguments, cancellationToken);
                 if (!logResult.IsSuccess) return Failure(logResult, "log");
                 ParseLogNumstat(logResult.Output, aggregate, aggregate.AnalysisMode == GitAnalysisMode.RecentTrend ? maxCommits : int.MaxValue);
+                // Commit subjects are inspected only to count safe keyword signals; the raw text is
+                // never placed in GitChangeSummary or logs. Keep this best-effort so older test and
+                // restricted Git runners that only allow numstat still produce a valid analysis.
+                var commitMetadataResult = await commandRunner.RunAsync(canonicalRootPath, BuildCommitMetadataArguments(input, aggregate, maxCommits), cancellationToken);
+                if (commitMetadataResult.IsSuccess)
+                {
+                    ParseCommitMetadata(commitMetadataResult.Output, aggregate);
+                }
             }
 
             var summary = aggregate.ToSummary();
+            logger?.Info("INFO [GrowthSummaryDiagnostic] activeRepoPath=approved-local-path" +
+                         " repoPathStableId=" + summary.ProjectPathHash +
+                         " commitCountAnalyzed=" + aggregate.CommitCount +
+                         " numstatRowsAnalyzed=" + summary.NumstatRowsAnalyzed +
+                         " categoryRawCounts=code:" + summary.CodeFileSignalCount +
+                         ",focusSessions:" + summary.FocusSessionCount +
+                         ",debug:" + summary.DebugCommitSignalCount +
+                         ",design:" + summary.DesignFileSignalCount +
+                         ",sync:" + summary.SyncSignalCount +
+                         " normalizedScores=" + summary.GrowthCodeScore + ":" + summary.GrowthFocusScore + ":" +
+                         summary.GrowthDebugScore + ":" + summary.GrowthDesignScore + ":" + summary.GrowthSyncScore);
             var privacyValidation = privacySanitizer.ValidateSafeSession(new AgentWorkSession { GitChangeSummary = summary, SourceProvider = "GIT" });
             if (!privacyValidation.IsSuccess)
             {
@@ -188,6 +209,20 @@ namespace TokenForge.Client.Git
 
             var windowDays = input.ClampedAnalysisWindowDays();
             return $"log --since={windowDays}.days.ago --numstat --format={CommitBoundary} -n {maxCommits}";
+        }
+
+        private static string BuildCommitMetadataArguments(GitRepositoryAnalysisInput input, AggregateState aggregate, int maxCommits)
+        {
+            var format = $"--format={CommitTimestampPrefix}%ct%n{CommitSubjectPrefix}%s";
+            if (aggregate.AnalysisMode == GitAnalysisMode.FullBaseline)
+            {
+                return $"log --all {format}";
+            }
+            if (aggregate.AnalysisMode == GitAnalysisMode.Incremental)
+            {
+                return $"log {aggregate.AnalyzedStartCommit}..HEAD {format}";
+            }
+            return $"log --since={input.ClampedAnalysisWindowDays()}.days.ago {format} -n {maxCommits}";
         }
 
         private static string SafeCommit(string raw)
@@ -351,7 +386,35 @@ namespace TokenForge.Client.Git
                     continue;
                 }
 
+                if (line.StartsWith(CommitTimestampPrefix, StringComparison.Ordinal))
+                {
+                    aggregate.AddCommitTimestamp(line.Substring(CommitTimestampPrefix.Length));
+                    continue;
+                }
+
+                if (line.StartsWith(CommitSubjectPrefix, StringComparison.Ordinal))
+                {
+                    aggregate.AddCommitSubjectSignals(line.Substring(CommitSubjectPrefix.Length));
+                    continue;
+                }
+
                 ParseNumstatLine(line, aggregate, true);
+            }
+        }
+
+        private static void ParseCommitMetadata(string output, AggregateState aggregate)
+        {
+            var lines = (output ?? string.Empty).Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var line in lines)
+            {
+                if (line.StartsWith(CommitTimestampPrefix, StringComparison.Ordinal))
+                {
+                    aggregate.AddCommitTimestamp(line.Substring(CommitTimestampPrefix.Length));
+                }
+                else if (line.StartsWith(CommitSubjectPrefix, StringComparison.Ordinal))
+                {
+                    aggregate.AddCommitSubjectSignals(line.Substring(CommitSubjectPrefix.Length));
+                }
             }
         }
 
@@ -375,6 +438,7 @@ namespace TokenForge.Client.Git
             {
                 aggregate.ChangedFileCount++;
                 aggregate.ModifiedFileCount++;
+                aggregate.NumstatRowsAnalyzed++;
                 aggregate.AddPathCategory(parts[2]);
             }
         }
@@ -408,14 +472,54 @@ namespace TokenForge.Client.Git
             public int RenamedFileCount { get; set; }
             public int BinaryFileCount { get; set; }
             public int CommitCount { get; set; }
+            public int NumstatRowsAnalyzed { get; set; }
+            public int CodeFileSignalCount { get; set; }
+            public int DesignFileSignalCount { get; set; }
+            public int DebugCommitSignalCount { get; set; }
+            public int SyncSignalCount { get; set; }
             public bool HasUncommittedChanges { get; set; }
             public Dictionary<FileCategory, int> FileCategories { get; } = new Dictionary<FileCategory, int>();
             public Dictionary<string, int> ExtensionCategories { get; } = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            public List<long> CommitTimestamps { get; } = new List<long>();
 
             public void AddPathCategory(string repositoryRelativePath)
             {
                 Increment(FileCategories, GitPathClassifier.Classify(repositoryRelativePath));
                 Increment(ExtensionCategories, GitExtensionCategoryClassifier.Classify(repositoryRelativePath));
+                var normalizedPath = (repositoryRelativePath ?? string.Empty).Replace('\\', '/').ToLowerInvariant();
+                if (IsCodePath(normalizedPath))
+                {
+                    CodeFileSignalCount++;
+                }
+                if (IsDesignPath(normalizedPath))
+                {
+                    DesignFileSignalCount++;
+                }
+                if (IsSyncPath(normalizedPath))
+                {
+                    SyncSignalCount++;
+                }
+            }
+
+            public void AddCommitTimestamp(string rawTimestamp)
+            {
+                if (long.TryParse((rawTimestamp ?? string.Empty).Trim(), out var value) && value > 0)
+                {
+                    CommitTimestamps.Add(value);
+                }
+            }
+
+            public void AddCommitSubjectSignals(string subject)
+            {
+                var normalized = (subject ?? string.Empty).ToLowerInvariant();
+                if (ContainsAny(normalized, "fix", "bug", "debug", "crash", "error", "exception", "regression", "patch"))
+                {
+                    DebugCommitSignalCount++;
+                }
+                if (ContainsAny(normalized, "sync", "network", "api", "auth", "repository", "remote", "pull", "push", "conflict", "git"))
+                {
+                    SyncSignalCount++;
+                }
             }
 
             public void AddFileKind(string statusCode)
@@ -442,6 +546,8 @@ namespace TokenForge.Client.Git
             public GitChangeSummary ToSummary()
             {
                 var confidence = CalculateConfidence();
+                var focusSessionCount = CalculateFocusSessionCount();
+                var focusRaw = CommitCount <= 0 ? 0 : CommitCount + Math.Max(0, CommitCount - focusSessionCount);
                 var warnings = new List<string>();
                 if (confidence == ConfidenceLevel.Low)
                 {
@@ -492,6 +598,18 @@ namespace TokenForge.Client.Git
                     FirstCommitAtUtc = FirstCommitAtUtc,
                     TotalCommitsAnalyzed = TotalCommitsAnalyzed,
                     IncrementalCommitCount = IncrementalCommitCount,
+                    NumstatRowsAnalyzed = NumstatRowsAnalyzed,
+                    CodeFileSignalCount = CodeFileSignalCount,
+                    DesignFileSignalCount = DesignFileSignalCount,
+                    DebugCommitSignalCount = DebugCommitSignalCount,
+                    SyncSignalCount = SyncSignalCount,
+                    FocusSessionCount = focusSessionCount,
+                    GrowthCodeScore = NormalizeGrowthScore(CodeFileSignalCount),
+                    GrowthFocusScore = NormalizeGrowthScore(focusRaw),
+                    GrowthDebugScore = NormalizeGrowthScore(DebugCommitSignalCount),
+                    GrowthDesignScore = NormalizeGrowthScore(DesignFileSignalCount),
+                    GrowthSyncScore = NormalizeGrowthScore(SyncSignalCount),
+                    GrowthScoringVersion = "git-growth-axes-v2",
                     LastAnalyzedCommit = LastAnalyzedCommit,
                     AnalyzedStartCommit = AnalyzedStartCommit,
                     AnalyzedEndCommit = AnalyzedEndCommit,
@@ -517,6 +635,66 @@ namespace TokenForge.Client.Git
                 }
 
                 return ConfidenceLevel.Medium;
+            }
+
+            private int CalculateFocusSessionCount()
+            {
+                var ordered = CommitTimestamps.OrderBy(value => value).ToList();
+                if (ordered.Count == 0)
+                {
+                    return CommitCount > 0 ? 1 : 0;
+                }
+
+                var sessions = 1;
+                for (var index = 1; index < ordered.Count; index++)
+                {
+                    if (ordered[index] - ordered[index - 1] > 90 * 60)
+                    {
+                        sessions++;
+                    }
+                }
+                return sessions;
+            }
+
+            private static int NormalizeGrowthScore(int rawCount)
+            {
+                if (rawCount <= 0)
+                {
+                    return 0;
+                }
+
+                return Math.Max(1, Math.Min(10, (int)Math.Ceiling(10.0 * (1.0 - Math.Exp(-rawCount / 12.0)))));
+            }
+
+            private static bool IsCodePath(string path)
+            {
+                return EndsWithAny(path, ".swift", ".cs", ".js", ".ts", ".tsx", ".jsx", ".py", ".java", ".kt", ".kts", ".go", ".rs", ".cpp", ".cc", ".c", ".h", ".hpp", ".m", ".mm", ".rb", ".php") ||
+                       path.StartsWith("src/", StringComparison.Ordinal) || path.Contains("/src/") || path.Contains("/scripts/");
+            }
+
+            private static bool IsDesignPath(string path)
+            {
+                return path.StartsWith("assets/", StringComparison.Ordinal) || path.Contains("/assets/") ||
+                       path.Contains("/ui/") || path.Contains("/views/") || path.Contains("/view/") ||
+                       EndsWithAny(path, ".uxml", ".uss", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".prefab", ".storyboard", ".xib");
+            }
+
+            private static bool IsSyncPath(string path)
+            {
+                return path.StartsWith(".git", StringComparison.Ordinal) || path.Contains("/git/") ||
+                       path.Contains("/network/") || path.Contains("/api/") || path.Contains("/sync/") ||
+                       path.Contains("/auth/") || path.Contains("/repository/") || path.Contains("/repositories/") ||
+                       path.Contains("remote") || path.Contains("conflict");
+            }
+
+            private static bool EndsWithAny(string value, params string[] suffixes)
+            {
+                return suffixes.Any(suffix => value.EndsWith(suffix, StringComparison.Ordinal));
+            }
+
+            private static bool ContainsAny(string value, params string[] needles)
+            {
+                return needles.Any(value.Contains);
             }
 
             private static void Increment<TKey>(Dictionary<TKey, int> dictionary, TKey key)

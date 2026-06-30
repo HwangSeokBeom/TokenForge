@@ -60,7 +60,7 @@ namespace TokenForge.Client.UI
             var repo = SanitizeKeyPart(repositoryIdentity, "no-repo");
             var role = SanitizeKeyPart(previewRole, "legacy");
             var variant = SanitizeKeyPart(cosmeticVariant, "default");
-            return "signature=sprite:v4:grid24:stage=" + state.Stage + ":archetype=" + state.Archetype + ":frame=" + (walkFrame ? "walk" : "idle") + ":repo=" + repo + ":role=" + role + ":zodiac=" + zodiac + ":variant=" + variant + ":equippedItemsHash=" + string.Join(",", items);
+            return "signature=sprite:v4:grid24:stage=" + CanonicalStageName(state.Stage) + ":archetype=" + state.Archetype + ":frame=" + (walkFrame ? "walk" : "idle") + ":repo=" + repo + ":role=" + role + ":zodiac=" + zodiac + ":variant=" + variant + ":equippedItemsHash=" + string.Join(",", items);
         }
 
         public static string SpriteSignature(CompanionState state, bool walkFrame, string zodiacTypeId, IEnumerable<string> equippedItemIds = null)
@@ -446,6 +446,7 @@ namespace TokenForge.Client.UI
             return (equippedItemIds ?? Enumerable.Empty<string>())
                 .Where(id => !string.IsNullOrWhiteSpace(id))
                 .Select(SanitizeItemId)
+                .Select(CanonicalizeEquippedItemId)
                 .Where(id => !string.IsNullOrWhiteSpace(id))
                 .Distinct(StringComparer.Ordinal)
                 .OrderBy(id => id, StringComparer.Ordinal)
@@ -464,6 +465,37 @@ namespace TokenForge.Client.UI
                 .Where(character => char.IsLetterOrDigit(character) || character == '_' || character == '-')
                 .ToArray();
             return new string(chars);
+        }
+
+        private static string CanonicalizeEquippedItemId(string sanitizedItemId)
+        {
+            // Cosmetic skin ids (skin_*) are collapsed to a compact underscore-free canonical
+            // token so equivalent skin variants share a single sprite-cache entry. Other equipment
+            // ids (outfits, effects, etc.) keep their raw separators to stay distinguishable.
+            if (string.IsNullOrEmpty(sanitizedItemId) || !sanitizedItemId.StartsWith("skin_", StringComparison.Ordinal))
+            {
+                return sanitizedItemId;
+            }
+
+            return sanitizedItemId.Replace("_", string.Empty);
+        }
+
+        private static string CanonicalStageName(CompanionStage stage)
+        {
+            // CompanionStage declares back-compat aliases that share underlying values
+            // (Baby = Child, Junior = Teen, Hatching = Hatchling). Enum.ToString() is
+            // non-deterministic for duplicate values and can emit the alias (e.g. "Baby"
+            // for Child), so resolve the canonical primary name explicitly for stable keys.
+            switch (stage)
+            {
+                case CompanionStage.Egg: return "Egg";
+                case CompanionStage.Hatchling: return "Hatchling";
+                case CompanionStage.Child: return "Child";
+                case CompanionStage.Teen: return "Teen";
+                case CompanionStage.Adult: return "Adult";
+                case CompanionStage.Legendary: return "Legendary";
+                default: return stage.ToString();
+            }
         }
 
         private static string StageVisualSignature(CompanionStage stage)

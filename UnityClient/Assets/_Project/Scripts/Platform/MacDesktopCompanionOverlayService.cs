@@ -290,7 +290,11 @@ namespace TokenForge.Client.Platform
 
             try
             {
-                var envelope = new NativeCompanionFarmSnapshotEnvelope();
+                var envelope = new NativeCompanionFarmSnapshotEnvelope
+                {
+                    globalMotionEnabled = farmState?.globalMotionEnabled ?? true,
+                    globalClickThroughEnabled = farmState?.globalClickThroughEnabled ?? false
+                };
                 var overlays = farmState?.overlays ?? new RepositoryCompanionOverlayState[0];
                 foreach (var overlay in overlays)
                 {
@@ -306,8 +310,11 @@ namespace TokenForge.Client.Platform
                     snapshot.hasSavedPosition = overlay.hasSavedPosition;
                     snapshot.desiredInitialX = overlay.desiredPositionX;
                     snapshot.desiredInitialY = overlay.desiredPositionY;
+                    // Each connected companion follows the global motion intent unless it is hidden
+                    // or being dragged, so every visible repo panel animates together when motion is on.
+                    snapshot.movementEnabled = envelope.globalMotionEnabled && snapshot.desiredVisible && !overlay.isDragging;
                     envelope.overlays.Add(snapshot);
-                    Debug.Log("INFO [FarmProjection][ITEM] repo=" + snapshot.repositoryId + " stage=" + ((CompanionStage)snapshot.stage) + " level=" + Math.Max(1, snapshot.level) + " source=profile");
+                    Debug.Log("INFO [FarmProjection][ITEM] repo=" + snapshot.repositoryId + " stage=" + ((CompanionStage)snapshot.stage) + " level=" + Math.Max(1, snapshot.level) + " movementEnabled=" + snapshot.movementEnabled + " source=profile");
                 }
 
                 NativeSetFarmSnapshots(JsonUtility.ToJson(envelope));
@@ -333,6 +340,11 @@ namespace TokenForge.Client.Platform
                     ? "Native repository companion farm active."
                     : "Native repository companion farm hidden.";
                 Debug.Log("INFO [FarmProjection][BUILD] connectedRepositories=" + envelope.overlays.Count + " snapshots=" + envelope.overlays.Count);
+                Debug.Log("INFO [OverlayMotionDiagnostic] globalMotionEnabled=" + envelope.globalMotionEnabled +
+                          " globalClickThroughEnabled=" + envelope.globalClickThroughEnabled +
+                          " targetCompanionCount=" + envelope.overlays.Count +
+                          " movingCompanionCount=" + envelope.overlays.FindAll(item => item.movementEnabled).Count +
+                          " source=csharp.setFarmSnapshots");
                 Debug.Log("INFO [OverlayFarm][SNAPSHOT_APPLY] count=" + envelope.overlays.Count + " source=csharp");
                 Debug.Log("INFO [OverlayFarm][VISIBLE_COUNT] count=" + (nativeVisible ? envelope.overlays.Count : 0));
                 Debug.Log("INFO [Overlay][Actual] repoHash=" + (envelope.overlays.Count == 0 ? "none" : string.Join(",", envelope.overlays.ConvertAll(item => item.repositoryId).ToArray())) +

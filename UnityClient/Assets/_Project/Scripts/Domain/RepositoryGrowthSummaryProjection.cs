@@ -228,12 +228,33 @@ namespace TokenForge.Client.Domain
                 AddTimelineSyncSignal(summary, timelineEvent, timelineEvent.TimestampUtc >= weekStart);
             }
 
+            var hasAuthoritativeGitAxes = connectedProject != null &&
+                                          string.Equals(connectedProject.GrowthScoringVersion, "git-growth-axes-v2", StringComparison.Ordinal) &&
+                                          connectedProject.TotalCommitCount > 0;
+            if (hasAuthoritativeGitAxes)
+            {
+                // The latest persisted Git-history analysis is a repository snapshot. It replaces
+                // accumulated legacy rule weights so rerunning Full History cannot double-count an
+                // older baseline or leak values from the previously selected repository.
+                summary.Code = Math.Max(0, connectedProject.GrowthCodeScore);
+                summary.Focus = Math.Max(0, connectedProject.GrowthFocusScore);
+                summary.Debug = Math.Max(0, connectedProject.GrowthDebugScore);
+                summary.Design = Math.Max(0, connectedProject.GrowthDesignScore);
+                summary.Sync = Math.Max(0, connectedProject.GrowthSyncScore);
+                summary.HasStoredAxisDeltas = true;
+                summary.HasHistoricalEvents = true;
+                summary.ProjectionSource = connectedProject.GrowthScoringVersion;
+                summary.ReasonIfUnchanged = summary.CurrentHead == summary.LastAnalyzedCommit && summary.CurrentHead != "none"
+                    ? "already_at_current_head"
+                    : "head_or_analysis_checkpoint_changed";
+            }
+
             if (summary.ProjectionSource == "none" && summary.HasHistoricalEvents)
             {
                 summary.ProjectionSource = summary.HasSavedGrowth ? "legacyAxisMissing" : "historicalActivityOnly";
             }
 
-            summary.HasLegacyAxisGap = summary.HasSavedGrowth &&
+            summary.HasLegacyAxisGap = !hasAuthoritativeGitAxes && summary.HasSavedGrowth &&
                                        ((!summary.HasStoredAxisDeltas &&
                                          summary.Code == 0 &&
                                          summary.Focus == 0 &&
@@ -247,6 +268,22 @@ namespace TokenForge.Client.Domain
             if (summary.HasLegacyAxisGap && summary.ProjectionSource != "legacyAxisMissing")
             {
                 summary.ProjectionSource = summary.ProjectionSource + "+legacyAxisGap";
+            }
+
+            // Distinguish "0 because there is genuinely nothing recorded for this repository"
+            // from "0 because the head has not advanced since the last analysis". Without this a
+            // freshly connected / never-analyzed repository (e.g. TokenForgeCoreServer) is
+            // indistinguishable from a stale-but-unchanged one and the summary looks silently
+            // frozen at 0/0/0/0/0 instead of reporting why it is empty.
+            var hasAnyAxisSignal = summary.Code > 0 || summary.Focus > 0 || summary.Debug > 0 ||
+                                   summary.Design > 0 || summary.Sync > 0 || summary.TotalXp > 0;
+            if (!summary.HasHistoricalEvents)
+            {
+                summary.ReasonIfUnchanged = "no_recorded_activity";
+            }
+            else if (!hasAnyAxisSignal)
+            {
+                summary.ReasonIfUnchanged = "recorded_activity_without_axis_delta";
             }
 
             summary.Code = Math.Max(0, summary.Code);
@@ -303,6 +340,18 @@ namespace TokenForge.Client.Domain
                                   " legacyGapCount=" + (summary.HasLegacyAxisGap ? 1 : 0) +
                                   " axisTotals=" + summary.Code + ":" + summary.Focus + ":" + summary.Debug + ":" + summary.Design + ":" + summary.Sync +
                                   " sourcePriority=" + summary.ProjectionSource);
+            UnityEngine.Debug.Log("INFO [GrowthSummaryDiagnostic] repoHash=" + repositoryId +
+                                  " selectedRepoHash=" + SafeLogValue(selectedRepositoryId, "none") +
+                                  " axisTotals=" + summary.Code + ":" + summary.Focus + ":" + summary.Debug + ":" + summary.Design + ":" + summary.Sync +
+                                  " hasHistoricalEvents=" + summary.HasHistoricalEvents +
+                                  " hasSavedGrowth=" + summary.HasSavedGrowth +
+                                  " hasStoredAxisDeltas=" + summary.HasStoredAxisDeltas +
+                                  " projectionSource=" + summary.ProjectionSource +
+                                  " reasonIfUnchanged=" + summary.ReasonIfUnchanged +
+                                  " timelineEventCount=" + timelineEvents.Count +
+                                  " excludedOtherRepoCount=" + excludedOtherRepoCount +
+                                  " fallbackUsed=" + summary.FallbackUsed +
+                                  " cacheHit=" + summary.CacheHit);
             UnityEngine.Debug.Log("INFO [GrowthProjectionDiagnostic] repoHash=" + repositoryId +
                                   " code=" + summary.Code +
                                   " focus=" + summary.Focus +
@@ -477,7 +526,7 @@ namespace TokenForge.Client.Domain
                 Focus = Math.Max(0, stats.Efficiency + stats.Stability),
                 Debug = Math.Max(0, stats.Debug),
                 Design = Math.Max(0, stats.Design + stats.Creativity),
-                Sync = 0
+                Sync = Math.Max(0, stats.Sync)
             };
         }
 
@@ -501,6 +550,16 @@ namespace TokenForge.Client.Domain
         private static void AddTimelineSyncSignal(RepositoryGrowthSummary summary, RepositoryTimelineEvent timelineEvent, bool weekly)
         {
             if (!IsSyncSignal(timelineEvent))
+            {
+                return;
+            }
+
+            // Events that already carry an explicit Sync axis delta have that value counted via
+            // AxesFromTimeline. Adding the heuristic +1 on top would double-count: e.g. a
+            // growth_saved event with SyncDelta=4 whose summary mentions "sync" would read 5.
+            // The heuristic is only meant to recover Sync for legacy events that lack an explicit
+            // SyncDelta (e.g. safe_sync_completed events whose axis delta maps Stability -> Focus).
+            if (Math.Max(0, timelineEvent?.SyncDelta ?? 0) > 0)
             {
                 return;
             }

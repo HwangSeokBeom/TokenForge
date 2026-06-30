@@ -14,6 +14,7 @@ namespace TokenForge.Client.Domain
         public int Velocity { get; set; }
         public int Creativity { get; set; }
         public int Efficiency { get; set; }
+        public int Sync { get; set; }
         public int Stress { get; set; }
 
         public static CharacterStats Zero()
@@ -31,6 +32,7 @@ namespace TokenForge.Client.Domain
             Velocity += delta.Velocity;
             Creativity += delta.Creativity;
             Efficiency += delta.Efficiency;
+            Sync += delta.Sync;
             Stress += delta.Stress;
         }
     }

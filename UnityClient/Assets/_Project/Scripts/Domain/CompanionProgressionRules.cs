@@ -224,6 +224,7 @@ namespace TokenForge.Client.Domain
                 stats.FocusStat += Math.Max(0, delta.Efficiency + delta.Stability);
                 stats.DebugStat += Math.Max(0, delta.Debug);
                 stats.DesignStat += Math.Max(0, delta.Design + delta.Creativity);
+                stats.SyncStat += Math.Max(0, delta.Sync);
             }
 
             return stats;

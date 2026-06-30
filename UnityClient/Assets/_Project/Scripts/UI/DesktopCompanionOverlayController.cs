@@ -368,8 +368,8 @@ namespace TokenForge.Client.UI
                       " selectedRepoId=none selectedRepoHash=none approvedRepoCount=0");
             Debug.Log("INFO [OverlayVisibilityDiagnostic] reason=" + reason +
                       " approvedRepoCount=0 selectedRepoHash=none desiredVisible=false actualVisible=false panelExists=" + panelExists +
-                      " farmPanelCount=0 forcedHiddenByNoRepo=true canonicalRepoHash=none legacyPanelExists=" + panelExists +
-                      " legacyPanelVisible=false visibleFarmPanelCount=0 persistedFarmSnapshotCount=0");
+                      " forcedHiddenByNoRepo=true canonicalRepoHash=none legacyPanelExists=" + panelExists +
+                      " legacyPanelVisible=false farmPanelCount=0 visibleFarmPanelCount=0 persistedFarmSnapshotCount=0");
             if (overlayService == null || !overlayService.IsAvailable)
             {
                 return;

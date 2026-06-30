@@ -48,6 +48,14 @@ namespace TokenForge.Client.Domain
         public string AnalyzedCommitRange { get; set; } = string.Empty;
         public string LastAnalysisMode { get; set; } = string.Empty;
         public string LastAnalysisScope { get; set; } = string.Empty;
+        public int GrowthCodeScore { get; set; }
+        public int GrowthFocusScore { get; set; }
+        public int GrowthDebugScore { get; set; }
+        public int GrowthDesignScore { get; set; }
+        public int GrowthSyncScore { get; set; }
+        public int GrowthNumstatRowsAnalyzed { get; set; }
+        public string GrowthScoringVersion { get; set; } = string.Empty;
+        public string GrowthResultId { get; set; } = string.Empty;
         public bool AnalysisEnabled { get; set; } = true;
     }
 

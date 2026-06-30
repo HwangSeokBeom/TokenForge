@@ -814,7 +814,7 @@ namespace TokenForge.Client.Domain
                 FocusStat = Math.Max(0, categoryDelta.Efficiency + categoryDelta.Stability),
                 DebugStat = Math.Max(0, categoryDelta.Debug),
                 DesignStat = Math.Max(0, categoryDelta.Design + categoryDelta.Creativity),
-                SyncStat = 0
+                SyncStat = Math.Max(0, categoryDelta.Sync)
             };
         }
 

@@ -47,6 +47,18 @@ namespace TokenForge.Client.Domain
         public string FirstCommitAtUtc { get; set; } = string.Empty;
         public int TotalCommitsAnalyzed { get; set; }
         public int IncrementalCommitCount { get; set; }
+        public int NumstatRowsAnalyzed { get; set; }
+        public int CodeFileSignalCount { get; set; }
+        public int DesignFileSignalCount { get; set; }
+        public int DebugCommitSignalCount { get; set; }
+        public int SyncSignalCount { get; set; }
+        public int FocusSessionCount { get; set; }
+        public int GrowthCodeScore { get; set; }
+        public int GrowthFocusScore { get; set; }
+        public int GrowthDebugScore { get; set; }
+        public int GrowthDesignScore { get; set; }
+        public int GrowthSyncScore { get; set; }
+        public string GrowthScoringVersion { get; set; } = string.Empty;
         public string LastAnalyzedCommit { get; set; } = string.Empty;
         public string AnalyzedStartCommit { get; set; } = string.Empty;
         public string AnalyzedEndCommit { get; set; } = string.Empty;

@@ -137,6 +137,24 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void GitAggregateAnalyzer_ComputesFiveAxesFromRepositoryEvidence()
+        {
+            var directory = CreateTempDirectory();
+            var analyzer = new GitAggregateAnalyzer(FakeRunner.WithMaliciousAggregateOutput());
+
+            var result = RunAsync(() => analyzer.AnalyzeAsync(Input(directory), CancellationToken.None));
+
+            Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
+            Assert.AreEqual("git-growth-axes-v2", result.Value.GrowthScoringVersion);
+            Assert.Greater(result.Value.NumstatRowsAnalyzed, 0);
+            Assert.Greater(result.Value.GrowthCodeScore, 0);
+            Assert.Greater(result.Value.GrowthFocusScore, 0);
+            Assert.Greater(result.Value.GrowthDebugScore, 0);
+            Assert.Greater(result.Value.GrowthDesignScore, 0);
+            Assert.Greater(result.Value.GrowthSyncScore, 0);
+        }
+
+        [Test]
         public void GitAggregateAnalyzer_CommitCountsAreBucketedAndCapped()
         {
             var directory = CreateTempDirectory();
@@ -489,7 +507,11 @@ namespace TokenForge.Client.Tests
                     ["log --all --numstat --format=--TOKENFORGE-COMMIT--"] = GitCommandResult.Success(log),
                     ["log BASESHA..HEAD --numstat --format=--TOKENFORGE-COMMIT--"] = GitCommandResult.Success(log),
                     ["log --since=7.days.ago --numstat --format=--TOKENFORGE-COMMIT-- -n 50"] = GitCommandResult.Success(log),
-                    ["log --since=30.days.ago --numstat --format=--TOKENFORGE-COMMIT-- -n 200"] = GitCommandResult.Success(log)
+                    ["log --since=30.days.ago --numstat --format=--TOKENFORGE-COMMIT-- -n 200"] = GitCommandResult.Success(log),
+                    ["log --all --format=--TOKENFORGE-TIMESTAMP--%ct%n--TOKENFORGE-SUBJECT--%s"] = GitCommandResult.Success("--TOKENFORGE-TIMESTAMP--1767225600\n--TOKENFORGE-SUBJECT--Fix auth sync crash in UI assets\n"),
+                    ["log BASESHA..HEAD --format=--TOKENFORGE-TIMESTAMP--%ct%n--TOKENFORGE-SUBJECT--%s"] = GitCommandResult.Success("--TOKENFORGE-TIMESTAMP--1767225600\n--TOKENFORGE-SUBJECT--Fix auth sync crash in UI assets\n"),
+                    ["log --since=7.days.ago --format=--TOKENFORGE-TIMESTAMP--%ct%n--TOKENFORGE-SUBJECT--%s -n 50"] = GitCommandResult.Success("--TOKENFORGE-TIMESTAMP--1767225600\n--TOKENFORGE-SUBJECT--Fix auth sync crash in UI assets\n"),
+                    ["log --since=30.days.ago --format=--TOKENFORGE-TIMESTAMP--%ct%n--TOKENFORGE-SUBJECT--%s -n 200"] = GitCommandResult.Success("--TOKENFORGE-TIMESTAMP--1767225600\n--TOKENFORGE-SUBJECT--Fix auth sync crash in UI assets\n")
                 };
             }
         }

@@ -427,13 +427,13 @@ namespace TokenForge.Client.Tests
             Assert.That(source, Does.Contain("TokenForgeTabContentTopInset"));
             Assert.That(source, Does.Contain("TokenForgeTabContentSideInset"));
             Assert.That(source, Does.Contain("scrollView.contentInsets"));
-            Assert.That(source, Does.Contain("TokenForgePinSubview(content, document, TokenForgeTabContentTopInset, TokenForgeTabContentSideInset, TokenForgeTabSafeBottomInset, TokenForgeTabContentSideInset)"));
+            Assert.That(source, Does.Contain("TokenForgeConstrainPageStack(content, document, TokenForgeTabContentTopInset, TokenForgeTabContentSideInset, TokenForgeTabSafeBottomInset)"));
             Assert.That(source, Does.Contain("[LayoutBounds][BOTTOM_INSET]"));
             Assert.That(source, Does.Contain("[LayoutDiagnostic] selectedTab=%@"));
             Assert.That(source, Does.Contain("dashboardFrame=%@ shellHeaderFrame=fixed92 scrollContentFrame=bodyFill bottomTabFrame=TokenForge.BottomTabBar safeBottomInset=%.0f"));
             Assert.That(source, Does.Contain("visibleContentHeight=%.0f contentBottomY=%.0f bottomTabTopY=%.0f isBottomClipped=%@"));
             Assert.That(source, Does.Contain("isBottomClipped ? @\"true\" : @\"false\""));
-            Assert.That(source, Does.Contain("scrollView.contentInsets = NSEdgeInsetsMake(0, 0, TokenForgeTabSafeBottomInset, 0);"));
+            Assert.That(source, Does.Contain("scrollView.contentInsets = NSEdgeInsetsMake(0, 0, 0, 0);"));
             Assert.That(source, Does.Contain("tokenShopScreen"));
             Assert.That(source, Does.Contain("wardrobeScreen"));
         }
@@ -796,13 +796,58 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void GrowthSummaryHarness_LatestGitHistoryAxesAreRepositoryScopedAndAuthoritative()
+        {
+            var saveData = SaveData.CreateDefault();
+            saveData.ConnectedProjects.Add(new ConnectedProject
+            {
+                Id = "repo-a",
+                PathHash = "repo-a",
+                ApprovedAt = DateTimeOffset.UtcNow,
+                IsActive = true,
+                CurrentHeadCommit = "HEAD-A",
+                LastAnalyzedCommit = "HEAD-A",
+                TotalCommitCount = 18,
+                GrowthScoringVersion = "git-growth-axes-v2",
+                GrowthCodeScore = 9,
+                GrowthFocusScore = 8,
+                GrowthDebugScore = 4,
+                GrowthDesignScore = 6,
+                GrowthSyncScore = 3
+            });
+            saveData.ConnectedProjects.Add(new ConnectedProject
+            {
+                Id = "repo-b",
+                PathHash = "repo-b",
+                ApprovedAt = DateTimeOffset.UtcNow,
+                CurrentHeadCommit = "HEAD-B",
+                LastAnalyzedCommit = "HEAD-B",
+                TotalCommitCount = 3,
+                GrowthScoringVersion = "git-growth-axes-v2",
+                GrowthCodeScore = 2,
+                GrowthFocusScore = 3,
+                GrowthDebugScore = 1,
+                GrowthDesignScore = 0,
+                GrowthSyncScore = 5
+            });
+
+            var repoA = RepositoryGrowthSummaryProjection.Build(saveData, "repo-a");
+            var repoB = RepositoryGrowthSummaryProjection.Build(saveData, "repo-b");
+
+            Assert.AreEqual("9:8:4:6:3", VectorKey(repoA));
+            Assert.AreEqual("2:3:1:0:5", VectorKey(repoB));
+            Assert.AreEqual("git-growth-axes-v2", repoA.ProjectionSource);
+            Assert.AreNotEqual(VectorKey(repoA), VectorKey(repoB));
+        }
+
+        [Test]
         public void NativeLayoutHarness_SafeInsetsClippingAndModalBoundsAreDiagnosed()
         {
             var source = NativeSource();
 
             Assert.That(source, Does.Contain("screen=%@ windowFrame=%@ contentFrame=%@ sidebarFrame=TokenForge.FixedLeftSidebar headerFrame=%@ scrollFrame=%@ contentSize=%@ bottomInset=%.0f dockSafeAreaGuess=%.0f clippedViewCount=%d clippedViewNames=%@"));
-            Assert.That(source, Does.Contain("scrollView.contentInsets = NSEdgeInsetsMake(0, 0, TokenForgeTabSafeBottomInset, 0);"));
-            Assert.That(source, Does.Contain("TokenForgePinSubview(content, document, TokenForgeTabContentTopInset, TokenForgeTabContentSideInset, TokenForgeTabSafeBottomInset, TokenForgeTabContentSideInset)"));
+            Assert.That(source, Does.Contain("scrollView.contentInsets = NSEdgeInsetsMake(0, 0, 0, 0);"));
+            Assert.That(source, Does.Contain("TokenForgeConstrainPageStack(content, document, TokenForgeTabContentTopInset, TokenForgeTabContentSideInset, TokenForgeTabSafeBottomInset)"));
             Assert.That(source, Does.Contain("tokenShopScreen"));
             Assert.That(source, Does.Contain("wardrobeScreen"));
             Assert.That(source, Does.Contain("TokenForge.Wardrobe.ContentRoot"));

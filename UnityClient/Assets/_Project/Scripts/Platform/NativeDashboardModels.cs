@@ -278,6 +278,7 @@ namespace TokenForge.Client.Platform
         public bool hasSavedPosition;
         public float desiredInitialX = -1f;
         public float desiredInitialY = -1f;
+        public bool movementEnabled = true;
 
         public static NativeCompanionFarmSnapshot CreateDefault()
         {
@@ -289,6 +290,8 @@ namespace TokenForge.Client.Platform
     public sealed class NativeCompanionFarmSnapshotEnvelope
     {
         public List<NativeCompanionFarmSnapshot> overlays = new List<NativeCompanionFarmSnapshot>();
+        public bool globalMotionEnabled = true;
+        public bool globalClickThroughEnabled;
     }
 
     [Serializable]

@@ -2086,6 +2086,11 @@ namespace TokenForge.Client.UI
                 GrowthResults = new List<CharacterGrowthResult> { growth },
                 CreatedAtUtc = DateTimeOffset.UtcNow
             };
+            if (string.Equals(sourceKind, "repository", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(repositoryHash))
+            {
+                ApplyRepositoryAnalysisCheckpoint(saveData, repositoryHash, session.GitChangeSummary);
+            }
             UpsertActivityReview(saveData, saveData.PendingNativeActivityReview, "pending", null);
 
             var validation = privacySanitizer.ValidateSafeSaveData(saveData);
@@ -2098,6 +2103,8 @@ namespace TokenForge.Client.UI
             if (saveResult.IsSuccess)
             {
                 RefreshCharacterDashboard(saveData, RecentSessions);
+                Debug.Log("INFO [GrowthSummaryDiagnostic] uiRefreshTriggered=true repositoryId=" +
+                          (repositoryHash ?? string.Empty) + " source=persistPendingAnalysis");
             }
 
             return saveResult;
@@ -3385,8 +3392,10 @@ namespace TokenForge.Client.UI
                 HasGrowthAxisData = hasConnectedRepository && repositoryGrowth.HasStoredAxisDeltas,
                 HasLegacyGrowthAxisGap = hasConnectedRepository && repositoryGrowth.HasLegacyAxisGap,
                 GrowthAxisDataStatusText = hasConnectedRepository && repositoryGrowth.HasStoredAxisDeltas
-                    ? "Axis data recorded from approved activity deltas."
-                    : "No axis data recorded yet.",
+                    ? (string.Equals(repositoryGrowth.ProjectionSource, "git-growth-axes-v2", StringComparison.Ordinal)
+                        ? "Calculated from this repository's Git history, numstat paths, commit signals, and work sessions."
+                        : "Axis data recorded from approved activity deltas.")
+                    : "Not enough Git history to calculate growth summary.",
                 GrowthBasis = "Full local Git history",
                 GrowthFirstCommit = hasConnectedRepository ? repositoryGrowth.FirstCommit : string.Empty,
                 GrowthFirstCommitDate = hasConnectedRepository ? repositoryGrowth.FirstCommitDate : string.Empty,
@@ -3937,6 +3946,19 @@ namespace TokenForge.Client.UI
             connection.AnalyzedCommitRange = (summary.AnalyzedStartCommit ?? string.Empty) + ".." + (summary.AnalyzedEndCommit ?? string.Empty);
             connection.LastAnalysisMode = summary.AnalysisMode ?? string.Empty;
             connection.LastAnalysisScope = AnalysisScopeLabel(summary);
+            connection.FilesChangedAnalyzed = Math.Max(0, summary.ChangedFileCount);
+            connection.FirstCommitHash = summary.FirstCommitHash ?? string.Empty;
+            connection.GrowthCodeScore = Math.Max(0, summary.GrowthCodeScore);
+            connection.GrowthFocusScore = Math.Max(0, summary.GrowthFocusScore);
+            connection.GrowthDebugScore = Math.Max(0, summary.GrowthDebugScore);
+            connection.GrowthDesignScore = Math.Max(0, summary.GrowthDesignScore);
+            connection.GrowthSyncScore = Math.Max(0, summary.GrowthSyncScore);
+            connection.GrowthNumstatRowsAnalyzed = Math.Max(0, summary.NumstatRowsAnalyzed);
+            connection.GrowthScoringVersion = summary.GrowthScoringVersion ?? string.Empty;
+            connection.GrowthResultId = summary.AnalysisIdempotencyKey ?? string.Empty;
+            Debug.Log("INFO [GrowthSummaryDiagnostic] persistedResultId=" + connection.GrowthResultId +
+                      " persistedTimestamp=" + connection.LastAnalyzedAt?.UtcDateTime.ToString("O") +
+                      " repositoryId=" + repositoryHash);
             Debug.Log("INFO [GrowthSummary][GIT_BASELINE] repositoryId=" + repositoryHash +
                       " firstConnectedAt=" + (connection.FirstConnectedAt?.UtcDateTime.ToString("O") ?? "none") +
                       " firstAnalyzedCommit=" + connection.FirstAnalyzedCommit +
