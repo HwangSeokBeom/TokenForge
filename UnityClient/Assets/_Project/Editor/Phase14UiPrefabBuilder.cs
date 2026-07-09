@@ -234,9 +234,9 @@ namespace TokenForge.Client.Editor
             StatPill("Hero XP Pill", stats.transform, "XP 0 / 1000", Mint());
             StatPill("Hero Growth Pill", stats.transform, "Today +0 XP", new Color(0.96f, 0.72f, 0.48f, 1f));
             var actions = CreateHorizontal("Hero Action Row", copy.transform, 52f, 10f);
-            var startButton = Button("Start Game", actions.transform, 140f, ButtonStyle.Primary);
+            var startButton = Button("Run Analysis", actions.transform, 140f, ButtonStyle.Primary);
             var addButton = Button("Add Repository", actions.transform, 154f, ButtonStyle.Secondary);
-            var codexButton = Button("Connect Codex Agent", actions.transform, 190f, ButtonStyle.Secondary);
+            var codexButton = Button("Connect AI Agent", actions.transform, 190f, ButtonStyle.Secondary);
 
             var grid = new GameObject("StatusCardGrid", typeof(RectTransform), typeof(GridLayoutGroup), typeof(LayoutElement));
             grid.transform.SetParent(parent, false);
