@@ -134,6 +134,8 @@ namespace TokenForge.Client.UI
                             xp = Math.Max(0, item.CurrentXp),
                             archetype = (int)item.Archetype,
                             visualThemeId = CompanionSkinCatalog.Normalize(item.Skin),
+                            equippedItemIds = string.Join(",", item.EquippedTokenShopItemIds ?? new List<string>()),
+                            zodiacType = RepositoryCompanionProfileService.NormalizeZodiacTypeId(item.ZodiacType, "repository"),
                             hydrated = true,
                             renderVersion = renderVersion,
                             desiredVisible = desiredVisible && item.DesktopCompanionEnabled,
@@ -172,7 +174,7 @@ namespace TokenForge.Client.UI
             overlayService.SetClickThrough(settings.IsClickThroughEnabled);
             var farm = new DesktopCompanionFarmState
             {
-                enabled = desiredVisible && settings.IsDesktopCompanionEnabled,
+                enabled = desiredVisible && overlays.Any(item => item.desiredVisible),
                 overlays = overlays,
                 visibleCount = overlays.Count(item => item.desiredVisible),
                 draggingRepositoryId = overlays.FirstOrDefault(item => item.isDragging)?.repositoryId ?? string.Empty,
@@ -417,8 +419,17 @@ namespace TokenForge.Client.UI
             }
 
             Debug.Log("INFO " + LogPrefix + " double click dashboard restore requested");
-            lifecycleService?.ShowMainWindow();
-            DashboardRestoreRequested?.Invoke();
+            // AppBootstrapper owns the canonical native-dashboard visibility
+            // flag. Sending both routes caused two open/focus requests for one
+            // double-click and let managed/native lifecycle state race.
+            if (DashboardRestoreRequested != null)
+            {
+                DashboardRestoreRequested.Invoke();
+            }
+            else
+            {
+                lifecycleService?.ShowMainWindow();
+            }
         }
 
         private void OnDesktopCompanionDragEnded(Vector2 position)
@@ -434,7 +445,10 @@ namespace TokenForge.Client.UI
         private void OnRepositoryCompanionDragEnded(string repositoryId, Vector2 position)
         {
             Debug.Log("INFO [OverlayPositionSync][COMMIT] repo=" + repositoryId + " source=dragEnd position=(" + position.x.ToString("0.##") + "," + position.y.ToString("0.##") + ")");
-            PositionChanged?.Invoke(position);
+            // Farm overlays have a repository-scoped persistence target. Firing
+            // the legacy unscoped event as well caused the same drag end to save
+            // twice (and could write the selected repository instead of the
+            // dragged repository).
             RepositoryPositionChanged?.Invoke(repositoryId, position);
         }
 

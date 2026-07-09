@@ -29,6 +29,7 @@ namespace TokenForge.Client.Agents
                 new ClaudeAgentLogParser(),
                 new CodexAgentLogParser(),
                 new GitHubCopilotAgentLogParser(),
+                new GeminiCliAgentLogParser(),
                 new ManualAgentLogParser(),
                 new UnknownAgentLogParser()
             }).ToList();
@@ -107,6 +108,11 @@ namespace TokenForge.Client.Agents
                 sample.IndexOf("github", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 return parsers.First(parser => parser.ProviderType == AgentProviderType.GitHubCopilot);
+            }
+
+            if (sample.IndexOf("gemini", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return parsers.First(parser => parser.ProviderType == AgentProviderType.GeminiCli);
             }
 
             return parsers.First(parser => parser.ProviderType == AgentProviderType.Unknown);

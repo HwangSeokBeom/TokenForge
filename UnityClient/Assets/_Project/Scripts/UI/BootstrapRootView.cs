@@ -558,9 +558,10 @@ namespace TokenForge.Client.UI
 
         private void DiscardPendingActivity()
         {
-            viewModel?.DiscardGitReview();
-            viewModel?.DiscardAgentReview();
-            Render();
+            if (viewModel != null)
+            {
+                RunViewModelAction(() => viewModel.DiscardAllPendingReviewsAsync());
+            }
         }
 
         private void ResetCompanionPosition()

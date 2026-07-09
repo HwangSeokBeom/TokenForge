@@ -17,7 +17,9 @@ namespace TokenForge.Client.Agents
             ".txt",
             ".ndjson"
         };
-        private const int MaxDirectoryDepth = 2;
+        // Codex stores sessions below year/month/day directories and Claude can nest by
+        // project. The file/entry caps still bound work, while this depth reaches real logs.
+        private const int MaxDirectoryDepth = 6;
         private const long MaxFileSizeBytes = 4L * 1024L * 1024L;
 
         public Task<AgentLogReadResult> ReadAsync(AgentAnalysisInput input, CancellationToken cancellationToken)
@@ -60,7 +62,8 @@ namespace TokenForge.Client.Agents
                             entries.Add(new AgentLogEntry
                             {
                                 Text = line,
-                                LastWriteTimeUtc = fileInfo.LastWriteTimeUtc
+                                LastWriteTimeUtc = fileInfo.LastWriteTimeUtc,
+                                SourceKey = "file-" + filesRead
                             });
                         }
                     }

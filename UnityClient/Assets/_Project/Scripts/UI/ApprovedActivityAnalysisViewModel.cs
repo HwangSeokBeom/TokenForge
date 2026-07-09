@@ -103,6 +103,7 @@ namespace TokenForge.Client.UI
         public List<string> PurchasedTokenShopItemIds { get; set; } = new List<string>();
         public List<string> EquippedTokenShopItemIds { get; set; } = new List<string>();
         public string Skin { get; set; } = CompanionSkinCatalog.DefaultSkinId;
+        public string ZodiacType { get; set; } = "rat";
         public string CompanionId { get; set; } = string.Empty;
         public bool DesktopCompanionEnabled { get; set; } = true;
         public bool HasSavedOverlayPosition { get; set; }
@@ -265,6 +266,8 @@ namespace TokenForge.Client.UI
         private Func<CancellationToken, Task<SafeSyncResult>> pendingSafeSyncConfirmationAction;
         private readonly Dictionary<ConnectedAgentSourceType, AgentSourceCandidate> approvedAgentCandidates = new Dictionary<ConnectedAgentSourceType, AgentSourceCandidate>();
         private readonly Dictionary<string, RepositoryLocalMetadata> approvedGitMetadataByHash = new Dictionary<string, RepositoryLocalMetadata>(StringComparer.Ordinal);
+        private readonly object pendingReviewClearLock = new object();
+        private Task<Result> pendingReviewClearTask;
 
         public ApprovedActivityAnalysisViewModel(
             GitAnalysisFlowController gitFlow,
@@ -1023,6 +1026,7 @@ namespace TokenForge.Client.UI
         {
             var saveData = await repository.LoadAsync(cancellationToken);
             RepositoryCompanionProfileService.Normalize(saveData);
+            var previousRepositoryHash = saveData.SelectedRepositoryHash ?? string.Empty;
             var profile = (saveData.RepositoryCompanionProfiles ?? new List<RepositoryCompanionProfile>())
                 .FirstOrDefault(item => string.Equals(item.RepositoryHash, repositoryHash, StringComparison.Ordinal));
             if (profile == null)
@@ -1040,8 +1044,19 @@ namespace TokenForge.Client.UI
                 return Result.Failure("repository_not_connected", "Connect this repository before selecting its companion.");
             }
 
+            // Validate and activate the approved local path before changing the
+            // persisted selection. Previously the save succeeded even when path
+            // restoration failed, leaving GitFlow on the old repository while
+            // every dashboard projection claimed the new one was active.
+            var activatePath = await RestoreSelectedRepositoryPathAsync(profile.RepositoryHash, cancellationToken);
+            if (!activatePath.IsSuccess)
+            {
+                return activatePath;
+            }
+
             saveData.SelectedRepositoryHash = profile.RepositoryHash;
             saveData.CompanionState = CompanionProgressionRules.Normalize(profile.CompanionState);
+            RepositoryCompanionProfileService.Normalize(saveData);
             var validation = privacySanitizer.ValidateSafeSaveData(saveData);
             if (!validation.IsSuccess)
             {
@@ -1051,9 +1066,14 @@ namespace TokenForge.Client.UI
             var saveResult = await repository.SaveAsync(saveData, cancellationToken);
             if (saveResult.IsSuccess)
             {
-                await RestoreSelectedRepositoryPathAsync(saveData.SelectedRepositoryHash, cancellationToken);
                 AgentFlow.SetSelectedRepositoryHash(saveData.SelectedRepositoryHash);
                 RefreshCharacterDashboard(saveData, RecentSessions);
+            }
+            else if (!string.IsNullOrWhiteSpace(previousRepositoryHash))
+            {
+                // Best-effort rollback of the in-memory analyzer selection when
+                // persistence fails after local path validation.
+                await RestoreSelectedRepositoryPathAsync(previousRepositoryHash, cancellationToken);
             }
 
             return saveResult;
@@ -1099,6 +1119,15 @@ namespace TokenForge.Client.UI
             var result = await AgentFlow.AnalyzeAsync(cancellationToken);
             if (result.IsSuccess)
             {
+                var usagePersist = await PersistProviderUsageAggregateAsync(
+                    AgentFlow.PendingSessionForLocalOnlyApproval?.AgentActivitySummary,
+                    cancellationToken);
+                if (!usagePersist.IsSuccess)
+                {
+                    AgentFlow.DiscardPendingReview();
+                    return Result<AgentAnalysisReviewModel>.Failure(usagePersist.ErrorCode, usagePersist.ErrorMessage);
+                }
+
                 var providerLabel = MacAgentSourceDetector.SafeProviderLabel(SelectedAgentProviderType);
                 var persist = await PersistPendingNativeReviewAsync(
                     "aiAgent",
@@ -1116,6 +1145,181 @@ namespace TokenForge.Client.UI
                 }
             }
 
+            return result;
+        }
+
+        public async Task<Result> ActivateConnectedAgentSourceAsync(AgentProviderType providerType, CancellationToken cancellationToken = default)
+        {
+            providerType = MacAgentSourceDetector.NormalizeProvider(providerType);
+            if (providerType == AgentProviderType.Unknown)
+            {
+                return Result.Failure("agent_source_unknown", "AI provider is unavailable.");
+            }
+
+            var settings = await approvedLocationRepository.LoadAsync(cancellationToken);
+            var providerSetting = (CurrentSaveData?.ProviderSettings ?? new List<ProviderSettings>())
+                .FirstOrDefault(item => item != null &&
+                                        item.Enabled &&
+                                        item.Selected &&
+                                        MacAgentSourceDetector.NormalizeProviderValue(item.ProviderId) == providerType);
+            var location = FindReadableApprovedProviderLocation(
+                settings.Locations,
+                providerType,
+                providerSetting?.SafeLocationHash);
+            if (location == null)
+            {
+                return Result.Failure("approved_agent_location_not_found", "No readable approved source exists for this provider.");
+            }
+
+            SelectedAgentProviderType = providerType;
+            var input = AgentSettings.ToInput(location.LocalPath, providerType);
+            input.SourceKind = AgentSourceKind.ManualFolder;
+            input.SafeSourceAlias = location.DisplayAlias;
+            var selection = AgentFlow.SelectApprovedLogLocation(input);
+            if (!selection.IsSuccess)
+            {
+                return selection;
+            }
+
+            var source = Onboarding.AgentSources.FirstOrDefault(item => item.SourceType == ToConnectedAgentSourceType(providerType));
+            if (source != null)
+            {
+                source.Selected = true;
+                source.State = AgentSourceSetupState.ReadyToAnalyze;
+                source.StatusLabel = "Connected. Ready to analyze.";
+                source.SafeLabel = location.DisplayAlias;
+                source.SafeLocationHash = SafeHashUtility.ComputeProjectPathHash(location.LocalPath, "TokenForge.AgentLogLocation.v1");
+            }
+
+            Debug.Log("INFO [AIAgentProviderStateDiagnostic] provider=" + providerType + " connected=true activeAnalyzerSource=true");
+            return Result.Success();
+        }
+
+        public async Task<Result<AgentAnalysisReviewModel>> AnalyzeProviderUsageOnlyAsync(AgentProviderType providerType, CancellationToken cancellationToken = default)
+        {
+            var activate = await ActivateConnectedAgentSourceAsync(providerType, cancellationToken);
+            if (!activate.IsSuccess)
+            {
+                return Result<AgentAnalysisReviewModel>.Failure(activate.ErrorCode, activate.ErrorMessage);
+            }
+
+            var result = await AgentFlow.AnalyzeAsync(cancellationToken);
+            if (!result.IsSuccess)
+            {
+                return result;
+            }
+
+            var persist = await PersistProviderUsageAggregateAsync(AgentFlow.PendingSessionForLocalOnlyApproval?.AgentActivitySummary, cancellationToken);
+            AgentFlow.DiscardPendingReview();
+            if (!persist.IsSuccess)
+            {
+                return Result<AgentAnalysisReviewModel>.Failure(persist.ErrorCode, persist.ErrorMessage);
+            }
+
+            return result;
+        }
+
+        private async Task<Result> PersistProviderUsageAggregateAsync(AgentActivitySummary summary, CancellationToken cancellationToken)
+        {
+            if (summary == null)
+            {
+                return Result.Failure("agent_usage_summary_missing", "AI usage aggregate was not produced.");
+            }
+
+            var providerType = MacAgentSourceDetector.NormalizeProvider(summary.ProviderType);
+            var saveData = await repository.LoadAsync(cancellationToken);
+            saveData.ProviderSettings = saveData.ProviderSettings ?? new List<ProviderSettings>();
+            var providerId = providerType.ToString();
+            var provider = saveData.ProviderSettings.FirstOrDefault(item =>
+                string.Equals(item.ProviderId, providerId, StringComparison.OrdinalIgnoreCase));
+            if (provider == null)
+            {
+                provider = new ProviderSettings { ProviderId = providerId };
+                saveData.ProviderSettings.Add(provider);
+            }
+
+            provider.LastAnalyzedAt = DateTimeOffset.UtcNow;
+            provider.LastActivityAtUtc = summary.LastActivityAtUtc;
+            // Provider usage is a snapshot of the currently approved local log
+            // source. Math.Max made deleted/rotated logs impossible to reflect
+            // and caused the provider rows to disagree with current evidence.
+            provider.EstimatedSessionCount = Math.Max(0, summary.EstimatedSessionCount);
+            provider.EstimatedInteractionCount = Math.Max(0, summary.EstimatedInteractionCount);
+            provider.EstimatedInputTokenCount = Math.Max(0, summary.EstimatedInputTokenCount);
+            provider.EstimatedOutputTokenCount = Math.Max(0, summary.EstimatedOutputTokenCount);
+            provider.EstimatedTotalTokenCount = Math.Max(
+                Math.Max(0, summary.EstimatedTotalTokenCount),
+                SaturatingTokenSum(provider.EstimatedInputTokenCount, provider.EstimatedOutputTokenCount));
+            provider.RecentRepositoryHash = RepositoryCompanionProfileService.IsConnectedRepository(saveData, saveData.SelectedRepositoryHash)
+                ? saveData.SelectedRepositoryHash ?? string.Empty
+                : string.Empty;
+            provider.UsageEvidenceState = provider.EstimatedTotalTokenCount > 0 ? "aggregateAvailable" : "noEvidence";
+            provider.Confidence = summary.ConfidenceLevel.ToString();
+            provider.ParserVersion = summary.AnalyzerVersion ?? string.Empty;
+            RepositoryCompanionProfileService.Normalize(saveData);
+
+            var validation = privacySanitizer.ValidateSafeSaveData(saveData);
+            if (!validation.IsSuccess)
+            {
+                return validation;
+            }
+
+            var saveResult = await repository.SaveAsync(saveData, cancellationToken);
+            if (saveResult.IsSuccess)
+            {
+                var wallet = RepositoryCompanionProfileService.GetAgentTokenShopState(saveData, providerId);
+                Debug.Log("INFO [AITokenUsageDiagnostic] provider=" + providerId +
+                          " sessions=" + provider.EstimatedSessionCount +
+                          " interactions=" + provider.EstimatedInteractionCount +
+                          " inputTokens=" + provider.EstimatedInputTokenCount +
+                          " outputTokens=" + provider.EstimatedOutputTokenCount +
+                          " totalTokens=" + provider.EstimatedTotalTokenCount +
+                          " rawContentPersisted=false");
+                Debug.Log("INFO [AITokenCoinDiagnostic] provider=" + providerId +
+                          " lifetimeScore=" + wallet.LifetimeTokenUsageScore +
+                          " spendableCoins=" + wallet.CurrencyBalance);
+                Debug.Log("INFO [ProviderAttributionDiagnostic] provider=" + providerId +
+                          " repositoryId=" + (provider.RecentRepositoryHash ?? string.Empty) +
+                          " confidence=" + provider.Confidence);
+            }
+
+            return saveResult;
+        }
+
+        private static long SaturatingTokenSum(long first, long second)
+        {
+            first = Math.Max(0, first);
+            second = Math.Max(0, second);
+            return first > long.MaxValue - second ? long.MaxValue : first + second;
+        }
+
+        public async Task<Result> ResetProviderUsageAggregatesAsync(CancellationToken cancellationToken = default)
+        {
+            var saveData = await repository.LoadAsync(cancellationToken);
+            foreach (var provider in saveData.ProviderSettings ?? new List<ProviderSettings>())
+            {
+                if (provider == null) continue;
+                provider.LastAnalyzedAt = null;
+                provider.LastActivityAtUtc = null;
+                provider.EstimatedSessionCount = 0;
+                provider.EstimatedInteractionCount = 0;
+                provider.EstimatedInputTokenCount = 0;
+                provider.EstimatedOutputTokenCount = 0;
+                provider.EstimatedTotalTokenCount = 0;
+                provider.RecentRepositoryHash = string.Empty;
+                provider.UsageEvidenceState = "notAnalyzed";
+                provider.Confidence = string.Empty;
+                provider.ParserVersion = string.Empty;
+            }
+
+            var validation = privacySanitizer.ValidateSafeSaveData(saveData);
+            if (!validation.IsSuccess) return validation;
+            var result = await repository.SaveAsync(saveData, cancellationToken);
+            if (result.IsSuccess)
+            {
+                Debug.Log("INFO [AITokenUsageDiagnostic] provider=all aggregateReset=true rawContentPersisted=false coinHistoryPreserved=true");
+                await RefreshRecentSessionsAsync(cancellationToken);
+            }
             return result;
         }
 
@@ -1540,7 +1744,7 @@ namespace TokenForge.Client.UI
         public Result DiscardGitReview()
         {
             var result = GitFlow.DiscardPendingReview();
-            _ = ClearPersistedPendingNativeReviewAfterDiscardAsync();
+            _ = SchedulePersistedPendingReviewClear();
             return result;
         }
 
@@ -1549,16 +1753,25 @@ namespace TokenForge.Client.UI
             AgentSelectionStatus = "No agent log location selected";
             AgentPickerErrorCategory = string.Empty;
             var result = AgentFlow.DiscardPendingReview();
-            _ = ClearPersistedPendingNativeReviewAfterDiscardAsync();
+            _ = SchedulePersistedPendingReviewClear();
             return result;
         }
 
-        private async Task ClearPersistedPendingNativeReviewAfterDiscardAsync()
+        public Task<Result> DiscardAllPendingReviewsAsync(CancellationToken cancellationToken = default)
         {
-            var result = await ClearPersistedPendingNativeReviewAsync(CancellationToken.None);
-            if (!result.IsSuccess)
+            return DiscardPendingNativeReviewAsync(cancellationToken);
+        }
+
+        private Task<Result> SchedulePersistedPendingReviewClear()
+        {
+            lock (pendingReviewClearLock)
             {
-                Debug.LogWarning("WARN [Analysis] discard persisted review failed reason=" + result.ErrorCode);
+                if (pendingReviewClearTask == null || pendingReviewClearTask.IsCompleted)
+                {
+                    pendingReviewClearTask = ClearPersistedPendingNativeReviewAsync(CancellationToken.None);
+                }
+
+                return pendingReviewClearTask;
             }
         }
 
@@ -1594,6 +1807,9 @@ namespace TokenForge.Client.UI
                                      string.Equals(session.DeduplicationKey, pendingSession.DeduplicationKey, StringComparison.Ordinal))));
             if (alreadyApplied || sessionAlreadySaved)
             {
+                Debug.Log("INFO [GrowthDuplicateGuardDiagnostic] reviewId=" + reviewId +
+                          " duplicateBlocked=true alreadyApplied=" + alreadyApplied +
+                          " sessionAlreadySaved=" + sessionAlreadySaved);
                 if (!string.IsNullOrWhiteSpace(reviewId) &&
                     !saveData.AppliedNativeReviewIds.Contains(reviewId, StringComparer.Ordinal))
                 {
@@ -1626,6 +1842,7 @@ namespace TokenForge.Client.UI
             saveData.CharacterProfile.Stats = saveData.CharacterProfile.Stats ?? CharacterStats.Zero();
             saveData.WorkSessionSummaries = saveData.WorkSessionSummaries ?? new List<AgentWorkSession>();
             saveData.GrowthHistory = saveData.GrowthHistory ?? new List<CharacterGrowthResult>();
+            var newlyAppliedGrowthResults = new List<CharacterGrowthResult>();
             for (var index = 0; index < pendingSessions.Count; index++)
             {
                 var session = pendingSessions[index];
@@ -1662,6 +1879,7 @@ namespace TokenForge.Client.UI
                 saveData.CharacterProfile.Stats.Add(growth.StatDeltas ?? CharacterStats.Zero());
                 saveData.WorkSessionSummaries.Add(session);
                 saveData.GrowthHistory.Add(growth);
+                newlyAppliedGrowthResults.Add(growth);
             }
 
             saveData.CharacterProfile.Level = Math.Max(saveData.CharacterProfile.Level, 1 + Math.Max(0, saveData.CharacterProfile.TotalExp) / 1000);
@@ -1683,7 +1901,7 @@ namespace TokenForge.Client.UI
                     profileSession,
                     saveData.WorkSessionSummaries.Where(session => repositorySessionIds.Contains(session.SessionId)).ToList(),
                     saveData.GrowthHistory.Where(growth => repositorySessionIds.Contains(growth.SessionId)).ToList());
-                ApplyRepositoryAnalysisCheckpoint(saveData, saveData.SelectedRepositoryHash, profileSession?.GitChangeSummary);
+                RepositoryCompanionProfileService.ApplyRepositoryAnalysisCheckpoint(saveData, saveData.SelectedRepositoryHash, profileSession?.GitChangeSummary);
             }
             else
             {
@@ -1691,8 +1909,14 @@ namespace TokenForge.Client.UI
                 Debug.Log("INFO [CompanionProfileGuard] blocked_default_profile_creation reason=no_connected_repository");
             }
             saveData.DailyProgress = saveData.DailyProgress ?? new DailyProgress();
-            saveData.DailyProgress.ExpGainedToday += pendingGrowthResults.Sum(growth => Math.Max(0, growth?.ExpGained ?? 0));
-            saveData.DailyProgress.SessionsConfirmedToday += Math.Max(1, pendingSessions.Count);
+            var appliedXpDelta = newlyAppliedGrowthResults.Sum(growth => Math.Max(0, growth?.ExpGained ?? 0));
+            var appliedStatDeltas = CharacterStats.Zero();
+            foreach (var growth in newlyAppliedGrowthResults)
+            {
+                appliedStatDeltas.Add(growth?.StatDeltas ?? CharacterStats.Zero());
+            }
+            saveData.DailyProgress.ExpGainedToday += appliedXpDelta;
+            saveData.DailyProgress.SessionsConfirmedToday += newlyAppliedGrowthResults.Count;
             if (!string.IsNullOrWhiteSpace(reviewId) &&
                 !saveData.AppliedNativeReviewIds.Contains(reviewId, StringComparer.Ordinal))
             {
@@ -1706,11 +1930,11 @@ namespace TokenForge.Client.UI
                 SourceKind = "reviewSaved",
                 Status = "saved",
                 ErrorCode = string.Empty,
-                SafeSummary = "Growth saved · +" + pendingGrowthResults.Sum(growth => Math.Max(0, growth?.ExpGained ?? 0)) + " XP",
+                SafeSummary = "Growth saved · +" + appliedXpDelta + " XP",
                 RepositoryId = pending.RepositoryHash ?? saveData.SelectedRepositoryHash ?? string.Empty,
                 RepositoryAlias = RepositoryAliasForHash(saveData, pending.RepositoryHash ?? saveData.SelectedRepositoryHash),
-                XpDelta = pendingGrowthResults.Sum(growth => Math.Max(0, growth?.ExpGained ?? 0)),
-                StatDeltas = pending.StatDeltas ?? CharacterStats.Zero(),
+                XpDelta = appliedXpDelta,
+                StatDeltas = appliedStatDeltas,
                 CreatedAtUtc = DateTimeOffset.UtcNow
             });
             RepositoryCompanionProfileService.RecordTimelineEvent(
@@ -1721,14 +1945,14 @@ namespace TokenForge.Client.UI
                 pending.RepositoryHash ?? saveData.SelectedRepositoryHash ?? string.Empty,
                 RepositoryAliasForHash(saveData, pending.RepositoryHash ?? saveData.SelectedRepositoryHash),
                 "growth_review",
-                pendingGrowthResults.Sum(growth => Math.Max(0, growth?.ExpGained ?? 0)),
+                appliedXpDelta,
                 0,
                 PendingProviderId(pending),
                 string.Empty,
                 string.Empty,
                 "success",
                 string.Empty,
-                pending.StatDeltas ?? CharacterStats.Zero());
+                appliedStatDeltas);
             saveData.PendingNativeActivityReview = null;
 
             var validation = privacySanitizer.ValidateSafeSaveData(saveData);
@@ -1742,6 +1966,11 @@ namespace TokenForge.Client.UI
             {
                 return Result<SaveData>.Failure(saveResult.ErrorCode, saveResult.ErrorMessage);
             }
+
+            Debug.Log("INFO [GrowthSaveDiagnostic] reviewId=" + reviewId +
+                      " repositoryId=" + (pending.RepositoryHash ?? saveData.SelectedRepositoryHash ?? string.Empty) +
+                      " xpApplied=" + appliedXpDelta +
+                      " selectedRepositoryOnly=true");
 
             GitFlow.DiscardPendingReview();
             AgentFlow.DiscardPendingReview();
@@ -1902,6 +2131,36 @@ namespace TokenForge.Client.UI
             return result;
         }
 
+        public async Task<Result<TokenShopPurchaseResult>> UnequipTokenShopItemAsync(
+            string itemId,
+            ShopTargetType targetType,
+            string targetId,
+            bool targetConnected,
+            CancellationToken cancellationToken = default)
+        {
+            var saveData = await repository.LoadAsync(cancellationToken);
+            var result = RepositoryCompanionProfileService.UnequipTokenShopItem(saveData, targetType, targetId, itemId, targetConnected);
+            if (!result.IsSuccess)
+            {
+                return result;
+            }
+
+            var validation = privacySanitizer.ValidateSafeSaveData(saveData);
+            if (!validation.IsSuccess)
+            {
+                return Result<TokenShopPurchaseResult>.Failure(validation.ErrorCode, validation.ErrorMessage);
+            }
+
+            var saveResult = await repository.SaveAsync(saveData, cancellationToken);
+            if (!saveResult.IsSuccess)
+            {
+                return Result<TokenShopPurchaseResult>.Failure(saveResult.ErrorCode, saveResult.ErrorMessage);
+            }
+
+            RefreshCharacterDashboard(saveData, RecentSessions);
+            return result;
+        }
+
         private static List<AgentWorkSession> PendingReviewSessions(PendingNativeActivityReview pending)
         {
             if (pending == null)
@@ -2011,16 +2270,27 @@ namespace TokenForge.Client.UI
         public async Task<Result> DiscardPendingNativeReviewAsync(CancellationToken cancellationToken = default)
         {
             var saveData = await repository.LoadAsync(cancellationToken);
+            Result persistenceResult = Result.Success();
             if (saveData.PendingNativeActivityReview != null)
             {
                 UpsertActivityReview(saveData, saveData.PendingNativeActivityReview, "discarded", null);
                 saveData.PendingNativeActivityReview = null;
-                await repository.SaveAsync(saveData, cancellationToken);
+                var validation = privacySanitizer.ValidateSafeSaveData(saveData);
+                if (!validation.IsSuccess)
+                {
+                    return validation;
+                }
+
+                persistenceResult = await repository.SaveAsync(saveData, cancellationToken);
+                if (persistenceResult.IsSuccess)
+                {
+                    RefreshCharacterDashboard(saveData, RecentSessions);
+                }
             }
 
             GitFlow.DiscardPendingReview();
             AgentFlow.DiscardPendingReview();
-            return await ClearPersistedPendingNativeReviewAsync(cancellationToken);
+            return persistenceResult;
         }
 
         private async Task<Result> PersistPendingNativeReviewAsync(
@@ -2086,11 +2356,6 @@ namespace TokenForge.Client.UI
                 GrowthResults = new List<CharacterGrowthResult> { growth },
                 CreatedAtUtc = DateTimeOffset.UtcNow
             };
-            if (string.Equals(sourceKind, "repository", StringComparison.OrdinalIgnoreCase) &&
-                !string.IsNullOrWhiteSpace(repositoryHash))
-            {
-                ApplyRepositoryAnalysisCheckpoint(saveData, repositoryHash, session.GitChangeSummary);
-            }
             UpsertActivityReview(saveData, saveData.PendingNativeActivityReview, "pending", null);
 
             var validation = privacySanitizer.ValidateSafeSaveData(saveData);
@@ -2260,6 +2525,16 @@ namespace TokenForge.Client.UI
                 }
 
                 var localFolderName = RepositoryFolderName(location.LocalPath);
+                var safeFolderAlias = RepositoryCompanionProfileService.SafeRepositoryAlias(location.LocalPath);
+                if (!string.IsNullOrWhiteSpace(localFolderName) &&
+                    !string.Equals(localFolderName, safeFolderAlias, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Privacy boundary: raw repository folder names must never be rendered or
+                    // flow into persisted summaries. Keep the local folder name only when the
+                    // sanitizer accepts it verbatim; otherwise use the safe alias.
+                    localFolderName = safeFolderAlias;
+                }
+
                 approvedGitMetadataByHash[repositoryHash] = new RepositoryLocalMetadata
                 {
                     RepositoryHash = repositoryHash,
@@ -2308,7 +2583,7 @@ namespace TokenForge.Client.UI
             RepositoryCompanionProfileService.Normalize(saveData);
             var settings = await approvedLocationRepository.LoadAsync(cancellationToken);
             var locations = settings.Locations ?? new List<ApprovedLocationEntry>();
-            RestoreProviderSelectionState(saveData.ProviderSettings);
+            var providerSettingsChanged = RestoreProviderSelectionState(saveData.ProviderSettings, locations);
 
             if (!GitFlow.HasSelectedRepositoryForLocalOnlyApproval && !string.IsNullOrWhiteSpace(saveData.SelectedRepositoryHash))
             {
@@ -2320,74 +2595,81 @@ namespace TokenForge.Client.UI
                         StringComparison.Ordinal));
                 if (gitLocation != null)
                 {
-                    await GitFlow.SelectLocalOnlyApprovedRepositoryPathAsync(gitLocation.LocalPath, cancellationToken);
-                    Onboarding.GitConnected = true;
-                    Onboarding.GitSafeAlias = gitLocation.DisplayAlias;
+                    var activate = await GitFlow.ActivatePersistedApprovedRepositoryPathAsync(gitLocation.LocalPath, cancellationToken);
+                    Onboarding.GitConnected = activate.IsSuccess;
+                    Onboarding.GitSafeAlias = activate.IsSuccess ? gitLocation.DisplayAlias : string.Empty;
                 }
+            }
+
+            var readableSelectedProviderLocations = (saveData.ProviderSettings ?? new List<ProviderSettings>())
+                .Where(setting => setting != null && setting.Enabled && setting.Selected)
+                .Select(setting => new
+                {
+                    Setting = setting,
+                    Provider = MacAgentSourceDetector.NormalizeProviderValue(setting.ProviderId)
+                })
+                .Where(item => item.Provider != AgentProviderType.Unknown)
+                .Select(item => new
+                {
+                    item.Setting,
+                    item.Provider,
+                    Location = FindReadableApprovedProviderLocation(locations, item.Provider, item.Setting.SafeLocationHash)
+                })
+                .Where(item => item.Location != null)
+                .ToList();
+
+            var activeAgentPath = AgentFlow.GetSelectedAgentLogLocationPathForLocalOnlyApproval();
+            if (AgentFlow.HasSelectedAgentLogLocationForLocalOnlyApproval &&
+                !readableSelectedProviderLocations.Any(item => string.Equals(item.Location.LocalPath, activeAgentPath, StringComparison.Ordinal)))
+            {
+                AgentFlow.ClearSelection();
             }
 
             if (!AgentFlow.HasSelectedAgentLogLocationForLocalOnlyApproval)
             {
-                var restoredProvider = false;
-                foreach (var setting in saveData.ProviderSettings ?? new List<ProviderSettings>())
+                var active = readableSelectedProviderLocations.FirstOrDefault();
+                if (active != null)
                 {
-                    if (!setting.Enabled || !setting.Selected)
-                    {
-                        continue;
-                    }
-
-                    var providerType = MacAgentSourceDetector.NormalizeProviderValue(setting.ProviderId);
-                    if (providerType == AgentProviderType.Unknown)
-                    {
-                        continue;
-                    }
-
-                    var locationSourceType = providerType.ToApprovedLocationSourceType();
-                    var location = locations.FirstOrDefault(item => item.Enabled && item.SourceType == locationSourceType && !string.IsNullOrWhiteSpace(item.LocalPath));
-                    if (location == null || !LocalSourceExists(location.LocalPath))
-                    {
-                        continue;
-                    }
-
-                    SelectedAgentProviderType = providerType;
-                    var input = AgentSettings.ToInput(location.LocalPath, providerType);
+                    SelectedAgentProviderType = active.Provider;
+                    var input = AgentSettings.ToInput(active.Location.LocalPath, active.Provider);
                     input.SourceKind = AgentSourceKind.ManualFolder;
-                    input.SafeSourceAlias = location.DisplayAlias;
-                    if (AgentFlow.SelectApprovedLogLocation(input).IsSuccess)
-                    {
-                        var source = Onboarding.AgentSources.FirstOrDefault(item => item.SourceType == ToConnectedAgentSourceType(providerType));
-                        if (source != null)
-                        {
-                            source.Selected = true;
-                            source.State = AgentSourceSetupState.ReadyToAnalyze;
-                            source.StatusLabel = "Ready to analyze";
-                            source.SafeLabel = location.DisplayAlias;
-                            source.SafeLocationHash = SafeHashUtility.ComputeProjectPathHash(location.LocalPath, "TokenForge.AgentLogLocation.v1");
-                            source.Confidence = ConfidenceLevel.Medium;
-                        }
-
-                        restoredProvider = true;
-                        break;
-                    }
+                    input.SafeSourceAlias = active.Location.DisplayAlias;
+                    AgentFlow.SelectApprovedLogLocation(input);
                 }
+            }
 
-                if (!restoredProvider)
+            if (providerSettingsChanged)
+            {
+                var validation = privacySanitizer.ValidateSafeSaveData(saveData);
+                if (validation.IsSuccess)
                 {
-                    foreach (var source in Onboarding.AgentSources.Where(item => item.Selected && IsSourceReadyState(item.State)))
-                    {
-                        source.Selected = false;
-                        source.State = AgentSourceSetupState.PermissionRequired;
-                        source.StatusLabel = "No approved source is readable. Choose a folder before analysis.";
-                        source.WarningCount = Math.Max(1, source.WarningCount);
-                    }
+                    await repository.SaveAsync(saveData, cancellationToken);
                 }
             }
         }
 
-        private void RestoreProviderSelectionState(List<ProviderSettings> providerSettings)
+        private bool RestoreProviderSelectionState(
+            List<ProviderSettings> providerSettings,
+            List<ApprovedLocationEntry> approvedLocations)
         {
+            foreach (var source in Onboarding.AgentSources)
+            {
+                source.Selected = false;
+                source.State = AgentSourceSetupState.NotSelected;
+                source.SafeLabel = string.Empty;
+                source.SafeLocationHash = string.Empty;
+                source.Confidence = ConfidenceLevel.Unknown;
+                source.WarningCount = 0;
+                source.StatusLabel = "Not selected";
+            }
+
+            var settingsChanged = false;
             foreach (var setting in providerSettings ?? new List<ProviderSettings>())
             {
+                if (setting == null)
+                {
+                    continue;
+                }
                 var providerType = MacAgentSourceDetector.NormalizeProviderValue(setting.ProviderId);
                 var sourceType = ToConnectedAgentSourceType(providerType);
                 var source = Onboarding.AgentSources.FirstOrDefault(item => item.SourceType == sourceType);
@@ -2396,33 +2678,96 @@ namespace TokenForge.Client.UI
                     continue;
                 }
 
-                source.Selected = setting.Selected && setting.Enabled;
-                source.SafeLocationHash = setting.SafeLocationHash ?? string.Empty;
-                source.State = setting.Detected && !source.Selected
-                    ? AgentSourceSetupState.LocalSourceDetected
-                    : ParseSourceState(setting.ConnectionState, source.Selected);
-                source.SafeLabel = source.Selected
-                    ? (string.IsNullOrWhiteSpace(setting.ApprovedSource) ? source.SafeLabel : setting.ApprovedSource)
-                    : ((setting.DetectedSources ?? new List<string>()).FirstOrDefault() ?? string.Empty);
+                var readableLocation = FindReadableApprovedProviderLocation(approvedLocations, providerType, setting.SafeLocationHash);
+                var hasPersistedLocationHash = !string.IsNullOrWhiteSpace(setting.SafeLocationHash);
+                var persistedSelected = setting.Selected && setting.Enabled;
+                var validSelection = persistedSelected && readableLocation != null;
+                source.Selected = validSelection;
+                source.SafeLocationHash = validSelection
+                    ? SafeHashUtility.ComputeProjectPathHash(readableLocation.LocalPath, "TokenForge.AgentLogLocation.v1")
+                    : string.Empty;
+                source.State = validSelection
+                    ? AgentSourceSetupState.ReadyToAnalyze
+                    : persistedSelected && hasPersistedLocationHash
+                        ? AgentSourceSetupState.PermissionRequired
+                        : setting.Detected && readableLocation != null
+                            ? AgentSourceSetupState.LocalSourceDetected
+                            : AgentSourceSetupState.NotSelected;
+                source.SafeLabel = validSelection
+                    ? readableLocation.DisplayAlias
+                    : readableLocation?.DisplayAlias ?? string.Empty;
                 source.Confidence = Enum.TryParse(setting.Confidence, true, out ConfidenceLevel confidence)
                     ? confidence
                     : ConfidenceLevel.Unknown;
                 source.WarningCount = setting.Warnings?.Count ?? 0;
-                if (IsSourceReadyState(source.State) && string.IsNullOrWhiteSpace(source.SafeLocationHash))
+                if (persistedSelected && !validSelection)
                 {
-                    source.Selected = false;
-                    source.State = AgentSourceSetupState.NotSelected;
-                    source.SafeLabel = string.Empty;
+                    setting.Selected = false;
+                    setting.Status = "notConfigured";
                     source.Confidence = ConfidenceLevel.Unknown;
-                    source.WarningCount = 0;
+                    if (hasPersistedLocationHash)
+                    {
+                        setting.ConnectionState = AgentSourceSetupState.PermissionRequired.ToString();
+                        setting.Warnings = new List<string> { "Approved source is missing or unreadable. Choose the folder again." };
+                        source.WarningCount = Math.Max(1, source.WarningCount);
+                    }
+                    else
+                    {
+                        // A persisted selection without a safe location hash was never a
+                        // verified connection: treat it as not selected instead of asking
+                        // the user to restore permission for a source that never existed.
+                        setting.ConnectionState = AgentSourceSetupState.NotSelected.ToString();
+                        setting.SafeLocationHash = string.Empty;
+                        setting.Warnings = new List<string>();
+                        source.WarningCount = 0;
+                    }
+
+                    settingsChanged = true;
+                }
+                else if (validSelection)
+                {
+                    var expectedHash = SafeHashUtility.ComputeProjectPathHash(readableLocation.LocalPath, "TokenForge.AgentLogLocation.v1");
+                    if (!string.Equals(setting.SafeLocationHash, expectedHash, StringComparison.Ordinal) ||
+                        !string.Equals(setting.ApprovedSource, readableLocation.DisplayAlias, StringComparison.Ordinal))
+                    {
+                        setting.SafeLocationHash = expectedHash;
+                        setting.ApprovedSource = readableLocation.DisplayAlias;
+                        settingsChanged = true;
+                    }
                 }
 
                 source.StatusLabel = source.State == AgentSourceSetupState.LocalSourceDetected && !source.Selected
                     ? "Detected source found. Connect to approve."
                     : source.Selected
                         ? StatusLabelForRestoredState(source.State)
-                        : "Not selected";
+                        : source.State == AgentSourceSetupState.PermissionRequired
+                            ? "Approved source is missing or unreadable. Choose the folder again."
+                            : "Not selected";
             }
+
+            return settingsChanged;
+        }
+
+        private static ApprovedLocationEntry FindReadableApprovedProviderLocation(
+            IEnumerable<ApprovedLocationEntry> locations,
+            AgentProviderType providerType,
+            string expectedSafeHash)
+        {
+            var candidates = (locations ?? Enumerable.Empty<ApprovedLocationEntry>())
+                .Where(item => item != null &&
+                               item.Enabled &&
+                               item.SourceType == providerType.ToApprovedLocationSourceType() &&
+                               LocalSourceExists(item.LocalPath))
+                .ToList();
+            if (!string.IsNullOrWhiteSpace(expectedSafeHash))
+            {
+                return candidates.FirstOrDefault(item => string.Equals(
+                    SafeHashUtility.ComputeProjectPathHash(item.LocalPath, "TokenForge.AgentLogLocation.v1"),
+                    expectedSafeHash,
+                    StringComparison.Ordinal));
+            }
+
+            return candidates.Count == 1 ? candidates[0] : null;
         }
 
         private async Task<Result> RestoreSelectedRepositoryPathAsync(string repositoryHash, CancellationToken cancellationToken)
@@ -2444,7 +2789,7 @@ namespace TokenForge.Client.UI
                 return Result.Failure("approved_location_not_found", "Approved Git location was not found.");
             }
 
-            return await GitFlow.SelectLocalOnlyApprovedRepositoryPathAsync(gitLocation.LocalPath, cancellationToken);
+            return await GitFlow.ActivatePersistedApprovedRepositoryPathAsync(gitLocation.LocalPath, cancellationToken);
         }
 
         private static bool IsSourceReadyState(AgentSourceSetupState state)
@@ -3514,6 +3859,7 @@ namespace TokenForge.Client.UI
                         PurchasedTokenShopItemIds = new List<string>(profile.TokenShop?.PurchasedItemIds ?? new List<string>()),
                         EquippedTokenShopItemIds = new List<string>(profile.TokenShop?.EquippedItemIds ?? new List<string>()),
                         Skin = CompanionSkinCatalog.Normalize(profile.DesktopCompanionSettings?.VisualThemeId),
+                        ZodiacType = RepositoryCompanionProfileService.NormalizeZodiacTypeId(profile.DesktopCompanionSettings?.ZodiacTypeId, "repository"),
                         CompanionId = profile.CompanionId,
                         DesktopCompanionEnabled = profile.DesktopCompanionSettings?.IsDesktopCompanionEnabled ?? true,
                         HasSavedOverlayPosition = profile.DesktopCompanionSettings?.HasSavedOverlayPosition ?? false,
@@ -3915,97 +4261,6 @@ namespace TokenForge.Client.UI
             return "None";
         }
 
-        private static void ApplyRepositoryAnalysisCheckpoint(SaveData saveData, string repositoryHash, GitChangeSummary summary)
-        {
-            if (saveData == null || string.IsNullOrWhiteSpace(repositoryHash) || summary == null)
-            {
-                return;
-            }
-
-            var connection = (saveData.ConnectedProjects ?? new List<ConnectedProject>())
-                .FirstOrDefault(project => project != null &&
-                                           !project.IsArchived &&
-                                           (string.Equals(project.Id, repositoryHash, StringComparison.Ordinal) ||
-                                            string.Equals(project.PathHash, repositoryHash, StringComparison.Ordinal) ||
-                                            string.Equals(project.ProjectPathHash, repositoryHash, StringComparison.Ordinal)));
-            if (connection == null)
-            {
-                return;
-            }
-
-            connection.LastAnalyzedAt = DateTimeOffset.UtcNow;
-            if (string.IsNullOrWhiteSpace(connection.FirstAnalyzedCommit))
-            {
-                connection.FirstAnalyzedCommit = summary.AnalyzedStartCommit ?? string.Empty;
-            }
-
-            connection.LastAnalyzedCommit = summary.LastAnalyzedCommit ?? string.Empty;
-            connection.CurrentHeadCommit = summary.AnalyzedEndCommit ?? summary.LastAnalyzedCommit ?? string.Empty;
-            connection.FirstCommitAt = summary.FirstCommitAtUtc ?? string.Empty;
-            connection.TotalCommitCount = Math.Max(0, summary.TotalCommitsAnalyzed);
-            connection.AnalyzedCommitRange = (summary.AnalyzedStartCommit ?? string.Empty) + ".." + (summary.AnalyzedEndCommit ?? string.Empty);
-            connection.LastAnalysisMode = summary.AnalysisMode ?? string.Empty;
-            connection.LastAnalysisScope = AnalysisScopeLabel(summary);
-            connection.FilesChangedAnalyzed = Math.Max(0, summary.ChangedFileCount);
-            connection.FirstCommitHash = summary.FirstCommitHash ?? string.Empty;
-            connection.GrowthCodeScore = Math.Max(0, summary.GrowthCodeScore);
-            connection.GrowthFocusScore = Math.Max(0, summary.GrowthFocusScore);
-            connection.GrowthDebugScore = Math.Max(0, summary.GrowthDebugScore);
-            connection.GrowthDesignScore = Math.Max(0, summary.GrowthDesignScore);
-            connection.GrowthSyncScore = Math.Max(0, summary.GrowthSyncScore);
-            connection.GrowthNumstatRowsAnalyzed = Math.Max(0, summary.NumstatRowsAnalyzed);
-            connection.GrowthScoringVersion = summary.GrowthScoringVersion ?? string.Empty;
-            connection.GrowthResultId = summary.AnalysisIdempotencyKey ?? string.Empty;
-            Debug.Log("INFO [GrowthSummaryDiagnostic] persistedResultId=" + connection.GrowthResultId +
-                      " persistedTimestamp=" + connection.LastAnalyzedAt?.UtcDateTime.ToString("O") +
-                      " repositoryId=" + repositoryHash);
-            Debug.Log("INFO [GrowthSummary][GIT_BASELINE] repositoryId=" + repositoryHash +
-                      " firstConnectedAt=" + (connection.FirstConnectedAt?.UtcDateTime.ToString("O") ?? "none") +
-                      " firstAnalyzedCommit=" + connection.FirstAnalyzedCommit +
-                      " lastAnalyzedCommit=" + connection.LastAnalyzedCommit +
-                      " currentHead=" + connection.CurrentHeadCommit +
-                      " analysisMode=" + connection.LastAnalysisMode +
-                      " totalCommitCount=" + connection.TotalCommitCount +
-                      " analyzedRange=" + connection.AnalyzedCommitRange);
-        }
-
-        private static string AnalysisScopeLabel(GitChangeSummary summary)
-        {
-            if (summary == null)
-            {
-                return "Not analyzed";
-            }
-
-            var mode = NormalizedAnalysisMode(summary.AnalysisMode);
-            if (string.Equals(mode, "fullbaseline", StringComparison.OrdinalIgnoreCase))
-            {
-                var start = string.IsNullOrWhiteSpace(summary.FirstCommitAtUtc) ? "initial commit" : DateOnly(summary.FirstCommitAtUtc);
-                return "Full history · " + start + " → now";
-            }
-
-            if (string.Equals(mode, "incremental", StringComparison.OrdinalIgnoreCase))
-            {
-                return "Since last analysis · " + Math.Max(0, summary.IncrementalCommitCount) + " commits";
-            }
-
-            return "Recent range · " + Math.Max(1, summary.AnalysisWindowDays) + " days";
-        }
-
-        private static string DateOnly(string value)
-        {
-            return DateTimeOffset.TryParse(value, out var parsed)
-                ? parsed.UtcDateTime.ToString("yyyy-MM-dd")
-                : value;
-        }
-
-        private static string NormalizedAnalysisMode(string value)
-        {
-            return (value ?? string.Empty)
-                .Replace("-", string.Empty)
-                .Replace("_", string.Empty)
-                .Trim();
-        }
-
         private static string TopStatCategory(CharacterStats stats)
         {
             if (stats == null)
@@ -4131,8 +4386,8 @@ namespace TokenForge.Client.UI
                 case AgentProviderType.Claude:
                 case AgentProviderType.ClaudeCode: return ClaudeAgentLogParser.Version;
                 case AgentProviderType.GitHubCopilot: return GitHubCopilotAgentLogParser.Version;
-                case AgentProviderType.Manual:
-                case AgentProviderType.GeminiCli: return ManualAgentLogParser.Version;
+                case AgentProviderType.GeminiCli: return GeminiCliAgentLogParser.Version;
+                case AgentProviderType.Manual: return ManualAgentLogParser.Version;
                 default: return UnknownAgentLogParser.Version;
             }
         }

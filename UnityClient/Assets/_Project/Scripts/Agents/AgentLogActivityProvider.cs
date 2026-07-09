@@ -56,7 +56,7 @@ namespace TokenForge.Client.Agents
                 WorkType = InferWorkType(summary),
                 StartedAt = startedAt,
                 EndedAt = endedAt >= startedAt ? endedAt : startedAt,
-                TokenUsageBucket = TokenUsageBucket.Unknown,
+                TokenUsageBucket = EstimateTokenUsageBucket(summary.EstimatedTotalTokenCount),
                 ActionSummary = ToActionSummary(summary),
                 GitChangeSummary = GitChangeSummary.Empty(),
                 AgentActivitySummary = summary,
@@ -73,6 +73,15 @@ namespace TokenForge.Client.Agents
             return session;
         }
 
+        public static TokenUsageBucket EstimateTokenUsageBucket(long estimatedTotalTokens)
+        {
+            if (estimatedTotalTokens <= 0) return TokenUsageBucket.None;
+            if (estimatedTotalTokens < 10_000) return TokenUsageBucket.Small;
+            if (estimatedTotalTokens < 50_000) return TokenUsageBucket.Medium;
+            if (estimatedTotalTokens < 250_000) return TokenUsageBucket.Large;
+            return TokenUsageBucket.Huge;
+        }
+
         private static string ToSourceProvider(AgentProviderType providerType)
         {
             switch (providerType)
@@ -82,7 +91,7 @@ namespace TokenForge.Client.Agents
                 case AgentProviderType.Claude:
                 case AgentProviderType.ClaudeCode: return "CLAUDE";
                 case AgentProviderType.GitHubCopilot: return "GITHUB_COPILOT";
-                case AgentProviderType.GeminiCli:
+                case AgentProviderType.GeminiCli: return "GEMINI_CLI";
                 case AgentProviderType.Manual: return "MANUAL";
                 default: return SourceProviderId;
             }

@@ -338,7 +338,9 @@ namespace TokenForge.Client.Tests
                         return Task.FromResult(GitCommandResult.Success("true\n"));
                     case "rev-parse HEAD":
                         return Task.FromResult(GitCommandResult.Success("HEADSHA\n"));
-                    case "log --all --reverse --format=%cI -n 1":
+                    case "rev-list --max-parents=0 --all --reverse":
+                        return Task.FromResult(GitCommandResult.Success("FIRSTSHA\n"));
+                    case "show -s --format=%cI FIRSTSHA":
                         return Task.FromResult(GitCommandResult.Success("2026-01-02T03:04:05Z\n"));
                     case "rev-list --all --count":
                         return Task.FromResult(GitCommandResult.Success("42\n"));
@@ -348,9 +350,9 @@ namespace TokenForge.Client.Tests
                         return Task.FromResult(GitCommandResult.Success("120\t8\tsrc/private/" + RawFileName + "\n"));
                     case "diff --cached --numstat":
                         return Task.FromResult(GitCommandResult.Success(string.Empty));
-                    case "log --since=7.days.ago --numstat --format=--TOKENFORGE-COMMIT-- -n 200":
-                    case "log --since=7.days.ago --numstat --format=--TOKENFORGE-COMMIT-- -n 50":
-                    case "log --all --numstat --format=--TOKENFORGE-COMMIT--":
+                    case "log --since=7.days.ago --numstat --format=format:--TOKENFORGE-COMMIT-- -n 200":
+                    case "log --since=7.days.ago --numstat --format=format:--TOKENFORGE-COMMIT-- -n 50":
+                    case "log --all --numstat --format=format:--TOKENFORGE-COMMIT--":
                         return Task.FromResult(GitCommandResult.Success("--TOKENFORGE-COMMIT--\n1\t0\tREADME.md\n"));
                     default:
                         return Task.FromResult(GitCommandResult.Success(string.Empty));

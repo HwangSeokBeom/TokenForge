@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using TokenForge.Client.Agents;
 using TokenForge.Client.Common;
 using TokenForge.Client.Privacy;
 
@@ -10,6 +11,131 @@ namespace TokenForge.Client.Domain
     public static class RepositoryCompanionProfileService
     {
         public const string DefaultLocalRepositoryHash = "0000000000000000000000000000000000000000000000000000000000000001";
+
+        public static void ApplyRepositoryAnalysisCheckpoint(SaveData saveData, string repositoryHash, GitChangeSummary summary)
+        {
+            if (saveData == null || string.IsNullOrWhiteSpace(repositoryHash) || summary == null)
+            {
+                return;
+            }
+
+            var connection = (saveData.ConnectedProjects ?? new List<ConnectedProject>())
+                .FirstOrDefault(project => project != null &&
+                                           !project.IsArchived &&
+                                           (string.Equals(project.Id, repositoryHash, StringComparison.Ordinal) ||
+                                            string.Equals(project.PathHash, repositoryHash, StringComparison.Ordinal) ||
+                                            string.Equals(project.ProjectPathHash, repositoryHash, StringComparison.Ordinal)));
+            if (connection == null)
+            {
+                return;
+            }
+
+            // Mixed native reviews can contain a repository session that was
+            // already saved plus a newly saved agent session. Guard at the
+            // canonical checkpoint boundary so no caller can re-accumulate an
+            // incremental range with the same idempotency key.
+            if (!string.IsNullOrWhiteSpace(summary.AnalysisIdempotencyKey) &&
+                string.Equals(connection.GrowthResultId, summary.AnalysisIdempotencyKey, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            var normalizedMode = new string((summary.AnalysisMode ?? string.Empty)
+                .Where(char.IsLetterOrDigit)
+                .ToArray())
+                .ToLowerInvariant();
+            var recentTrend = string.Equals(normalizedMode, "recenttrend", StringComparison.Ordinal);
+            var incremental = string.Equals(normalizedMode, "incremental", StringComparison.Ordinal);
+            var fullBaseline = string.Equals(normalizedMode, "fullbaseline", StringComparison.Ordinal) ||
+                               (!recentTrend && !incremental);
+
+            connection.LastAnalyzedAt = DateTimeOffset.UtcNow;
+            connection.LastAnalysisMode = summary.AnalysisMode ?? string.Empty;
+            connection.LastAnalysisScope = AnalysisScopeLabel(summary);
+
+            // A recent-trend window overlaps the cumulative baseline by design.
+            // It may be saved as activity, but must not advance the incremental
+            // checkpoint or add its evidence to cumulative growth axes.
+            if (recentTrend)
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(connection.FirstAnalyzedCommit))
+            {
+                connection.FirstAnalyzedCommit = summary.AnalyzedStartCommit ?? string.Empty;
+            }
+
+            connection.LastAnalyzedCommit = summary.LastAnalyzedCommit ?? string.Empty;
+            connection.CurrentHeadCommit = summary.AnalyzedEndCommit ?? summary.LastAnalyzedCommit ?? string.Empty;
+            connection.FirstCommitAt = summary.FirstCommitAtUtc ?? string.Empty;
+            connection.TotalCommitCount = Math.Max(0, summary.TotalCommitsAnalyzed);
+            connection.AnalyzedCommitRange = (summary.AnalyzedStartCommit ?? string.Empty) + ".." + (summary.AnalyzedEndCommit ?? string.Empty);
+            connection.FilesChangedAnalyzed = fullBaseline
+                ? Math.Max(0, summary.ChangedFileCount)
+                : SaturatingAdd(connection.FilesChangedAnalyzed, summary.ChangedFileCount);
+            connection.FirstCommitHash = summary.FirstCommitHash ?? string.Empty;
+
+            if (fullBaseline || !connection.GrowthSignalsInitialized)
+            {
+                connection.GrowthCodeSignalCount = Math.Max(0, summary.CodeFileSignalCount);
+                connection.GrowthFocusSignalCount = Math.Max(0, summary.GrowthFocusSignalCount);
+                connection.GrowthDebugSignalCount = Math.Max(0, summary.DebugCommitSignalCount);
+                connection.GrowthDesignSignalCount = Math.Max(0, summary.DesignFileSignalCount);
+                connection.GrowthSyncSignalCount = Math.Max(0, summary.SyncSignalCount);
+                connection.GrowthNumstatRowsAnalyzed = Math.Max(0, summary.NumstatRowsAnalyzed);
+            }
+            else
+            {
+                connection.GrowthCodeSignalCount = SaturatingAdd(connection.GrowthCodeSignalCount, summary.CodeFileSignalCount);
+                connection.GrowthFocusSignalCount = SaturatingAdd(connection.GrowthFocusSignalCount, summary.GrowthFocusSignalCount);
+                connection.GrowthDebugSignalCount = SaturatingAdd(connection.GrowthDebugSignalCount, summary.DebugCommitSignalCount);
+                connection.GrowthDesignSignalCount = SaturatingAdd(connection.GrowthDesignSignalCount, summary.DesignFileSignalCount);
+                connection.GrowthSyncSignalCount = SaturatingAdd(connection.GrowthSyncSignalCount, summary.SyncSignalCount);
+                connection.GrowthNumstatRowsAnalyzed = SaturatingAdd(connection.GrowthNumstatRowsAnalyzed, summary.NumstatRowsAnalyzed);
+            }
+
+            connection.GrowthSignalsInitialized = true;
+            connection.GrowthCodeScore = NormalizeGrowthSignalScore(connection.GrowthCodeSignalCount);
+            connection.GrowthFocusScore = NormalizeGrowthSignalScore(connection.GrowthFocusSignalCount);
+            connection.GrowthDebugScore = NormalizeGrowthSignalScore(connection.GrowthDebugSignalCount);
+            connection.GrowthDesignScore = NormalizeGrowthSignalScore(connection.GrowthDesignSignalCount);
+            connection.GrowthSyncScore = NormalizeGrowthSignalScore(connection.GrowthSyncSignalCount);
+            connection.GrowthScoringVersion = summary.GrowthScoringVersion ?? string.Empty;
+            connection.GrowthResultId = summary.AnalysisIdempotencyKey ?? string.Empty;
+        }
+
+        public static int NormalizeGrowthSignalScore(long rawCount)
+        {
+            if (rawCount <= 0)
+            {
+                return 0;
+            }
+
+            return Math.Max(1, Math.Min(10, (int)Math.Ceiling(10.0 * (1.0 - Math.Exp(-rawCount / 12.0)))));
+        }
+
+        private static int SaturatingAdd(int current, int delta)
+        {
+            return (int)Math.Min(int.MaxValue, Math.Max(0L, (long)Math.Max(0, current) + Math.Max(0, delta)));
+        }
+
+        private static long SaturatingAdd(long current, long delta)
+        {
+            var positiveCurrent = Math.Max(0L, current);
+            var positiveDelta = Math.Max(0L, delta);
+            return positiveCurrent > long.MaxValue - positiveDelta ? long.MaxValue : positiveCurrent + positiveDelta;
+        }
+
+        private static string AnalysisScopeLabel(GitChangeSummary summary)
+        {
+            var normalized = new string((summary?.AnalysisMode ?? string.Empty).Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+            if (normalized == "fullbaseline") return "Full local Git history";
+            if (normalized == "incremental") return "Incremental changes since last saved checkpoint";
+            if (normalized == "recenttrend") return "Recent trend window";
+            return "Repository aggregate";
+        }
+
         public sealed class SelectedRepositoryCanonicalization
         {
             public string InputSelectedRepoHash { get; set; } = string.Empty;
@@ -562,6 +688,31 @@ namespace TokenForge.Client.Domain
         public static SaveData Normalize(SaveData saveData)
         {
             saveData = saveData ?? SaveData.CreateDefault();
+            saveData.ProviderSettings = (saveData.ProviderSettings ?? new List<ProviderSettings>())
+                .Where(setting => setting != null && !string.IsNullOrWhiteSpace(setting.ProviderId))
+                .GroupBy(setting => MacAgentSourceDetector.NormalizeProviderValue(setting.ProviderId).ToString(), StringComparer.OrdinalIgnoreCase)
+                .Select(group =>
+                {
+                    var setting = group
+                        .OrderByDescending(item => item.Enabled && item.Selected)
+                        .ThenByDescending(item => item.LastAnalyzedAt ?? DateTimeOffset.MinValue)
+                        .First();
+                    setting.EstimatedSessionCount = Math.Max(0, setting.EstimatedSessionCount);
+                    setting.EstimatedInteractionCount = Math.Max(0, setting.EstimatedInteractionCount);
+                    setting.EstimatedInputTokenCount = Math.Max(0, setting.EstimatedInputTokenCount);
+                    setting.EstimatedOutputTokenCount = Math.Max(0, setting.EstimatedOutputTokenCount);
+                    setting.EstimatedTotalTokenCount = Math.Max(setting.EstimatedTotalTokenCount,
+                        SaturatingAdd(setting.EstimatedInputTokenCount, setting.EstimatedOutputTokenCount));
+                    setting.Enabled = group.Any(item => item.Enabled);
+                    setting.Selected = group.Any(item => item.Enabled && item.Selected);
+                    setting.Detected = group.Any(item => item.Detected);
+                    setting.ManualFolderApproved = group.Any(item => item.ManualFolderApproved);
+                    setting.UsageEvidenceState = string.IsNullOrWhiteSpace(setting.UsageEvidenceState)
+                        ? (setting.EstimatedTotalTokenCount > 0 ? "aggregateAvailable" : "notAnalyzed")
+                        : setting.UsageEvidenceState;
+                    return setting;
+                })
+                .ToList();
             saveData.RepositoryCompanionProfiles = saveData.RepositoryCompanionProfiles ?? new List<RepositoryCompanionProfile>();
             saveData.ConnectedProjects = saveData.ConnectedProjects ?? new List<ConnectedProject>();
             saveData.RepositoryTimelineEvents = saveData.RepositoryTimelineEvents ?? new List<RepositoryTimelineEvent>();
@@ -578,7 +729,32 @@ namespace TokenForge.Client.Domain
                 })
                 .Where(state => !string.IsNullOrWhiteSpace(state.AgentId))
                 .GroupBy(state => state.AgentId, StringComparer.Ordinal)
-                .Select(group => group.First())
+                .Select(group =>
+                {
+                    var states = group.ToList();
+                    var chosen = states
+                        .OrderByDescending(state => state.TokenShop.LifetimeTokenUsageScore)
+                        .ThenByDescending(state => state.TokenShop.PurchaseHistory?.Count ?? 0)
+                        .First();
+                    var allPurchased = states.SelectMany(state => state.TokenShop.PurchasedItemIds ?? new List<string>());
+                    var equippedWithChosenLast = states
+                        .Where(state => !ReferenceEquals(state, chosen))
+                        .SelectMany(state => state.TokenShop.EquippedItemIds ?? new List<string>())
+                        .Concat(chosen.TokenShop.EquippedItemIds ?? new List<string>());
+                    chosen.TokenShop.PurchasedItemIds = NormalizePurchasedItemIds(allPurchased);
+                    chosen.TokenShop.EquippedItemIds = NormalizeEquippedItemIds(equippedWithChosenLast, chosen.TokenShop.PurchasedItemIds);
+                    chosen.TokenShop.PurchaseHistory = states
+                        .SelectMany(state => state.TokenShop.PurchaseHistory ?? new List<TokenShopPurchaseHistoryEntry>())
+                        .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.ItemId))
+                        .GroupBy(entry => entry.ItemId + "|" + entry.TargetType + "|" + entry.TargetId + "|" + entry.PurchasedAtUtc.UtcDateTime.Ticks,
+                            StringComparer.Ordinal)
+                        .Select(history => history.First())
+                        .OrderByDescending(entry => entry.PurchasedAtUtc)
+                        .ToList();
+                    chosen.TokenShop.CurrencyBalance = states.Max(state => Math.Max(0, state.TokenShop.CurrencyBalance));
+                    chosen.TokenShop.LifetimeTokenUsageScore = states.Max(state => Math.Max(0, state.TokenShop.LifetimeTokenUsageScore));
+                    return chosen;
+                })
                 .ToList();
             ApplyAgentTokenShopCurrency(saveData);
 
@@ -938,10 +1114,6 @@ namespace TokenForge.Client.Domain
                 PurchasedAtUtc = DateTimeOffset.UtcNow
             });
 
-            EquipPurchasedItem(saveData, target.Value, item);
-            UnityEngine.Debug.Log("INFO [Wardrobe][EQUIP_ITEM] targetType=" + TargetTypeId(targetType) +
-                                  " targetId=" + target.Value.TargetId +
-                                  " itemId=" + item.ItemId);
             RecordTimelineEvent(
                 saveData,
                 "shop_item_purchased",
@@ -955,20 +1127,6 @@ namespace TokenForge.Client.Domain
                 targetType == ShopTargetType.AiAgent ? target.Value.TargetId : string.Empty,
                 item.ItemId,
                 item.ZodiacTypeId);
-            RecordTimelineEvent(
-                saveData,
-                "shop_item_equipped",
-                "Shop item equipped",
-                item.Name + " equipped for " + target.Value.TargetType + ".",
-                targetType == ShopTargetType.RepositoryCompanion ? target.Value.TargetId : saveData.SelectedRepositoryHash,
-                string.Empty,
-                "token_shop",
-                0,
-                0,
-                targetType == ShopTargetType.AiAgent ? target.Value.TargetId : string.Empty,
-                item.ItemId,
-                item.ZodiacTypeId);
-
             UnityEngine.Debug.Log("INFO [TokenShop][PURCHASE] targetType=" + TargetTypeId(targetType) +
                                   " targetId=" + target.Value.TargetId +
                                   " itemId=" + item.ItemId +
@@ -976,6 +1134,14 @@ namespace TokenForge.Client.Domain
                                   " balanceBefore=" + before +
                                   " balanceAfter=" + walletShop.CurrencyBalance +
                                   " result=success");
+            UnityEngine.Debug.Log("INFO [PurchaseDiagnostic] targetType=" + TargetTypeId(targetType) +
+                                  " targetId=" + target.Value.TargetId +
+                                  " itemId=" + item.ItemId +
+                                  " chargedExactlyOnce=true balanceBefore=" + before +
+                                  " balanceAfter=" + walletShop.CurrencyBalance);
+            UnityEngine.Debug.Log("INFO [CosmeticOwnershipDiagnostic] targetType=" + TargetTypeId(targetType) +
+                                  " targetId=" + target.Value.TargetId + " itemId=" + item.ItemId +
+                                  " owned=true equipped=false");
             return Result<TokenShopPurchaseResult>.Success(new TokenShopPurchaseResult
             {
                 ItemId = item.ItemId,
@@ -985,7 +1151,7 @@ namespace TokenForge.Client.Domain
                 BalanceAfter = walletShop.CurrencyBalance,
                 Purchased = true,
                 Owned = true,
-                Equipped = true,
+                Equipped = false,
                 StatusText = item.Name + " purchased."
             });
         }
@@ -1022,6 +1188,12 @@ namespace TokenForge.Client.Domain
             UnityEngine.Debug.Log("INFO [Wardrobe][EQUIP_ITEM] targetType=" + TargetTypeId(targetType) +
                                   " targetId=" + target.Value.TargetId +
                                   " itemId=" + item.ItemId);
+            UnityEngine.Debug.Log("INFO [CosmeticEquipDiagnostic] targetType=" + TargetTypeId(targetType) +
+                                  " targetId=" + target.Value.TargetId + " itemId=" + item.ItemId +
+                                  " balanceChanged=false equipped=true");
+            UnityEngine.Debug.Log("INFO [WardrobeEquipPersistenceDiagnostic] targetType=" + TargetTypeId(targetType) +
+                                  " targetId=" + target.Value.TargetId + " itemId=" + item.ItemId +
+                                  " persistedInSharedOwnershipStore=true");
             RecordTimelineEvent(
                 saveData,
                 "wardrobe_item_equipped",
@@ -1046,6 +1218,68 @@ namespace TokenForge.Client.Domain
                 Owned = true,
                 Equipped = true,
                 StatusText = item.Name + " equipped."
+            });
+        }
+
+        public static Result<TokenShopPurchaseResult> UnequipTokenShopItem(SaveData saveData, ShopTargetType targetType, string targetId, string itemId, bool targetConnected)
+        {
+            saveData = Normalize(saveData);
+            itemId = (itemId ?? string.Empty).Trim();
+            var item = FullTokenShopCatalog().FirstOrDefault(candidate => string.Equals(candidate.ItemId, itemId, StringComparison.Ordinal));
+            if (item == null)
+            {
+                return Result<TokenShopPurchaseResult>.Failure("shop_item_not_found", "This wardrobe item is not available.");
+            }
+
+            var target = ResolveTokenShopTarget(saveData, targetType, targetId, targetConnected);
+            if (!target.IsSuccess)
+            {
+                return Result<TokenShopPurchaseResult>.Failure(target.ErrorCode, target.ErrorMessage);
+            }
+
+            var shop = target.Value.OwnershipShop;
+            if (!shop.PurchasedItemIds.Contains(item.ItemId, StringComparer.Ordinal))
+            {
+                return Result<TokenShopPurchaseResult>.Failure("shop_item_not_owned", "Purchase this item before changing its wardrobe state.");
+            }
+            if (!shop.EquippedItemIds.Contains(item.ItemId, StringComparer.Ordinal))
+            {
+                return Result<TokenShopPurchaseResult>.Failure("shop_item_not_equipped", "This item is not equipped.");
+            }
+
+            shop.EquippedItemIds.RemoveAll(id => string.Equals(id, item.ItemId, StringComparison.Ordinal));
+            shop.EquippedItemIds = NormalizeEquippedItemIds(shop.EquippedItemIds, shop.PurchasedItemIds);
+            if (target.Value.RepositoryProfile != null && !string.IsNullOrWhiteSpace(item.VisualThemeId))
+            {
+                var fallbackTheme = shop.EquippedItemIds
+                    .Select(id => FullTokenShopCatalog().FirstOrDefault(candidate => string.Equals(candidate.ItemId, id, StringComparison.Ordinal)))
+                    .Where(candidate => candidate != null && !string.IsNullOrWhiteSpace(candidate.VisualThemeId))
+                    .Select(candidate => candidate.VisualThemeId)
+                    .LastOrDefault() ?? "orange_cat";
+                target.Value.RepositoryProfile.DesktopCompanionSettings.VisualThemeId = CompanionSkinCatalog.Normalize(fallbackTheme);
+                if (string.Equals(target.Value.RepositoryProfile.RepositoryHash, saveData.SelectedRepositoryHash, StringComparison.Ordinal))
+                {
+                    saveData.DesktopCompanionSettings = CloneDesktopCompanionSettings(target.Value.RepositoryProfile.DesktopCompanionSettings);
+                }
+            }
+
+            UnityEngine.Debug.Log("INFO [CosmeticEquipDiagnostic] targetType=" + TargetTypeId(targetType) +
+                                  " targetId=" + target.Value.TargetId + " itemId=" + item.ItemId +
+                                  " balanceChanged=false equipped=false");
+            UnityEngine.Debug.Log("INFO [WardrobeEquipPersistenceDiagnostic] targetType=" + TargetTypeId(targetType) +
+                                  " targetId=" + target.Value.TargetId + " itemId=" + item.ItemId +
+                                  " persistedInSharedOwnershipStore=true");
+            return Result<TokenShopPurchaseResult>.Success(new TokenShopPurchaseResult
+            {
+                ItemId = item.ItemId,
+                ItemName = item.Name,
+                CurrencyName = target.Value.WalletShop.CurrencyName,
+                BalanceBefore = target.Value.WalletShop.CurrencyBalance,
+                BalanceAfter = target.Value.WalletShop.CurrencyBalance,
+                Purchased = false,
+                Owned = true,
+                Equipped = false,
+                StatusText = item.Name + " unequipped."
             });
         }
 
@@ -2201,17 +2435,27 @@ namespace TokenForge.Client.Domain
         private static void ApplyAgentTokenShopCurrency(SaveData saveData)
         {
             saveData.WorkSessionSummaries = saveData.WorkSessionSummaries ?? new List<AgentWorkSession>();
-            foreach (var group in saveData.WorkSessionSummaries
+            var sessionScores = saveData.WorkSessionSummaries
                          .Where(session => session != null && !IsGitGrowthSession(session))
-                         .GroupBy(AgentShopIdForSession, StringComparer.Ordinal))
+                         .GroupBy(AgentShopIdForSession, StringComparer.Ordinal)
+                         .ToDictionary(group => NormalizeAgentShopId(group.Key), group => group.Sum(session => TokenCurrencyScore(session.TokenUsageBucket)), StringComparer.Ordinal);
+            var providerIds = sessionScores.Keys
+                .Concat((saveData.ProviderSettings ?? new List<ProviderSettings>())
+                    .Select(setting => NormalizeAgentShopId(setting?.ProviderId)))
+                .Where(id => !string.IsNullOrWhiteSpace(id) && !string.Equals(id, "unknown", StringComparison.Ordinal))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            foreach (var agentId in providerIds)
             {
-                var agentId = NormalizeAgentShopId(group.Key);
-                if (string.IsNullOrWhiteSpace(agentId) || string.Equals(agentId, "unknown", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                var score = group.Sum(session => TokenCurrencyScore(session.TokenUsageBucket));
+                sessionScores.TryGetValue(agentId, out var sessionScore);
+                var provider = (saveData.ProviderSettings ?? new List<ProviderSettings>())
+                    .FirstOrDefault(setting => string.Equals(NormalizeAgentShopId(setting?.ProviderId), agentId, StringComparison.Ordinal));
+                var aggregateScore = EstimateProviderCoinScore(provider?.EstimatedTotalTokenCount ?? 0);
+                // Exact aggregate tokens are authoritative once analyzed.
+                // Bucket-derived session scores remain a legacy fallback only.
+                var hasAggregateEvidence = provider != null &&
+                    (provider.LastAnalyzedAt != null || provider.EstimatedTotalTokenCount > 0);
+                var score = hasAggregateEvidence ? aggregateScore : sessionScore;
                 if (score <= 0)
                 {
                     continue;
@@ -2227,7 +2471,21 @@ namespace TokenForge.Client.Domain
                 state.TokenShop.LifetimeTokenUsageScore = score;
                 state.TokenShop.CurrencyBalance = Math.Max(0, state.TokenShop.CurrencyBalance + delta);
                 UnityEngine.Debug.Log("INFO [TokenShop] agentId=" + agentId + " currency=" + state.TokenShop.CurrencyName + " delta=" + delta + " balance=" + state.TokenShop.CurrencyBalance);
+                UnityEngine.Debug.Log("INFO [AITokenCoinDiagnostic] provider=" + agentId + " estimatedTokens=" + Math.Max(0, provider?.EstimatedTotalTokenCount ?? 0) + " earnedCoinScore=" + score + " delta=" + delta + " balance=" + state.TokenShop.CurrencyBalance);
             }
+        }
+
+        public static int EstimateProviderCoinScore(long estimatedTotalTokens)
+        {
+            if (estimatedTotalTokens <= 0)
+            {
+                return 0;
+            }
+
+            // Cosmetic-only currency: one whole coin per completed 10k locally
+            // measured/estimated tokens. Partial blocks carry in the lifetime
+            // token total and never mint an early coin.
+            return (int)Math.Min(int.MaxValue, estimatedTotalTokens / 10_000L);
         }
 
         private static string AgentShopIdForSession(AgentWorkSession session)

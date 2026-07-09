@@ -548,13 +548,14 @@ namespace TokenForge.Client.Tests
                 {
                     ["rev-parse --is-inside-work-tree"] = GitCommandResult.Success("true\n"),
                     ["rev-parse HEAD"] = GitCommandResult.Success("HEADSHA\n"),
-                    ["log --all --reverse --format=%cI -n 1"] = GitCommandResult.Success("2026-01-02T03:04:05Z\n"),
+                    ["rev-list --max-parents=0 --all --reverse"] = GitCommandResult.Success("FIRSTSHA\n"),
+                    ["show -s --format=%cI FIRSTSHA"] = GitCommandResult.Success("2026-01-02T03:04:05Z\n"),
                     ["rev-list --all --count"] = GitCommandResult.Success("42\n"),
                     ["status --porcelain"] = GitCommandResult.Success(status),
                     ["diff --numstat"] = GitCommandResult.Success(diff),
                     ["diff --cached --numstat"] = GitCommandResult.Success(cachedDiff),
-                    ["log --all --numstat --format=--TOKENFORGE-COMMIT--"] = GitCommandResult.Success(log),
-                    ["log --since=7.days.ago --numstat --format=--TOKENFORGE-COMMIT-- -n 50"] = GitCommandResult.Success(log)
+                    ["log --all --numstat --format=format:--TOKENFORGE-COMMIT--"] = GitCommandResult.Success(log),
+                    ["log --since=7.days.ago --numstat --format=format:--TOKENFORGE-COMMIT-- -n 50"] = GitCommandResult.Success(log)
                 };
             }
         }

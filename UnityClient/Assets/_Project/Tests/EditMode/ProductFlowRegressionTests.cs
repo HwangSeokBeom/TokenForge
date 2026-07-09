@@ -115,8 +115,8 @@ namespace TokenForge.Client.Tests
             Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
             Assert.That(runner.Arguments, Has.Some.Contains("log --all --numstat"));
             var numstatLog = runner.Arguments.First(item => item.StartsWith("log --all --numstat", StringComparison.Ordinal));
-            Assert.That(numstatLog, Does.Contain("--format=--TOKENFORGE-COMMIT--"));
-            Assert.That(numstatLog, Does.Not.Contain("--format=format:"));
+            Assert.That(numstatLog, Does.Contain("--format=format:--TOKENFORGE-COMMIT--"));
+            Assert.That(numstatLog, Does.Not.Contain("--format=--TOKENFORGE-COMMIT--"));
         }
 
         [UnityTest]
@@ -601,7 +601,12 @@ namespace TokenForge.Client.Tests
                     return Task.FromResult(GitCommandResult.Success("HEADSHA\n"));
                 }
 
-                if (arguments == "log --all --reverse --format=%cI -n 1")
+                if (arguments == "rev-list --max-parents=0 --all --reverse")
+                {
+                    return Task.FromResult(GitCommandResult.Success("FIRSTSHA\n"));
+                }
+
+                if (arguments == "show -s --format=%cI FIRSTSHA")
                 {
                     return Task.FromResult(GitCommandResult.Success("2026-01-02T03:04:05Z\n"));
                 }

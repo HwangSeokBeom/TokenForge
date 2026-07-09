@@ -38,6 +38,13 @@ namespace TokenForge.Client.Agents
         public override string ParserVersion => Version;
     }
 
+    public sealed class GeminiCliAgentLogParser : SafeAgentLogParser
+    {
+        public const string Version = "gemini-cli-agent-parser-v1";
+        public override AgentProviderType ProviderType => AgentProviderType.GeminiCli;
+        public override string ParserVersion => Version;
+    }
+
     public sealed class ManualAgentLogParser : SafeAgentLogParser
     {
         public const string Version = "manual-agent-parser-v1";
@@ -77,6 +84,10 @@ namespace TokenForge.Client.Agents
             var interactionCount = 0;
             var timestampCount = 0;
             var providerMarkerCount = 0;
+            long estimatedInputTokens = 0;
+            long estimatedOutputTokens = 0;
+            var cumulativeTokensBySource = new Dictionary<string, TokenMeasurement>(StringComparer.Ordinal);
+            DateTimeOffset? lastActivityAtUtc = null;
 
             foreach (var entry in entries)
             {
@@ -84,6 +95,12 @@ namespace TokenForge.Client.Agents
                 if (string.IsNullOrWhiteSpace(text))
                 {
                     continue;
+                }
+
+                if (entry?.LastWriteTimeUtc != null &&
+                    (lastActivityAtUtc == null || entry.LastWriteTimeUtc.Value > lastActivityAtUtc.Value))
+                {
+                    lastActivityAtUtc = entry.LastWriteTimeUtc.Value;
                 }
 
                 if (detector.ContainsSensitiveString(text) || SourceLikeRegex.IsMatch(text))
@@ -99,10 +116,47 @@ namespace TokenForge.Client.Agents
                 var parsedJson = TryParseJson(text, out var json);
                 if (parsedJson)
                 {
+                    if (TryExtractExplicitTokenUsage(json, out var measurement))
+                    {
+                        if (measurement.Cumulative)
+                        {
+                            var sourceKey = string.IsNullOrWhiteSpace(entry?.SourceKey) ? "unknown-source" : entry.SourceKey;
+                            if (!cumulativeTokensBySource.TryGetValue(sourceKey, out var previous) ||
+                                measurement.Total > previous.Total)
+                            {
+                                cumulativeTokensBySource[sourceKey] = measurement;
+                            }
+                        }
+                        else
+                        {
+                            estimatedInputTokens = SaturatingAdd(estimatedInputTokens, measurement.Input);
+                            estimatedOutputTokens = SaturatingAdd(estimatedOutputTokens, measurement.Output);
+                        }
+                    }
+                    else
+                    {
+                        EstimateMessageTokens(json, text, out var inputEstimate, out var outputEstimate);
+                        estimatedInputTokens = SaturatingAdd(estimatedInputTokens, inputEstimate);
+                        estimatedOutputTokens = SaturatingAdd(estimatedOutputTokens, outputEstimate);
+                        if (inputEstimate > 0 || outputEstimate > 0)
+                        {
+                            warningIds.Add("agent_token_usage_estimated_from_message_text");
+                        }
+                    }
                     ExtractFromJson(json, sessionKeys, dayCounts, toolCounts, languageCounts, ref interactionCount, ref timestampCount, warningIds);
                 }
                 else
                 {
+                    var lineTokens = Math.Max(1L, (text.Length + 3L) / 4L);
+                    if (LooksLikeAssistantOutput(text))
+                    {
+                        estimatedOutputTokens = SaturatingAdd(estimatedOutputTokens, lineTokens);
+                    }
+                    else
+                    {
+                        estimatedInputTokens = SaturatingAdd(estimatedInputTokens, lineTokens);
+                    }
+                    warningIds.Add("agent_token_usage_estimated_from_message_text");
                     ExtractFromText(text, sessionKeys, dayCounts, toolCounts, languageCounts, ref interactionCount, ref timestampCount);
                 }
 
@@ -110,6 +164,12 @@ namespace TokenForge.Client.Agents
                 {
                     AddDay(dayCounts, entry.LastWriteTimeUtc.Value.UtcDateTime);
                 }
+            }
+
+            foreach (var measurement in cumulativeTokensBySource.Values)
+            {
+                estimatedInputTokens = SaturatingAdd(estimatedInputTokens, measurement.Input);
+                estimatedOutputTokens = SaturatingAdd(estimatedOutputTokens, measurement.Output);
             }
 
             if (entries.Count == 0)
@@ -144,6 +204,12 @@ namespace TokenForge.Client.Agents
                 SessionCountBucket = ToCountBucket(Math.Max(sessionKeys.Count, entries.Count > 0 ? 1 : 0)),
                 InteractionCountBucket = ToCountBucket(interactionCount),
                 EstimatedCodingActivityBucket = ToCountBucket(toolCounts.Where(item => item.Key != AgentToolUsageCategory.Unknown).Sum(item => item.Value)),
+                EstimatedSessionCount = Math.Max(sessionKeys.Count, entries.Count > 0 ? 1 : 0),
+                EstimatedInteractionCount = Math.Max(0, interactionCount),
+                EstimatedInputTokenCount = Math.Max(0, estimatedInputTokens),
+                EstimatedOutputTokenCount = Math.Max(0, estimatedOutputTokens),
+                EstimatedTotalTokenCount = SaturatingAdd(estimatedInputTokens, estimatedOutputTokens),
+                LastActivityAtUtc = lastActivityAtUtc,
                 ToolUsageCategoryBuckets = toolCounts
                     .OrderBy(item => item.Key)
                     .Select(item => new AgentToolUsageCategoryBucket { Category = item.Key, CountBucket = ToCountBucket(item.Value) })
@@ -158,6 +224,185 @@ namespace TokenForge.Client.Agents
             };
 
             return Result<AgentActivitySummary>.Success(summary);
+        }
+
+        private struct TokenMeasurement
+        {
+            public long Input;
+            public long Output;
+            public bool Cumulative;
+            public long Total => SaturatingAdd(Input, Output);
+        }
+
+        private static bool TryExtractExplicitTokenUsage(JToken json, out TokenMeasurement measurement)
+        {
+            measurement = default(TokenMeasurement);
+            var properties = EnumerateProperties(json).ToList();
+
+            // Codex token_count events carry both last_token_usage and
+            // total_token_usage. The total is cumulative for that source file,
+            // so prefer it and let the caller retain only the greatest value.
+            foreach (var property in properties.Where(item => NormalizeTokenField(item.Name) == "totaltokenusage"))
+            {
+                if (TryReadTokenObject(property.Value as JObject, out measurement))
+                {
+                    measurement.Cumulative = true;
+                    return true;
+                }
+            }
+
+            var candidates = new List<TokenMeasurement>();
+            foreach (var property in properties.Where(item =>
+                         NormalizeTokenField(item.Name) == "usage" ||
+                         NormalizeTokenField(item.Name) == "tokenusage" ||
+                         NormalizeTokenField(item.Name) == "lasttokenusage"))
+            {
+                if (TryReadTokenObject(property.Value as JObject, out var candidate))
+                {
+                    candidates.Add(candidate);
+                }
+            }
+
+            if (json is JObject root && TryReadTokenObject(root, out var rootMeasurement))
+            {
+                candidates.Add(rootMeasurement);
+            }
+
+            if (candidates.Count == 0)
+            {
+                return false;
+            }
+
+            measurement = candidates.OrderByDescending(item => item.Total).First();
+            return true;
+        }
+
+        private static bool TryReadTokenObject(JObject value, out TokenMeasurement measurement)
+        {
+            measurement = default(TokenMeasurement);
+            if (value == null)
+            {
+                return false;
+            }
+
+            long input = 0;
+            long prompt = 0;
+            long output = 0;
+            long completion = 0;
+            long cacheCreation = 0;
+            long cacheRead = 0;
+            long total = 0;
+            var found = false;
+            foreach (var property in value.Properties())
+            {
+                if (!TryReadNonNegativeLong(property.Value, out var count))
+                {
+                    continue;
+                }
+
+                switch (NormalizeTokenField(property.Name))
+                {
+                    case "inputtokens": input = Math.Max(input, count); found = true; break;
+                    case "prompttokens": prompt = Math.Max(prompt, count); found = true; break;
+                    case "outputtokens": output = Math.Max(output, count); found = true; break;
+                    case "completiontokens": completion = Math.Max(completion, count); found = true; break;
+                    case "cachecreationinputtokens": cacheCreation = Math.Max(cacheCreation, count); found = true; break;
+                    case "cachereadinputtokens": cacheRead = Math.Max(cacheRead, count); found = true; break;
+                    case "totaltokens": total = Math.Max(total, count); found = true; break;
+                }
+            }
+
+            if (!found)
+            {
+                return false;
+            }
+
+            measurement.Input = SaturatingAdd(Math.Max(input, prompt), SaturatingAdd(cacheCreation, cacheRead));
+            measurement.Output = Math.Max(output, completion);
+            if (measurement.Input == 0 && measurement.Output == 0 && total > 0)
+            {
+                measurement.Input = total;
+            }
+            return measurement.Total > 0;
+        }
+
+        private static bool TryReadNonNegativeLong(JToken token, out long value)
+        {
+            value = 0;
+            if (token == null || (token.Type != JTokenType.Integer && token.Type != JTokenType.Float && token.Type != JTokenType.String))
+            {
+                return false;
+            }
+
+            if (!decimal.TryParse(token.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed) || parsed < 0)
+            {
+                return false;
+            }
+
+            value = parsed >= long.MaxValue ? long.MaxValue : (long)parsed;
+            return true;
+        }
+
+        private static string NormalizeTokenField(string value)
+        {
+            return new string((value ?? string.Empty).Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+        }
+
+        private static void EstimateMessageTokens(JToken json, string originalText, out long inputTokens, out long outputTokens)
+        {
+            var uniqueValues = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var property in EnumerateProperties(json))
+            {
+                var name = NormalizeTokenField(property.Name);
+                if (name != "content" && name != "text" && name != "prompt" && name != "input" &&
+                    name != "output" && name != "response" && name != "completion" && name != "message")
+                {
+                    continue;
+                }
+
+                if (property.Value?.Type == JTokenType.String)
+                {
+                    var value = property.Value.Value<string>();
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        uniqueValues.Add(value);
+                    }
+                }
+            }
+
+            long characters = 0;
+            foreach (var value in uniqueValues)
+            {
+                characters = SaturatingAdd(characters, value.Length);
+            }
+            var tokens = characters <= 0 ? 0 : Math.Max(1L, (characters + 3L) / 4L);
+            if (LooksLikeAssistantOutput(originalText))
+            {
+                inputTokens = 0;
+                outputTokens = tokens;
+            }
+            else
+            {
+                inputTokens = tokens;
+                outputTokens = 0;
+            }
+        }
+
+        private static long SaturatingAdd(long first, long second)
+        {
+            first = Math.Max(0, first);
+            second = Math.Max(0, second);
+            return first > long.MaxValue - second ? long.MaxValue : first + second;
+        }
+
+        private static bool LooksLikeAssistantOutput(string text)
+        {
+            text = text ?? string.Empty;
+            return text.IndexOf("\"role\":\"assistant\"", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   text.IndexOf("\"role\": \"assistant\"", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   text.IndexOf("assistant:", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   text.IndexOf("completion", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   text.IndexOf("model_response", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         internal static CountBucket ToCountBucket(int count)
@@ -287,6 +532,8 @@ namespace TokenForge.Client.Agents
                 case AgentProviderType.GitHubCopilot:
                     return text.IndexOf("copilot", StringComparison.OrdinalIgnoreCase) >= 0 ||
                            text.IndexOf("github", StringComparison.OrdinalIgnoreCase) >= 0;
+                case AgentProviderType.GeminiCli:
+                    return text.IndexOf("gemini", StringComparison.OrdinalIgnoreCase) >= 0;
                 default:
                     return false;
             }

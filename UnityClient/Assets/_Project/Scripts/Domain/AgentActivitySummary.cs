@@ -29,6 +29,14 @@ namespace TokenForge.Client.Domain
         public CountBucket SessionCountBucket { get; set; } = CountBucket.Unknown;
         public CountBucket InteractionCountBucket { get; set; } = CountBucket.Unknown;
         public CountBucket EstimatedCodingActivityBucket { get; set; } = CountBucket.Unknown;
+        // Privacy-safe aggregates. Raw prompts, responses, code, and transcripts are never
+        // copied into this model or persisted by the analyzer.
+        public int EstimatedSessionCount { get; set; }
+        public int EstimatedInteractionCount { get; set; }
+        public long EstimatedInputTokenCount { get; set; }
+        public long EstimatedOutputTokenCount { get; set; }
+        public long EstimatedTotalTokenCount { get; set; }
+        public DateTimeOffset? LastActivityAtUtc { get; set; }
         public List<AgentToolUsageCategoryBucket> ToolUsageCategoryBuckets { get; set; } = new List<AgentToolUsageCategoryBucket>();
         public List<AgentLanguageCategoryBucket> LanguageCategoryBuckets { get; set; } = new List<AgentLanguageCategoryBucket>();
         public ConfidenceLevel ConfidenceLevel { get; set; } = ConfidenceLevel.Unknown;

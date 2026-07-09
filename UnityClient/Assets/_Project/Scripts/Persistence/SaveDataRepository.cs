@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -21,6 +22,8 @@ namespace TokenForge.Client.Persistence
     public sealed class SaveDataRepository : ILocalSaveDataRepository
     {
         public const string SaveFileName = "tokenforge-save.json";
+        private static readonly ConcurrentDictionary<string, SemaphoreSlim> FileGates =
+            new ConcurrentDictionary<string, SemaphoreSlim>(StringComparer.Ordinal);
         private readonly string saveFilePath;
         private readonly PrivacySanitizer privacySanitizer;
         private readonly JsonSerializerSettings serializerSettings;
@@ -45,6 +48,20 @@ namespace TokenForge.Client.Persistence
         public string UnsafeFilePath => saveFilePath + ".unsafe";
 
         public async Task<SaveData> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            var gate = FileGates.GetOrAdd(saveFilePath, _ => new SemaphoreSlim(1, 1));
+            await gate.WaitAsync(cancellationToken);
+            try
+            {
+                return await LoadUnlockedAsync(cancellationToken);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        private async Task<SaveData> LoadUnlockedAsync(CancellationToken cancellationToken)
         {
             if (!File.Exists(saveFilePath))
             {
@@ -98,6 +115,20 @@ namespace TokenForge.Client.Persistence
 
         public async Task<Result> SaveAsync(SaveData saveData, CancellationToken cancellationToken = default)
         {
+            var gate = FileGates.GetOrAdd(saveFilePath, _ => new SemaphoreSlim(1, 1));
+            await gate.WaitAsync(cancellationToken);
+            try
+            {
+                return await SaveUnlockedAsync(saveData, cancellationToken);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        private async Task<Result> SaveUnlockedAsync(SaveData saveData, CancellationToken cancellationToken)
+        {
             if (saveData == null)
             {
                 throw new ArgumentNullException(nameof(saveData));
@@ -148,16 +179,24 @@ namespace TokenForge.Client.Persistence
             return Result.Success();
         }
 
-        public Task DeleteLocalData(CancellationToken cancellationToken = default)
+        public async Task DeleteLocalData(CancellationToken cancellationToken = default)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            DeleteIfExists(saveFilePath);
-            DeleteIfExists(BackupFilePath);
-            DeleteIfExists(CorruptFilePath);
-            DeleteIfExists(UnsupportedSchemaFilePath);
-            DeleteIfExists(UnsafeFilePath);
-            DeleteIfExists(saveFilePath + ".tmp");
-            return Task.CompletedTask;
+            var gate = FileGates.GetOrAdd(saveFilePath, _ => new SemaphoreSlim(1, 1));
+            await gate.WaitAsync(cancellationToken);
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                DeleteIfExists(saveFilePath);
+                DeleteIfExists(BackupFilePath);
+                DeleteIfExists(CorruptFilePath);
+                DeleteIfExists(UnsupportedSchemaFilePath);
+                DeleteIfExists(UnsafeFilePath);
+                DeleteIfExists(saveFilePath + ".tmp");
+            }
+            finally
+            {
+                gate.Release();
+            }
         }
 
         private static SaveData Migrate(SaveData saveData, int sourceSchemaVersion)

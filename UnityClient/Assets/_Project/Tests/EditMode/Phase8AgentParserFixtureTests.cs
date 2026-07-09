@@ -63,7 +63,56 @@ namespace TokenForge.Client.Tests
             AssertLoweredConfidence(result.Value);
             Assert.Contains("agent_log_risky_content_discarded", result.Value.WarningIds);
             Assert.AreEqual(CodexAgentLogParser.Version, result.Value.AnalyzerVersion);
+            Assert.Greater(result.Value.EstimatedTotalTokenCount, 0);
+            Assert.AreEqual(result.Value.EstimatedInputTokenCount + result.Value.EstimatedOutputTokenCount, result.Value.EstimatedTotalTokenCount);
+            Assert.GreaterOrEqual(result.Value.EstimatedInteractionCount, 1);
+            Assert.IsNotNull(result.Value.LastActivityAtUtc);
             AssertNoRawFixtureData(result.Value);
+        }
+
+        [Test]
+        public void TokenEstimatorProducesDeterministicUsageBucketAndCoins()
+        {
+            Assert.AreEqual(TokenUsageBucket.None, AgentLogActivityProvider.EstimateTokenUsageBucket(0));
+            Assert.AreEqual(TokenUsageBucket.Small, AgentLogActivityProvider.EstimateTokenUsageBucket(9_999));
+            Assert.AreEqual(TokenUsageBucket.Medium, AgentLogActivityProvider.EstimateTokenUsageBucket(10_000));
+            Assert.AreEqual(0, RepositoryCompanionProfileService.EstimateProviderCoinScore(0));
+            Assert.AreEqual(0, RepositoryCompanionProfileService.EstimateProviderCoinScore(9_999));
+            Assert.AreEqual(1, RepositoryCompanionProfileService.EstimateProviderCoinScore(10_000));
+            Assert.AreEqual(2, RepositoryCompanionProfileService.EstimateProviderCoinScore(25_001));
+        }
+
+        [Test]
+        public void ExplicitUsageFields_AreUsedInsteadOfSerializedJsonLength()
+        {
+            var result = new ClaudeAgentLogParser().Parse(Input(AgentProviderType.ClaudeCode), new List<AgentLogEntry>
+            {
+                Entry("{\"provider\":\"claude\",\"type\":\"assistant\",\"content\":\"short\",\"usage\":{\"input_tokens\":120,\"cache_read_input_tokens\":30,\"output_tokens\":25}}")
+            });
+
+            Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
+            Assert.AreEqual(150, result.Value.EstimatedInputTokenCount);
+            Assert.AreEqual(25, result.Value.EstimatedOutputTokenCount);
+            Assert.AreEqual(175, result.Value.EstimatedTotalTokenCount);
+            CollectionAssert.DoesNotContain(result.Value.WarningIds, "agent_token_usage_estimated_from_message_text");
+        }
+
+        [Test]
+        public void CumulativeTokenEvents_KeepLatestPerOpaqueSourceInsteadOfDoubleCounting()
+        {
+            var entries = new List<AgentLogEntry>
+            {
+                EntryWithSource("{\"type\":\"token_count\",\"total_token_usage\":{\"input_tokens\":100,\"output_tokens\":20}}", "file-1"),
+                EntryWithSource("{\"type\":\"token_count\",\"total_token_usage\":{\"input_tokens\":150,\"output_tokens\":30}}", "file-1"),
+                EntryWithSource("{\"type\":\"token_count\",\"total_token_usage\":{\"input_tokens\":50,\"output_tokens\":10}}", "file-2")
+            };
+
+            var result = new CodexAgentLogParser().Parse(Input(AgentProviderType.Codex), entries);
+
+            Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
+            Assert.AreEqual(200, result.Value.EstimatedInputTokenCount);
+            Assert.AreEqual(40, result.Value.EstimatedOutputTokenCount);
+            Assert.AreEqual(240, result.Value.EstimatedTotalTokenCount);
         }
 
         [Test]
@@ -143,6 +192,13 @@ namespace TokenForge.Client.Tests
                 Text = text,
                 LastWriteTimeUtc = new DateTimeOffset(2026, 5, 14, 0, 0, 0, TimeSpan.Zero)
             };
+        }
+
+        private static AgentLogEntry EntryWithSource(string text, string sourceKey)
+        {
+            var entry = Entry(text);
+            entry.SourceKey = sourceKey;
+            return entry;
         }
 
         private static string Escape(string value)

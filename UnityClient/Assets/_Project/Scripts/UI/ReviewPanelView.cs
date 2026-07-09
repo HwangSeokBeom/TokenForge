@@ -22,14 +22,12 @@ namespace TokenForge.Client.UI
             ReplaceClick(saveGitButton, () => RunViewModelAction(() => this.viewModel.SaveGitSessionAsync()));
             ReplaceClick(discardGitButton, () =>
             {
-                this.viewModel.DiscardGitReview();
-                RenderAll();
+                RunViewModelAction(() => this.viewModel.DiscardAllPendingReviewsAsync());
             });
             ReplaceClick(saveAgentButton, () => RunViewModelAction(() => this.viewModel.SaveAgentSessionAsync()));
             ReplaceClick(discardAgentButton, () =>
             {
-                this.viewModel.DiscardAgentReview();
-                RenderAll();
+                RunViewModelAction(() => this.viewModel.DiscardAllPendingReviewsAsync());
             });
 
             Render();

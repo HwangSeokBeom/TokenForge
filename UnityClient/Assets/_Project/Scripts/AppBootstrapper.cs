@@ -87,6 +87,7 @@ namespace TokenForge.Client
         private bool prefabUiUnavailableLogged;
         private readonly Queue<NativeDashboardActionRequest> pendingNativeActions = new Queue<NativeDashboardActionRequest>();
         private readonly object pendingNativeActionsLock = new object();
+        private readonly SemaphoreSlim nativeActionExecutionGate = new SemaphoreSlim(1, 1);
         private string nativeSelectedNavItem = "dashboard";
         private bool nativeAnalysisInProgress;
         private string nativeCurrentAnalysisJobId = string.Empty;
@@ -625,14 +626,30 @@ namespace TokenForge.Client
 
         private async Task SaveNativeCompanionPositionAsync(Vector2 position)
         {
-            await approvedActivityAnalysis.SaveDesktopCompanionPositionAsync(position.x, position.y);
-            Debug.Log("INFO [OverlayPositionSync][COMMIT] source=dragEnd position=(" + position.x.ToString("0.##") + "," + position.y.ToString("0.##") + ")");
+            await nativeActionExecutionGate.WaitAsync();
+            try
+            {
+                await approvedActivityAnalysis.SaveDesktopCompanionPositionAsync(position.x, position.y);
+                Debug.Log("INFO [OverlayPositionSync][COMMIT] source=dragEnd position=(" + position.x.ToString("0.##") + "," + position.y.ToString("0.##") + ")");
+            }
+            finally
+            {
+                nativeActionExecutionGate.Release();
+            }
         }
 
         private async Task SaveNativeRepositoryCompanionPositionAsync(string repositoryId, Vector2 position)
         {
-            await approvedActivityAnalysis.SaveDesktopCompanionPositionForRepositoryAsync(repositoryId, position.x, position.y);
-            Debug.Log("INFO [OverlayPositionSync][COMMIT] repo=" + repositoryId + " source=dragEnd position=(" + position.x.ToString("0.##") + "," + position.y.ToString("0.##") + ")");
+            await nativeActionExecutionGate.WaitAsync();
+            try
+            {
+                await approvedActivityAnalysis.SaveDesktopCompanionPositionForRepositoryAsync(repositoryId, position.x, position.y);
+                Debug.Log("INFO [OverlayPositionSync][COMMIT] repo=" + repositoryId + " source=dragEnd position=(" + position.x.ToString("0.##") + "," + position.y.ToString("0.##") + ")");
+            }
+            finally
+            {
+                nativeActionExecutionGate.Release();
+            }
         }
 
         private void ApplyNativeShellState(bool showDashboardIfNeeded)
@@ -788,7 +805,7 @@ namespace TokenForge.Client
             var settings = dashboard.DesktopCompanionSettings ?? DesktopCompanionSettings.CreateDefault();
             var projectionSaveData = approvedActivityAnalysis?.CurrentSaveData;
             var codexConnected = approvedActivityAnalysis != null
-                && approvedActivityAnalysis.Onboarding.AgentSources.Any(source => source.SourceType == ConnectedAgentSourceType.Codex && IsAgentReadyForNative(source) && NativeAgentFlowMatchesSource(source));
+                && approvedActivityAnalysis.Onboarding.AgentSources.Any(source => source.SourceType == ConnectedAgentSourceType.Codex && IsAgentReadyForNative(source));
             var connectedRepositories = approvedActivityAnalysis == null
                 ? new List<RepositoryCompanionDisplayItem>()
                 : (approvedActivityAnalysis.RepositoryCompanions ?? new List<RepositoryCompanionDisplayItem>())
@@ -813,7 +830,7 @@ namespace TokenForge.Client
             state.isAnalysisRunning = nativeAnalysisInProgress;
             state.actionStatusKind = string.IsNullOrWhiteSpace(nativeActionStatusKind) ? "idle" : nativeActionStatusKind;
             state.actionStatusText = SafeNativeText(nativeActionStatusText, "Ready");
-            var pendingNativeReview = approvedActivityAnalysis?.PendingNativeActivityReview;
+            var pendingNativeReview = PendingReviewForCurrentRepository();
             state.pendingReviewCount = pendingNativeReview != null ? 1 : 0;
             state.hasPendingReview = pendingNativeReview != null;
             state.pendingEstimatedXP = Math.Max(0, pendingNativeReview?.EstimatedXpDelta ?? 0);
@@ -915,6 +932,7 @@ namespace TokenForge.Client
             state.repository.id = repositoryConnected ? dashboard.CurrentRepositoryHash ?? string.Empty : string.Empty;
             state.activeRepositoryId = state.repository.id;
             var activeRepositoryDisplay = connectedRepositories.FirstOrDefault(item => string.Equals(item.RepositoryHash, state.repository.id, StringComparison.Ordinal));
+            state.companion.equippedItemIds = string.Join(",", activeRepositoryDisplay?.EquippedTokenShopItemIds ?? new List<string>());
             state.repository.name = repositoryConnected ? SafeNativeText(NativeRepositoryDisplayName(activeRepositoryDisplay), "Repository") : string.Empty;
             state.repository.folderName = repositoryConnected ? SafeNativeText(activeRepositoryDisplay?.LocalFolderName, string.Empty) : string.Empty;
             state.repository.status = repositoryConnected ? "active" : "not_selected";
@@ -982,13 +1000,27 @@ namespace TokenForge.Client
             state.repositories = BuildNativeRepositoryItems(dashboard);
             state.companionFarm = BuildNativeCompanionFarmState(state.repositories, settings, state.desiredVisible);
             state.tokenShop = BuildNativeTokenShopState(state.repositories.FirstOrDefault(item => item != null && item.selected), repositoryConnected, projectionSaveData, state.agentProviders);
+            Debug.Log("INFO [TokenShopStateDiagnostic] targetType=" + state.tokenShop.targetType +
+                      " selectedAgentId=" + state.tokenShop.selectedAgentId +
+                      " balance=" + state.tokenShop.balance +
+                      " itemCount=" + state.tokenShop.items.Length);
+            Debug.Log("INFO [OverlayDashboardSyncDiagnostic] selectedRepositoryId=" + state.repository.id +
+                      " overlayMode=" + state.overlayMode +
+                      " desiredVisible=" + state.desiredVisible +
+                      " actualVisible=" + state.actualVisible);
+            Debug.Log("INFO [OverlayCompanionSelectionDiagnostic] dashboardRepositoryId=" + state.repository.id +
+                      " companionRepositoryId=" + state.companion.motion.repositoryId +
+                      " farmOverlayCount=" + state.companionFarm.overlays.Length);
             state.onboarding = BuildNativeOnboardingState(projectionSaveData, repositoryConnected);
-            state.agents.connectedCount = state.agentProviders.Count(provider => provider.connected && provider.hasValidSource);
+            state.agents.connectedCount = NativeAgentProviderState.CountConnected(state.agentProviders);
             state.agents.warningCount = state.agentProviders.Sum(provider => Math.Max(0, provider.warningCount));
             state.agents.lastProvider = state.agentProviders.FirstOrDefault(provider => provider.connected && provider.hasValidSource)?.displayName ?? "None";
             state.agents.statusText = state.agents.connectedCount > 0
-                ? state.agents.connectedCount + " provider" + (state.agents.connectedCount == 1 ? "" : "s") + " ready"
-                : "No agents connected";
+                ? "AI agents · " + state.agents.connectedCount + " connected"
+                : "AI agents · 0 connected";
+            Debug.Log("INFO [AIAgentConnectionDiagnostic] authoritativeConnectedCount=" + state.agents.connectedCount +
+                      " connectedProviderIds=" + string.Join(",", state.agentProviders.Where(provider => provider.connected).Select(provider => provider.id)) +
+                      " rowCount=" + state.agentProviders.Length);
             state.agents.privacyText = "Local aggregate only";
             state.primaryActionEnabled = !nativeAnalysisInProgress && (state.repository.canAnalyze || state.agentProviders.Any(provider => provider.canAnalyze));
             state.providerUsagePercentages = BuildNativeProviderUsagePercentages();
@@ -1112,6 +1144,7 @@ namespace TokenForge.Client
                     canDelete = item.Archived,
                     archived = item.Archived,
                     avatarSkin = CompanionSkinCatalog.Normalize(item.Skin),
+                    zodiacType = RepositoryCompanionProfileService.NormalizeZodiacTypeId(item.ZodiacType, "repository"),
                     stage = item.Stage.ToString(),
                     stageIndex = (int)item.Stage,
                     level = Math.Max(1, item.Level),
@@ -1140,6 +1173,10 @@ namespace TokenForge.Client
                     equippedTokenShopItemIds = (item.EquippedTokenShopItemIds ?? new List<string>())
                         .Where(id => !string.IsNullOrWhiteSpace(id))
                         .ToArray(),
+                    desktopCompanionEnabled = item.DesktopCompanionEnabled,
+                    hasSavedOverlayPosition = item.HasSavedOverlayPosition,
+                    overlayPositionX = item.OverlayPositionX,
+                    overlayPositionY = item.OverlayPositionY,
                     motionMood = SafeNativeText(item.MotionState?.Mood, "idle"),
                     motionReason = SafeNativeText(item.MotionState?.ReasonSummary, "No recent aggregate activity."),
                     canViewGrowth = true,
@@ -1377,7 +1414,6 @@ namespace TokenForge.Client
                     : "Connect to unlock agent cosmetics.";
             var items = RepositoryCompanionProfileService.GetTokenShopCatalog()
                 .Where(item => item.TargetType == targetType)
-                .Where(item => IsNativeShopCategoryVisible(item, category, purchased))
                 .Select(item =>
                 {
                     var owned = purchased.Any(id => string.Equals(id, item.ItemId, StringComparison.Ordinal));
@@ -1417,16 +1453,18 @@ namespace TokenForge.Client
                         price = Math.Max(0, item.Price),
                         owned = owned,
                         equipped = isEquipped,
+                        featured = item.Featured,
                         locked = !targetReady,
                         available = targetReady && compatible && !owned && affordable,
                         canEquip = targetReady && compatible && owned && !isEquipped,
+                        canUnequip = targetReady && compatible && owned && isEquipped,
                         stateLabel = stateLabel,
                         buttonTitle = !compatible
                             ? "Not compatible"
                             : !targetReady
                                 ? (targetType == ShopTargetType.AiAgent ? "Connect agent" : "Unavailable")
                                 : isEquipped
-                                    ? "Equipped"
+                                    ? "Unequip"
                                     : owned
                                         ? "Equip"
                                         : affordable
@@ -1456,19 +1494,28 @@ namespace TokenForge.Client
                     var providerShop = RepositoryCompanionProfileService.GetAgentTokenShopState(saveData, provider.id);
                     var providerState = (saveData.AiAgentShopStates ?? new List<AiAgentShopState>())
                         .FirstOrDefault(state => state != null && string.Equals(state.AgentId, provider.id, StringComparison.Ordinal));
+                    var providerUsage = (saveData.ProviderSettings ?? new List<ProviderSettings>())
+                        .FirstOrDefault(setting => MacAgentSourceDetector.NormalizeProviderValue(setting?.ProviderId) ==
+                                                   MacAgentSourceDetector.NormalizeProviderValue(provider.id));
                     var providerZodiac = RepositoryCompanionProfileService.NormalizeZodiacTypeId(providerState?.ZodiacTypeId, provider.id);
+                    var connected = provider.connected && provider.hasValidSource;
+                    var usageStatus = !connected
+                        ? "Locked · provider not connected"
+                        : providerUsage?.LastAnalyzedAt == null
+                            ? "Connected · analysis needed · " + Math.Max(0, providerShop.CurrencyBalance) + " " + RepositoryCompanionProfileService.AgentCurrencyName(provider.id)
+                            : providerUsage.EstimatedTotalTokenCount <= 0
+                                ? "No usage evidence yet · " + Math.Max(0, providerShop.CurrencyBalance) + " " + RepositoryCompanionProfileService.AgentCurrencyName(provider.id)
+                                : "Connected · ≈" + providerUsage.EstimatedTotalTokenCount + " tokens · " + Math.Max(0, providerShop.CurrencyBalance) + " " + RepositoryCompanionProfileService.AgentCurrencyName(provider.id);
                     return new NativeTokenShopAgentState
                     {
                         id = provider.id,
                         displayName = SafeNativeText(provider.displayName, "AI Agent"),
-                        connected = provider.connected && provider.hasValidSource,
+                        connected = connected,
                         selected = string.Equals(provider.id, selectedAgentId, StringComparison.Ordinal),
-                        statusText = provider.connected && provider.hasValidSource
-                            ? "Connected · " + Math.Max(0, providerShop.LifetimeTokenUsageScore) + " usage score · " + Math.Max(0, providerShop.CurrencyBalance) + " " + RepositoryCompanionProfileService.AgentCurrencyName(provider.id)
-                            : "Locked · No token usage yet",
-                        lockedReason = provider.connected && provider.hasValidSource ? string.Empty : "Connect to unlock agent cosmetics.",
-                        actionTitle = provider.connected && provider.hasValidSource ? "Selected" : "Connect agent",
-                        tokenUsageTotal = Math.Max(0, providerShop.LifetimeTokenUsageScore),
+                        statusText = usageStatus,
+                        lockedReason = connected ? string.Empty : "Connect to unlock agent cosmetics.",
+                        actionTitle = connected ? "Selected" : "Connect agent",
+                        tokenUsageTotal = Math.Max(0L, providerUsage?.EstimatedTotalTokenCount ?? 0L),
                         tokenUsageRecent = 0,
                         spendableCoins = Math.Max(0, providerShop.CurrencyBalance),
                         currencyName = RepositoryCompanionProfileService.AgentCurrencyName(provider.id),
@@ -1616,13 +1663,13 @@ namespace TokenForge.Client
                     repositoryId = item.id,
                     repositoryName = SafeNativeText(item.name, "Repository"),
                     companionId = item.id,
-                    desiredVisible = desiredVisible && settings.IsDesktopCompanionEnabled,
+                    desiredVisible = desiredVisible && item.desktopCompanionEnabled,
                     actualVisible = false,
-                    desiredPositionX = -1f,
-                    desiredPositionY = -1f,
-                    actualPositionX = -1f,
-                    actualPositionY = -1f,
-                    hasSavedPosition = false,
+                    desiredPositionX = item.overlayPositionX,
+                    desiredPositionY = item.overlayPositionY,
+                    actualPositionX = item.overlayPositionX,
+                    actualPositionY = item.overlayPositionY,
+                    hasSavedPosition = item.hasSavedOverlayPosition,
                     dragEnabled = !settings.IsClickThroughEnabled,
                     isDragging = false,
                     hydratedSnapshot = new NativeCompanionFarmSnapshot
@@ -1635,8 +1682,13 @@ namespace TokenForge.Client
                         xp = Math.Max(0, item.currentXP),
                         archetype = 0,
                         visualThemeId = CompanionSkinCatalog.Normalize(item.avatarSkin),
+                        equippedItemIds = string.Join(",", item.equippedTokenShopItemIds ?? new string[0]),
+                        zodiacType = RepositoryCompanionProfileService.NormalizeZodiacTypeId(item.zodiacType, "repository"),
                         hydrated = true,
-                        desiredVisible = desiredVisible && settings.IsDesktopCompanionEnabled
+                        desiredVisible = desiredVisible && item.desktopCompanionEnabled,
+                        hasSavedPosition = item.hasSavedOverlayPosition,
+                        desiredInitialX = item.overlayPositionX,
+                        desiredInitialY = item.overlayPositionY
                     }
                 })
                 .ToArray();
@@ -1648,9 +1700,9 @@ namespace TokenForge.Client
 
             return new DesktopCompanionFarmState
             {
-                enabled = desiredVisible && settings.IsDesktopCompanionEnabled && overlays.Length > 0,
+                enabled = desiredVisible && overlays.Any(item => item.desiredVisible),
                 overlays = overlays,
-                visibleCount = desiredVisible && settings.IsDesktopCompanionEnabled ? overlays.Count(item => item.desiredVisible) : 0,
+                visibleCount = desiredVisible ? overlays.Count(item => item.desiredVisible) : 0,
                 globalMotionEnabled = settings.MotionMode != CompanionDesktopMotionMode.Calm,
                 globalClickThroughEnabled = settings.IsClickThroughEnabled
             };
@@ -1725,13 +1777,16 @@ namespace TokenForge.Client
                 return new NativeAgentProviderState[0];
             }
 
-            return approvedActivityAnalysis.Onboarding.AgentSources
+            var providerSettings = approvedActivityAnalysis.CurrentSaveData?.ProviderSettings ?? new List<ProviderSettings>();
+            var items = approvedActivityAnalysis.Onboarding.AgentSources
                 .Select(source =>
                 {
                     var providerType = ProviderTypeForNative(source.SourceType);
+                    var persisted = providerSettings.FirstOrDefault(setting =>
+                        MacAgentSourceDetector.NormalizeProviderValue(setting.ProviderId) == MacAgentSourceDetector.NormalizeProvider(providerType));
                     var manual = source.SourceType == ConnectedAgentSourceType.OtherManualLogFolder;
                     var hasValidSource = AgentHasValidSourceForNative(source);
-                    var ready = IsAgentReadyForNative(source) && NativeAgentFlowMatchesSource(source);
+                    var ready = IsAgentReadyForNative(source);
                     var status = ready
                         ? "connected"
                         : IsAgentReadyForNative(source)
@@ -1742,7 +1797,9 @@ namespace TokenForge.Client
                     var pending = PendingProviderXp(providerType);
                     var saved = SavedProviderXp(providerType);
                     var tokenActivity = EstimatedTokenActivityForProvider(providerType);
-                    var repositoryAttribution = RepositoryAttributionForProvider(providerType);
+                    var repositoryAttribution = !string.IsNullOrWhiteSpace(persisted?.RecentRepositoryHash)
+                        ? "Attributed to " + RepositoryAliasForHash(persisted.RecentRepositoryHash)
+                        : RepositoryAttributionForProvider(providerType);
                     return new NativeAgentProviderState
                     {
                         id = NativeProviderId(providerType),
@@ -1766,17 +1823,17 @@ namespace TokenForge.Client
                         warningCount = Math.Max(0, source.WarningCount),
                         safeCandidateSummary = sourceLabel,
                         selectedSourceLabel = sourceLabel,
-                        lastAnalyzedAt = source.LastScanTimeUtc == null ? "Not analyzed" : source.LastScanTimeUtc.Value.UtcDateTime.ToString("yyyy-MM-dd"),
+                        lastAnalyzedAt = persisted?.LastAnalyzedAt == null ? "Not analyzed" : persisted.LastAnalyzedAt.Value.UtcDateTime.ToString("yyyy-MM-dd HH:mm"),
                         approvedSource = hasValidSource,
                         estimatedTokenActivity = TokenActivityLabel(tokenActivity),
-                        estimatedTokensText = "unavailable",
-                        sessionCountText = CountBucketLabel(ProviderSessionBucket(providerType)),
-                        interactionCountText = CountBucketLabel(ProviderInteractionBucket(providerType)),
-                        recentAnalyzedRepository = RecentRepositoryForProvider(providerType),
+                        estimatedTokensText = ProviderEstimatedTokensText(persisted, ready),
+                        sessionCountText = persisted?.LastAnalyzedAt != null ? Math.Max(0, persisted.EstimatedSessionCount).ToString() : CountBucketLabel(ProviderSessionBucket(providerType)),
+                        interactionCountText = persisted?.LastAnalyzedAt != null ? Math.Max(0, persisted.EstimatedInteractionCount).ToString() : CountBucketLabel(ProviderInteractionBucket(providerType)),
+                        recentAnalyzedRepository = !string.IsNullOrWhiteSpace(persisted?.RecentRepositoryHash) ? RepositoryAliasForHash(persisted.RecentRepositoryHash) : RecentRepositoryForProvider(providerType),
                         repositoryAttributionSummary = repositoryAttribution,
                         pendingXP = pending,
                         savedXP = saved,
-                        confidence = ProviderConfidenceLabel(providerType),
+                        confidence = !string.IsNullOrWhiteSpace(persisted?.Confidence) ? persisted.Confidence : ProviderConfidenceLabel(providerType),
                         warningsText = source.WarningCount > 0 ? source.WarningCount + " warning" + (source.WarningCount == 1 ? string.Empty : "s") : "None",
                         canApprove = !ready && hasValidSource,
                         canViewUsage = true,
@@ -1787,11 +1844,37 @@ namespace TokenForge.Client
                     };
                 })
                 .ToArray();
+            foreach (var item in items)
+            {
+                Debug.Log("INFO [AIAgentProviderStateDiagnostic] provider=" + item.id +
+                          " connected=" + item.connected +
+                          " approvedSource=" + item.approvedSource +
+                          " canAnalyze=" + item.canAnalyze +
+                          " tokenEvidence=" + item.estimatedTokensText);
+            }
+            return items;
+        }
+
+        private static string ProviderEstimatedTokensText(ProviderSettings provider, bool connected)
+        {
+            if (provider?.LastAnalyzedAt == null)
+            {
+                return connected ? "Connected · analysis needed" : "No usage evidence yet";
+            }
+
+            if (provider.EstimatedTotalTokenCount <= 0)
+            {
+                return "No usage evidence yet";
+            }
+
+            return "≈" + provider.EstimatedTotalTokenCount +
+                   " total (≈" + Math.Max(0, provider.EstimatedInputTokenCount) +
+                   " input / ≈" + Math.Max(0, provider.EstimatedOutputTokenCount) + " output)";
         }
 
         private bool stateHasPendingProvider(AgentProviderType providerType)
         {
-            var pending = approvedActivityAnalysis?.PendingNativeActivityReview;
+            var pending = PendingReviewForCurrentRepository();
             if (pending == null)
             {
                 return false;
@@ -1803,7 +1886,7 @@ namespace TokenForge.Client
 
         private int PendingProviderXp(AgentProviderType providerType)
         {
-            var pending = approvedActivityAnalysis?.PendingNativeActivityReview;
+            var pending = PendingReviewForCurrentRepository();
             if (pending == null)
             {
                 return 0;
@@ -1842,7 +1925,13 @@ namespace TokenForge.Client
         private TokenUsageBucket EstimatedTokenActivityForProvider(AgentProviderType providerType)
         {
             var normalized = MacAgentSourceDetector.NormalizeProvider(providerType);
-            var pending = approvedActivityAnalysis?.PendingNativeActivityReview;
+            var persisted = (approvedActivityAnalysis?.CurrentSaveData?.ProviderSettings ?? new List<ProviderSettings>())
+                .FirstOrDefault(setting => MacAgentSourceDetector.NormalizeProviderValue(setting.ProviderId) == normalized);
+            if (persisted != null && persisted.EstimatedTotalTokenCount > 0)
+            {
+                return AgentLogActivityProvider.EstimateTokenUsageBucket(persisted.EstimatedTotalTokenCount);
+            }
+            var pending = PendingReviewForCurrentRepository();
             var pendingBucket = PendingReviewSessionsForNative(pending)
                 .Where(session => MacAgentSourceDetector.NormalizeProvider(session.AgentActivitySummary?.ProviderType ?? AgentProviderType.Unknown) == normalized)
                 .Select(session => session.TokenUsageBucket)
@@ -1854,7 +1943,7 @@ namespace TokenForge.Client
         private CountBucket ProviderSessionBucket(AgentProviderType providerType)
         {
             var normalized = MacAgentSourceDetector.NormalizeProvider(providerType);
-            return PendingReviewSessionsForNative(approvedActivityAnalysis?.PendingNativeActivityReview)
+            return PendingReviewSessionsForNative(PendingReviewForCurrentRepository())
                 .Where(session => MacAgentSourceDetector.NormalizeProvider(session.AgentActivitySummary?.ProviderType ?? AgentProviderType.Unknown) == normalized)
                 .Select(session => session.AgentActivitySummary?.SessionCountBucket ?? CountBucket.Unknown)
                 .OrderByDescending(bucket => (int)bucket)
@@ -1864,7 +1953,7 @@ namespace TokenForge.Client
         private CountBucket ProviderInteractionBucket(AgentProviderType providerType)
         {
             var normalized = MacAgentSourceDetector.NormalizeProvider(providerType);
-            return PendingReviewSessionsForNative(approvedActivityAnalysis?.PendingNativeActivityReview)
+            return PendingReviewSessionsForNative(PendingReviewForCurrentRepository())
                 .Where(session => MacAgentSourceDetector.NormalizeProvider(session.AgentActivitySummary?.ProviderType ?? AgentProviderType.Unknown) == normalized)
                 .Select(session => session.AgentActivitySummary?.InteractionCountBucket ?? CountBucket.Unknown)
                 .OrderByDescending(bucket => (int)bucket)
@@ -1874,7 +1963,7 @@ namespace TokenForge.Client
         private string RecentRepositoryForProvider(AgentProviderType providerType)
         {
             var normalized = MacAgentSourceDetector.NormalizeProvider(providerType);
-            var repositoryHash = PendingReviewSessionsForNative(approvedActivityAnalysis?.PendingNativeActivityReview)
+            var repositoryHash = PendingReviewSessionsForNative(PendingReviewForCurrentRepository())
                 .Where(session => MacAgentSourceDetector.NormalizeProvider(session.AgentActivitySummary?.ProviderType ?? AgentProviderType.Unknown) == normalized)
                 .Select(RepositoryCompanionProfileService.SafeRepositoryHashForSession)
                 .FirstOrDefault(hash => !string.IsNullOrWhiteSpace(hash));
@@ -1885,7 +1974,7 @@ namespace TokenForge.Client
         private string RepositoryAttributionForProvider(AgentProviderType providerType)
         {
             var normalized = MacAgentSourceDetector.NormalizeProvider(providerType);
-            var pending = approvedActivityAnalysis?.PendingNativeActivityReview;
+            var pending = PendingReviewForCurrentRepository();
             var sessions = PendingReviewSessionsForNative(pending)
                 .Where(session => MacAgentSourceDetector.NormalizeProvider(session.AgentActivitySummary?.ProviderType ?? AgentProviderType.Unknown) == normalized)
                 .ToList();
@@ -1901,26 +1990,46 @@ namespace TokenForge.Client
                 var xp = growthResults
                     .Where(growth => growth != null && sessionIds.Contains(growth.SessionId))
                     .Sum(growth => Math.Max(0, growth.ExpGained));
-                var repository = RepositoryAliasForHash(sessions.Select(RepositoryCompanionProfileService.SafeRepositoryHashForSession).FirstOrDefault(hash => !string.IsNullOrWhiteSpace(hash)));
+                var attributedHash = sessions.Select(RepositoryCompanionProfileService.SafeRepositoryHashForSession).FirstOrDefault(hash => !string.IsNullOrWhiteSpace(hash));
                 var bucket = sessions.Select(session => session.TokenUsageBucket).OrderByDescending(bucketValue => (int)bucketValue).FirstOrDefault();
+                if (string.IsNullOrWhiteSpace(attributedHash))
+                {
+                    return "Unassigned: +" + xp + " XP · repository attribution unavailable · token activity " + TokenActivityLabel(bucket);
+                }
+
+                var repository = RepositoryAliasForHash(attributedHash);
                 return repository + ": +" + xp + " XP · token activity " + TokenActivityLabel(bucket);
             }
 
             var saved = SavedProviderXp(providerType);
             return saved > 0
-                ? "Unassigned: +" + saved + " XP saved · repository attribution unavailable"
-                : "No recent repository attribution";
+                ? "Agent-only: +" + saved + " XP saved · repository attribution unavailable"
+                : "Agent-only · repository attribution unavailable";
         }
 
         private string ProviderConfidenceLabel(AgentProviderType providerType)
         {
             var normalized = MacAgentSourceDetector.NormalizeProvider(providerType);
-            var confidence = PendingReviewSessionsForNative(approvedActivityAnalysis?.PendingNativeActivityReview)
+            var confidence = PendingReviewSessionsForNative(PendingReviewForCurrentRepository())
                 .Where(session => MacAgentSourceDetector.NormalizeProvider(session.AgentActivitySummary?.ProviderType ?? AgentProviderType.Unknown) == normalized)
                 .Select(session => session.Confidence)
                 .OrderByDescending(value => (int)value)
                 .FirstOrDefault();
             return confidence == ProviderConfidence.Unknown ? "Unknown" : confidence.ToString();
+        }
+
+        private PendingNativeActivityReview PendingReviewForCurrentRepository()
+        {
+            var pending = approvedActivityAnalysis?.PendingNativeActivityReview;
+            if (pending == null || string.IsNullOrWhiteSpace(pending.RepositoryHash))
+            {
+                return pending;
+            }
+
+            var selectedRepositoryHash = approvedActivityAnalysis?.CurrentSaveData?.SelectedRepositoryHash ?? string.Empty;
+            return string.Equals(pending.RepositoryHash, selectedRepositoryHash, StringComparison.Ordinal)
+                ? pending
+                : null;
         }
 
         private static List<AgentWorkSession> PendingReviewSessionsForNative(PendingNativeActivityReview pending)
@@ -1943,7 +2052,7 @@ namespace TokenForge.Client
         {
             if (string.IsNullOrWhiteSpace(repositoryHash))
             {
-                return "Unassigned";
+                return "Agent-only";
             }
 
             var item = (approvedActivityAnalysis?.RepositoryCompanions ?? new List<RepositoryCompanionDisplayItem>())
@@ -2387,41 +2496,57 @@ namespace TokenForge.Client
 
         private NativeProviderUsagePercentage[] BuildNativeProviderUsagePercentages()
         {
-            var summaries = approvedActivityAnalysis?.RecentSessions ?? new List<RecentSafeSessionSummary>();
-            var counts = new Dictionary<AgentProviderType, int>
+            var providers = new[]
             {
-                { AgentProviderType.Codex, 0 },
-                { AgentProviderType.ClaudeCode, 0 },
-                { AgentProviderType.GeminiCli, 0 }
+                new { Type = AgentProviderType.Codex, Id = "codex", Label = "Cdx" },
+                new { Type = AgentProviderType.ClaudeCode, Id = "claudeCode", Label = "Cl" },
+                new { Type = AgentProviderType.GeminiCli, Id = "geminiCli", Label = "Gem" },
+                new { Type = AgentProviderType.Cursor, Id = "cursor", Label = "Cur" },
+                new { Type = AgentProviderType.GitHubCopilot, Id = "githubCopilot", Label = "Cop" },
+                new { Type = AgentProviderType.Manual, Id = "manual", Label = "Man" }
             };
-
-            foreach (var summary in summaries)
+            var settings = approvedActivityAnalysis?.CurrentSaveData?.ProviderSettings ?? new List<ProviderSettings>();
+            var rows = providers.Select(provider =>
             {
-                var provider = MacAgentSourceDetector.NormalizeProvider(summary.AgentProviderType);
-                if (counts.ContainsKey(provider))
+                var persisted = settings.FirstOrDefault(setting =>
+                    MacAgentSourceDetector.NormalizeProviderValue(setting?.ProviderId) == provider.Type);
+                return new
                 {
-                    counts[provider]++;
-                }
+                    provider.Id,
+                    provider.Label,
+                    Tokens = Math.Max(0L, persisted?.EstimatedTotalTokenCount ?? 0L),
+                    HasEvidence = persisted?.LastAnalyzedAt != null
+                };
+            }).ToList();
+            var total = rows.Sum(row => (decimal)row.Tokens);
+            var result = rows.Select(row => new NativeProviderUsagePercentage
+            {
+                providerId = row.Id,
+                label = row.Label,
+                percentage = total <= 0 || row.Tokens <= 0
+                    ? 0
+                    : (int)Math.Floor(100m * row.Tokens / total),
+                hasSavedApprovedActivity = row.HasEvidence
+            }).ToArray();
+
+            // Largest-remainder allocation keeps displayed percentages at an
+            // exact 100 instead of producing 99/101 through independent rounding.
+            var pointsToAllocate = total <= 0 ? 0 : 100 - result.Sum(item => item.percentage);
+            foreach (var index in rows
+                         .Select((row, index) => new
+                         {
+                             Index = index,
+                             Fraction = total <= 0 ? 0m : (100m * row.Tokens / total) - Math.Floor(100m * row.Tokens / total)
+                         })
+                         .OrderByDescending(item => item.Fraction)
+                         .ThenBy(item => item.Index)
+                         .Take(pointsToAllocate)
+                         .Select(item => item.Index))
+            {
+                result[index].percentage += 1;
             }
 
-            var total = counts.Values.Sum();
-            return new[]
-            {
-                ProviderUsage("codex", "Cdx", counts[AgentProviderType.Codex], total),
-                ProviderUsage("claudeCode", "Cl", counts[AgentProviderType.ClaudeCode], total),
-                ProviderUsage("geminiCli", "Gem", counts[AgentProviderType.GeminiCli], total)
-            };
-        }
-
-        private static NativeProviderUsagePercentage ProviderUsage(string id, string label, int count, int total)
-        {
-            return new NativeProviderUsagePercentage
-            {
-                providerId = id,
-                label = label,
-                percentage = total <= 0 || count <= 0 ? 0 : (int)Math.Round(100.0 * count / total),
-                hasSavedApprovedActivity = count > 0
-            };
+            return result;
         }
 
         private static string NativeProviderUsageStatusText(NativeProviderUsagePercentage[] usage, int readyProviderCount)
@@ -3057,6 +3182,7 @@ namespace TokenForge.Client
                     OpenNativeDashboardCanonical(request.RawAction);
                     break;
                 case NativeDashboardAction.ShowDashboard:
+                    nativeDashboardShown = true;
                     OpenNativeDashboardCanonical(request.RawAction);
                     break;
                 case NativeDashboardAction.ToggleDashboard:
@@ -3097,6 +3223,10 @@ namespace TokenForge.Client
                 case NativeDashboardAction.SelectRepository:
                     nativeSelectedNavItem = "repository";
                     RunNativeDashboardTask(() => SelectRepositoryFromNativeAsync(request.Value), request.RawAction);
+                    break;
+                case NativeDashboardAction.ViewRepositoryGrowth:
+                    nativeSelectedNavItem = "activity";
+                    RunNativeDashboardTask(() => ViewRepositoryGrowthFromNativeAsync(request.Value), request.RawAction);
                     break;
                 case NativeDashboardAction.OpenActiveCompanionDashboard:
                     nativeSelectedNavItem = "dashboard";
@@ -3145,6 +3275,9 @@ namespace TokenForge.Client
                 case NativeDashboardAction.AnalyzeAgent:
                     RunNativeDashboardTask(() => RunNativeAnalysisAsync(string.Empty, request.Value), request.RawAction);
                     break;
+                case NativeDashboardAction.AnalyzeAllAgents:
+                    RunNativeDashboardTask(AnalyzeAllConnectedProvidersUsageAsync, request.RawAction);
+                    break;
                 case NativeDashboardAction.DisconnectAgent:
                     nativeSelectedNavItem = "aiAgents";
                     RunNativeDashboardTask(() => DisconnectAgentFromNativeAsync(request.Value), request.RawAction);
@@ -3162,6 +3295,21 @@ namespace TokenForge.Client
                     break;
                 case NativeDashboardAction.Wardrobe:
                     nativeSelectedNavItem = "wardrobe";
+                    if (ActiveRepositoryReadyForNative())
+                    {
+                        nativeShopTargetType = "repositoryCompanion";
+                    }
+                    else
+                    {
+                        var firstConnectedAgent = BuildNativeAgentProviderItems()
+                            .FirstOrDefault(provider => provider != null && provider.connected && provider.hasValidSource);
+                        nativeShopTargetType = "aiAgent";
+                        if (firstConnectedAgent != null)
+                        {
+                            nativeShopSelectedAgentId = firstConnectedAgent.id;
+                        }
+                    }
+                    nativeShopSelectedCategory = "owned";
                     nativeActionStatusKind = "idle";
                     nativeActionStatusText = "Wardrobe opened. Equip owned cosmetics without spending coins.";
                     Debug.Log("INFO [Wardrobe][TARGET_SELECTED] target=" + SafeNativeText(nativeShopTargetType, "repositoryCompanion"));
@@ -3271,8 +3419,14 @@ namespace TokenForge.Client
                     RunNativeDashboardTask(RefreshAndPublishNativeDashboardAsync, request.RawAction);
                     break;
                 case NativeDashboardAction.EquipTokenShopItem:
-                    nativeSelectedNavItem = "tokenShop";
+                    nativeSelectedNavItem = string.Equals(nativeSelectedNavItem, "wardrobe", StringComparison.Ordinal)
+                        ? "wardrobe"
+                        : "tokenShop";
                     RunNativeDashboardTask(() => EquipTokenShopItemFromNativeAsync(request.Value), request.RawAction);
+                    break;
+                case NativeDashboardAction.UnequipTokenShopItem:
+                    nativeSelectedNavItem = "wardrobe";
+                    RunNativeDashboardTask(() => UnequipTokenShopItemFromNativeAsync(request.Value), request.RawAction);
                     break;
                 case NativeDashboardAction.PreviewTokenShopItem:
                     nativeSelectedNavItem = "tokenShop";
@@ -3350,6 +3504,9 @@ namespace TokenForge.Client
                 case NativeDashboardAction.ResetCompanionPosition:
                     RunNativeDashboardTask(ResetCompanionPositionFromNativeAsync, request.RawAction);
                     break;
+                case NativeDashboardAction.ResetProviderAggregates:
+                    RunNativeDashboardTask(ResetProviderAggregatesFromNativeAsync, request.RawAction);
+                    break;
                 case NativeDashboardAction.ChangeCompanionSkin:
                     RunNativeDashboardTask(() => SetCompanionSkinFromNativeAsync(request.Value), request.RawAction);
                     break;
@@ -3390,9 +3547,20 @@ namespace TokenForge.Client
                 return;
             }
 
-            Debug.Log("INFO [Threading] dispatch background action=" + action);
+            var gateAcquired = false;
             try
             {
+                // Native actions are dequeued in the same frame. Without a
+                // mutation gate, two Save/Purchase/Equip actions can both load
+                // the same pre-action snapshot and then overwrite each other.
+                await nativeActionExecutionGate.WaitAsync();
+                gateAcquired = true;
+                if (nativeExplicitQuitRequested)
+                {
+                    return;
+                }
+
+                Debug.Log("INFO [Threading] dispatch background action=" + action);
                 await taskFactory();
                 if (nativeExplicitQuitRequested)
                 {
@@ -3411,6 +3579,13 @@ namespace TokenForge.Client
                 Debug.LogError("ERROR [NativeAction] action failed action=" + action + " reason=" + exception.Message);
                 Debug.Log("INFO [DashboardAction] action=" + action + " target= result=failed");
                 ApplyNativeShellState(showDashboardIfNeeded: false);
+            }
+            finally
+            {
+                if (gateAcquired)
+                {
+                    nativeActionExecutionGate.Release();
+                }
             }
         }
 
@@ -3461,6 +3636,24 @@ namespace TokenForge.Client
             var result = await approvedActivityAnalysis.SelectRepositoryCompanionProfileAsync(repositoryHash);
             nativeActionStatusKind = result.IsSuccess ? "success" : "error";
             nativeActionStatusText = result.IsSuccess ? "Active repository changed." : "Repository switch failed: " + SafeNativeText(result.ErrorMessage, result.ErrorCode);
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task ViewRepositoryGrowthFromNativeAsync(string repositoryHash)
+        {
+            if (approvedActivityAnalysis == null || string.IsNullOrWhiteSpace(repositoryHash))
+            {
+                nativeActionStatusKind = "error";
+                nativeActionStatusText = "Repository growth view failed: missing repository id.";
+                await RefreshAndPublishNativeDashboardAsync();
+                return;
+            }
+
+            var result = await approvedActivityAnalysis.SelectRepositoryCompanionProfileAsync(repositoryHash);
+            nativeActionStatusKind = result.IsSuccess ? "success" : "error";
+            nativeActionStatusText = result.IsSuccess
+                ? "Viewing growth for the selected repository."
+                : "Repository growth view failed: " + SafeNativeText(result.ErrorMessage, result.ErrorCode);
             await RefreshAndPublishNativeDashboardAsync();
         }
 
@@ -3700,7 +3893,7 @@ namespace TokenForge.Client
             }
 
             var source = approvedActivityAnalysis.Onboarding.AgentSources.FirstOrDefault(item => item.SourceType == sourceType);
-            return IsAgentReadyForNative(source) && NativeAgentFlowMatchesSource(source);
+            return IsAgentReadyForNative(source);
         }
 
         private bool NativeAgentFlowMatchesSource(ConnectedAgentSource source)
@@ -3791,6 +3984,59 @@ namespace TokenForge.Client
             await RunNativeAnalysisAsync(string.Empty, ProviderTypeForNative(ready.SourceType).ToString());
         }
 
+        private async Task AnalyzeAllConnectedProvidersUsageAsync()
+        {
+            if (approvedActivityAnalysis == null || nativeAnalysisInProgress)
+            {
+                return;
+            }
+
+            var connected = approvedActivityAnalysis.Onboarding.AgentSources
+                .Where(IsAgentReadyForNative)
+                .Select(source => ProviderTypeForNative(source.SourceType))
+                .Where(provider => provider != AgentProviderType.Unknown)
+                .Distinct()
+                .ToList();
+            if (connected.Count == 0)
+            {
+                nativeActionStatusKind = "warning";
+                nativeActionStatusText = "No connected AI providers are ready to analyze.";
+                await RefreshAndPublishNativeDashboardAsync();
+                return;
+            }
+
+            nativeAnalysisInProgress = true;
+            nativeActionStatusKind = "running";
+            nativeActionStatusText = "Analyzing all connected AI providers...";
+            ApplyNativeShellState(showDashboardIfNeeded: false);
+            var succeeded = 0;
+            try
+            {
+                foreach (var provider in connected)
+                {
+                    var result = await approvedActivityAnalysis.AnalyzeProviderUsageOnlyAsync(provider);
+                    if (result.IsSuccess)
+                    {
+                        succeeded += 1;
+                    }
+                    else
+                    {
+                        Debug.LogWarning("WARN [AITokenUsageDiagnostic] provider=" + provider + " analyzeAllResult=" + result.ErrorCode);
+                    }
+                }
+            }
+            finally
+            {
+                nativeAnalysisInProgress = false;
+            }
+
+            nativeSelectedNavItem = "aiAgents";
+            nativeActionStatusKind = succeeded == connected.Count ? "success" : succeeded > 0 ? "warning" : "error";
+            nativeActionStatusText = "Usage analysis complete for " + succeeded + " of " + connected.Count + " connected providers. Usage snapshots and agent coins were refreshed; no growth review was created.";
+            Debug.Log("INFO [AITokenUsageDiagnostic] analyzeAllConnected=true requested=" + connected.Count + " succeeded=" + succeeded);
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
         private string ResolveActiveRepositoryHashForAnalysis(string explicitRepositoryHash)
         {
             if (!string.IsNullOrWhiteSpace(explicitRepositoryHash))
@@ -3836,6 +4082,21 @@ namespace TokenForge.Client
 
             await approvedActivityAnalysis.RefreshApprovedLocationsAsync();
             await approvedActivityAnalysis.RestoreLocalSelectionsFromApprovedLocationsAsync();
+
+            if (!repositoryOnly && !string.IsNullOrWhiteSpace(providerValue) &&
+                TrySourceTypeForNative(providerValue, out var providerSourceType))
+            {
+                var activate = await approvedActivityAnalysis.ActivateConnectedAgentSourceAsync(ProviderTypeForNative(providerSourceType));
+                if (!activate.IsSuccess)
+                {
+                    nativeActionStatusKind = "error";
+                    nativeActionStatusText = "Analysis failed safely: " + SafeNativeText(activate.ErrorMessage, activate.ErrorCode);
+                    await approvedActivityAnalysis.RecordNativeAnalysisRunAsync("agent", "failed", activate.ErrorCode, nativeActionStatusText);
+                    Debug.LogWarning("WARN [AIAgentProviderStateDiagnostic] provider=" + providerValue + " activationFailed=" + activate.ErrorCode);
+                    await RefreshAndPublishNativeDashboardAsync();
+                    return;
+                }
+            }
 
             // When no explicit repository was passed (Dashboard/Activity "Analyze"), make sure the
             // git analysis path follows the currently active repository. RestoreLocalSelections only
@@ -4120,6 +4381,14 @@ namespace TokenForge.Client
                 return;
             }
 
+            if (PendingReviewForCurrentRepository() == null)
+            {
+                nativeActionStatusKind = "warning";
+                nativeActionStatusText = "No pending review belongs to the active repository.";
+                await RefreshAndPublishNativeDashboardAsync();
+                return;
+            }
+
             var pendingXp = Math.Max(0, approvedActivityAnalysis.PendingNativeActivityReview?.EstimatedXpDelta ?? 0);
             var result = await approvedActivityAnalysis.ApprovePendingNativeReviewAsync();
             if (!result.IsSuccess)
@@ -4137,7 +4406,6 @@ namespace TokenForge.Client
                 nativeActionStatusText = pendingXp > 0
                     ? "Growth saved. +" + pendingXp + " XP applied."
                     : "Growth saved. No pending review remains.";
-                await approvedActivityAnalysis.RecordNativeAnalysisRunAsync("reviewSaved", "saved", string.Empty, nativeActionStatusText);
                 nativeDesktopCompanionController?.TriggerReaction(CompanionReaction.GrowthSaved, "Growth saved.");
                 Debug.Log("INFO [ReviewState] pending=0 saved=1 appliedReviewId=saved result=success");
             }
@@ -4149,6 +4417,14 @@ namespace TokenForge.Client
         {
             if (approvedActivityAnalysis == null)
             {
+                return;
+            }
+
+            if (PendingReviewForCurrentRepository() == null)
+            {
+                nativeActionStatusKind = "warning";
+                nativeActionStatusText = "No pending review belongs to the active repository.";
+                await RefreshAndPublishNativeDashboardAsync();
                 return;
             }
 
@@ -4263,6 +4539,34 @@ namespace TokenForge.Client
             await RefreshAndPublishNativeDashboardAsync();
         }
 
+        private async Task UnequipTokenShopItemFromNativeAsync(string itemId)
+        {
+            if (approvedActivityAnalysis == null)
+            {
+                return;
+            }
+
+            var targetType = string.Equals(nativeShopTargetType, "aiAgent", StringComparison.Ordinal) ? ShopTargetType.AiAgent : ShopTargetType.RepositoryCompanion;
+            var targetId = targetType == ShopTargetType.AiAgent ? RepositoryCompanionProfileService.NormalizeAgentShopId(nativeShopSelectedAgentId) : string.Empty;
+            var result = await approvedActivityAnalysis.UnequipTokenShopItemAsync(itemId, targetType, targetId, IsNativeShopAgentConnected(targetId));
+            nativeActionStatusKind = "shop";
+            nativeActionStatusText = result.IsSuccess
+                ? SafeNativeText(result.Value?.StatusText, "Item unequipped.")
+                : "Unequip unavailable: " + SafeNativeText(result.ErrorMessage, result.ErrorCode);
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
+        private async Task ResetProviderAggregatesFromNativeAsync()
+        {
+            if (approvedActivityAnalysis == null) return;
+            var result = await approvedActivityAnalysis.ResetProviderUsageAggregatesAsync();
+            nativeActionStatusKind = result.IsSuccess ? "success" : "error";
+            nativeActionStatusText = result.IsSuccess
+                ? "AI usage aggregates reset. Earned coins and cosmetic ownership were preserved."
+                : "Reset failed safely: " + SafeNativeText(result.ErrorMessage, result.ErrorCode);
+            await RefreshAndPublishNativeDashboardAsync();
+        }
+
         private bool IsNativeShopAgentConnected(string agentId)
         {
             agentId = RepositoryCompanionProfileService.NormalizeAgentShopId(agentId);
@@ -4275,8 +4579,7 @@ namespace TokenForge.Client
             {
                 var providerId = NativeProviderId(ProviderTypeForNative(source.SourceType));
                 return string.Equals(providerId, agentId, StringComparison.Ordinal) &&
-                       IsAgentReadyForNative(source) &&
-                       NativeAgentFlowMatchesSource(source);
+                       IsAgentReadyForNative(source);
             });
         }
 
@@ -4311,7 +4614,7 @@ namespace TokenForge.Client
             }
 
             await approvedActivityAnalysis.RefreshRecentSessionsAsync();
-            var pending = approvedActivityAnalysis.PendingNativeActivityReview;
+            var pending = PendingReviewForCurrentRepository();
             if (pending == null)
             {
                 nativeReviewDetailVisible = false;

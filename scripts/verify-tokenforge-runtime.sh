@@ -18,6 +18,8 @@ LSREGISTER="${LSREGISTER:-/System/Library/Frameworks/CoreServices.framework/Fram
 LOG_STREAM_FILE="${VERIFY_LOG_DIR}/tokenforge-log-stream.log"
 LOG_SHOW_FILE="${VERIFY_LOG_DIR}/tokenforge-log-show.log"
 DIRECT_LAUNCH_LOG_FILE="${VERIFY_LOG_DIR}/tokenforge-direct-launch.log"
+PLAYER_LOG_FILE="${PLAYER_LOG_FILE:-${HOME}/Library/Logs/TokenForge/TokenForge/Player.log}"
+PLAYER_LOG_SNAPSHOT_FILE="${VERIFY_LOG_DIR}/tokenforge-player-log-snapshot.log"
 HASH_REPORT="${VERIFY_LOG_DIR}/bundle-hashes.sha256"
 CRASH_REPORT_FILE="${VERIFY_LOG_DIR}/crash-files-after-launch.txt"
 CRASH_ARTIFACT_DIR="${VERIFY_LOG_DIR}/crash-artifacts"
@@ -41,12 +43,37 @@ build_status_value() {
 require_log() {
   local pattern="$1"
   local label="$2"
-  if grep -Fq "${pattern}" "${LOG_STREAM_FILE}" "${LOG_SHOW_FILE}" "${DIRECT_LAUNCH_LOG_FILE}" 2>/dev/null; then
+  if grep -Fq "${pattern}" "${LOG_STREAM_FILE}" "${LOG_SHOW_FILE}" "${DIRECT_LAUNCH_LOG_FILE}" "${PLAYER_LOG_SNAPSHOT_FILE}" 2>/dev/null; then
     printf 'PASS: %s (%s)\n' "${label}" "${pattern}"
     return 0
   fi
   printf 'FAIL: %s missing (%s)\n' "${label}" "${pattern}"
   return 1
+}
+
+log_contains() {
+  local pattern="$1"
+  grep -Fq "${pattern}" "${LOG_STREAM_FILE}" "${LOG_SHOW_FILE}" "${DIRECT_LAUNCH_LOG_FILE}" "${PLAYER_LOG_SNAPSHOT_FILE}" 2>/dev/null
+}
+
+# Unity Debug.Log output lands in the Player.log file, not the unified log
+# stream, so managed-side markers are only visible there. The snapshot is
+# admitted as evidence only when Player.log was written after this launch.
+snapshot_player_log_if_fresh() {
+  local launch_epoch="$1"
+  rm -f "${PLAYER_LOG_SNAPSHOT_FILE}"
+  if [[ ! -f "${PLAYER_LOG_FILE}" ]]; then
+    echo "INFO [RuntimeVerify] player_log_snapshot=skipped reason=missing path=${PLAYER_LOG_FILE}"
+    return 0
+  fi
+  local player_log_epoch
+  player_log_epoch="$(stat -f '%m' "${PLAYER_LOG_FILE}" 2>/dev/null || echo 0)"
+  if [[ "${player_log_epoch}" -lt "${launch_epoch}" ]]; then
+    echo "INFO [RuntimeVerify] player_log_snapshot=skipped reason=staleBeforeLaunch mtime=${player_log_epoch} launch=${launch_epoch} path=${PLAYER_LOG_FILE}"
+    return 0
+  fi
+  cp "${PLAYER_LOG_FILE}" "${PLAYER_LOG_SNAPSHOT_FILE}"
+  echo "INFO [RuntimeVerify] player_log_snapshot=captured mtime=${player_log_epoch} launch=${launch_epoch} snapshot=${PLAYER_LOG_SNAPSHOT_FILE}"
 }
 
 app_executable() {
@@ -425,6 +452,7 @@ if ! launch_verify_app; then
 fi
 sleep "${VERIFY_RUNTIME_WAIT_SECONDS}"
 log show --style compact --predicate 'process CONTAINS "TokenForge"' --last 2m --debug > "${LOG_SHOW_FILE}" 2>&1 || true
+snapshot_player_log_if_fresh "${launch_epoch}"
 
 section "Required Runtime Logs"
 MISSING=0

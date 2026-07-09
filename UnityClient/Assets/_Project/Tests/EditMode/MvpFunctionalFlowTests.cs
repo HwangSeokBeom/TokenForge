@@ -432,7 +432,12 @@ namespace TokenForge.Client.Tests
                     return Task.FromResult(GitCommandResult.Success("HEADSHA\n"));
                 }
 
-                if (arguments == "log --all --reverse --format=%cI -n 1")
+                if (arguments == "rev-list --max-parents=0 --all --reverse")
+                {
+                    return Task.FromResult(GitCommandResult.Success("FIRSTSHA\n"));
+                }
+
+                if (arguments == "show -s --format=%cI FIRSTSHA")
                 {
                     return Task.FromResult(GitCommandResult.Success("2026-01-02T03:04:05Z\n"));
                 }
@@ -457,7 +462,7 @@ namespace TokenForge.Client.Tests
                     return Task.FromResult(GitCommandResult.Success("--TOKENFORGE-COMMIT--\n8\t2\t" + RawFilePath + "\n"));
                 }
 
-                if (arguments == "log --all --numstat --format=--TOKENFORGE-COMMIT--")
+                if (arguments == "log --all --numstat --format=format:--TOKENFORGE-COMMIT--")
                 {
                     return Task.FromResult(GitCommandResult.Success("--TOKENFORGE-COMMIT--\n8\t2\t" + RawFilePath + "\n"));
                 }

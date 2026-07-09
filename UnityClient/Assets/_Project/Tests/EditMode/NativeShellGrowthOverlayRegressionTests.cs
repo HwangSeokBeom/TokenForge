@@ -144,12 +144,13 @@ namespace TokenForge.Client.Tests
         {
             var flowSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "UI", "GitAnalysisFlowController.cs"));
             var viewModelSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "UI", "ApprovedActivityAnalysisViewModel.cs"));
+            var profileServiceSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Domain", "RepositoryCompanionProfileService.cs"));
 
             Assert.That(flowSource, Does.Contain("[GrowthSummary][RECOMPUTE]"));
-            Assert.That(flowSource, Does.Contain("[GrowthSummary][GIT_BASELINE]"));
-            Assert.That(flowSource, Does.Contain("FirstAnalyzedCommit"));
-            Assert.That(flowSource, Does.Contain("CurrentHeadCommit"));
-            Assert.That(viewModelSource, Does.Contain("[GrowthSummary][GIT_BASELINE]"));
+            Assert.That(flowSource, Does.Contain("RepositoryCompanionProfileService.ApplyRepositoryAnalysisCheckpoint"));
+            Assert.That(viewModelSource, Does.Contain("RepositoryCompanionProfileService.ApplyRepositoryAnalysisCheckpoint"));
+            Assert.That(profileServiceSource, Does.Contain("GrowthSignalsInitialized"));
+            Assert.That(profileServiceSource, Does.Contain("recentTrend"));
         }
 
         [Test]
@@ -756,7 +757,7 @@ namespace TokenForge.Client.Tests
             var gitSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Git", "GitAggregateAnalyzer.cs"));
             var projectionSource = File.ReadAllText(Path.Combine(Application.dataPath, "_Project", "Scripts", "Domain", "RepositoryGrowthSummaryProjection.cs"));
 
-            Assert.That(gitSource, Does.Contain("rev-list --max-parents=0 HEAD"));
+            Assert.That(gitSource, Does.Contain("rev-list --max-parents=0 --all --reverse"));
             Assert.That(gitSource, Does.Contain("log --all --numstat"));
             Assert.That(projectionSource, Does.Contain("firstCommit="));
             Assert.That(projectionSource, Does.Contain("commitsAnalyzed="));

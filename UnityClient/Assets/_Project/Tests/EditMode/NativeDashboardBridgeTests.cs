@@ -20,6 +20,49 @@ namespace TokenForge.Client.Tests
 {
     public sealed class NativeDashboardBridgeTests
     {
+        [Test]
+        public void ConnectedProviderCountUsesSameRowsAsHeader()
+        {
+            var providers = new[]
+            {
+                new NativeAgentProviderState { id = "codex", connected = true, hasValidSource = true },
+                new NativeAgentProviderState { id = "claudeCode", connected = true, hasValidSource = true },
+                new NativeAgentProviderState { id = "cursor", connected = false, hasValidSource = false }
+            };
+
+            Assert.AreEqual(2, NativeAgentProviderState.CountConnected(providers));
+        }
+
+        [Test]
+        public void NativeDashboardUsesSharedSafeLayoutAndLifecycleRestorePaths()
+        {
+            var source = File.ReadAllText(Path.Combine(Application.dataPath, "Plugins/macOS/DesktopCompanionOverlay.mm"));
+
+            StringAssert.Contains("DashboardLayoutMetrics", source);
+            StringAssert.Contains("TokenForgeDashboardButtonRow", source);
+            StringAssert.Contains("TokenForgeConstrainPageStack(content, document, TokenForgeTabContentTopInset, TokenForgeTabContentSideInset, TokenForgeTabSafeBottomInset)", source);
+            StringAssert.Contains("NSScreen.visibleFrame", source);
+            StringAssert.Contains("- (BOOL)applicationShouldHandleReopen:", source);
+            StringAssert.Contains("- (void)applicationDidBecomeActive:", source);
+            StringAssert.Contains("TokenForgeOpenOrFocusDashboard(@\"dock.reopen\")", source);
+            StringAssert.Contains("makeKeyAndOrderFront", source);
+            StringAssert.Contains("activateIgnoringOtherApps", source);
+            StringAssert.Contains("[VisibleFrameDiagnostic]", source);
+            StringAssert.Contains("[CloseRestoreDiagnostic]", source);
+        }
+
+        [Test]
+        public void TryParseActionMapsProviderAggregateAndWardrobeActions()
+        {
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("agent.analyzeAll", out var analyzeAll));
+            Assert.AreEqual(NativeDashboardAction.AnalyzeAllAgents, analyzeAll.Action);
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("shop.unequip:skin_white_cat", out var unequip));
+            Assert.AreEqual(NativeDashboardAction.UnequipTokenShopItem, unequip.Action);
+            Assert.AreEqual("skin_white_cat", unequip.Value);
+            Assert.IsTrue(MacNativeDashboardService.TryParseAction("debug.resetProviderUsage:all", out var reset));
+            Assert.AreEqual(NativeDashboardAction.ResetProviderAggregates, reset.Action);
+        }
+
         [SetUp]
         public void SetUp()
         {
@@ -1491,7 +1534,9 @@ namespace TokenForge.Client.Tests
             StringAssert.Contains("[DockReopen][ACTION] openOrFocusDashboard source=dock.reopen", source);
             StringAssert.Contains("[DockReopenDiagnostic] dockReopenEventReceived=true", source);
             StringAssert.Contains("[DockReopenDiagnostic] activationRequested=true", source);
-            StringAssert.Contains("[DockReopenDiagnostic] activationFallbackReceived=true", source);
+            StringAssert.Contains("[AppLifecycle][DELEGATE_PROXY_INSTALLED]", source);
+            StringAssert.Contains("TokenForgeDashboardExplicitlyHidden", source);
+            StringAssert.DoesNotContain("activationFallbackReceived=true", source);
             StringAssert.Contains("TokenForgeDumpWindowClassifications(@\"AFTER_DOCK_REOPEN\")", source);
             StringAssert.Contains("TokenForgeDumpWindowClassifications(@\"AFTER_MENUBAR_OPEN\")", source);
             StringAssert.Contains("TokenForgeDumpWindowClassifications(@\"AFTER_DASHBOARD_CLOSE\")", source);

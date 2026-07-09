@@ -31,6 +31,7 @@ namespace TokenForge.Client.Platform
         ManageAgents,
         LevelUpCompanion,
         SelectRepository,
+        ViewRepositoryGrowth,
         OpenActiveCompanionDashboard,
         OpenRepositoryCompanionDashboard,
         AnalyzeRepository,
@@ -39,6 +40,7 @@ namespace TokenForge.Client.Platform
         AutoDetectAgent,
         ChooseAgentFolder,
         AnalyzeAgent,
+        AnalyzeAllAgents,
         DisconnectAgent,
         SaveGrowth,
         SaveReview,
@@ -58,6 +60,7 @@ namespace TokenForge.Client.Platform
         SelectShopAgentTarget,
         SelectShopCategory,
         EquipTokenShopItem,
+        UnequipTokenShopItem,
         PreviewTokenShopItem,
         OpenAgentConnect,
         ToggleCompanionVisible,
@@ -76,6 +79,7 @@ namespace TokenForge.Client.Platform
         EnableClick,
         DisableClick,
         ResetCompanionPosition,
+        ResetProviderAggregates,
         ResetLocalState,
         SelectRepositoryZodiacMascot,
         Unsupported
@@ -272,6 +276,8 @@ namespace TokenForge.Client.Platform
         public int xp;
         public int archetype;
         public string visualThemeId = "orange_cat";
+        public string equippedItemIds = string.Empty;
+        public string zodiacType = "rat";
         public bool hydrated;
         public int renderVersion;
         public bool desiredVisible = true;
@@ -309,6 +315,7 @@ namespace TokenForge.Client.Platform
         public string levelUpDisabledReason = "Earn enough XP before leveling up.";
         public string mood = "active";
         public string skin = "orange_cat";
+        public string equippedItemIds = string.Empty;
         public string zodiacType = "rat";
         public string zodiacLabel = "Rat / 쥐";
         public bool evolveActionVisible;
@@ -412,6 +419,7 @@ namespace TokenForge.Client.Platform
         public bool canDelete;
         public bool archived;
         public string avatarSkin = "orange_cat";
+        public string zodiacType = "rat";
         public string stage = "Egg";
         public int stageIndex;
         public int level = 1;
@@ -433,6 +441,10 @@ namespace TokenForge.Client.Platform
         public int tokenCurrencyBalance;
         public string[] purchasedTokenShopItemIds = new string[0];
         public string[] equippedTokenShopItemIds = new string[0];
+        public bool desktopCompanionEnabled = true;
+        public bool hasSavedOverlayPosition;
+        public float overlayPositionX = -1f;
+        public float overlayPositionY = -1f;
         public string motionMood = "idle";
         public string motionReason = "No recent aggregate activity.";
         public bool canViewGrowth = true;
@@ -498,6 +510,19 @@ namespace TokenForge.Client.Platform
         public string lastErrorSafeMessage = string.Empty;
         public string disabledReason = "Detect or choose a folder before analyzing.";
         public string unsupportedReason = string.Empty;
+
+        public static int CountConnected(IEnumerable<NativeAgentProviderState> providers)
+        {
+            var count = 0;
+            foreach (var provider in providers ?? new NativeAgentProviderState[0])
+            {
+                if (provider != null && provider.connected && provider.hasValidSource)
+                {
+                    count += 1;
+                }
+            }
+            return count;
+        }
     }
 
     [Serializable]
@@ -548,9 +573,11 @@ namespace TokenForge.Client.Platform
         public int price;
         public bool owned;
         public bool equipped;
+        public bool featured;
         public bool locked;
         public bool available;
         public bool canEquip;
+        public bool canUnequip;
         public string stateLabel = "Buy";
         public string buttonTitle = "Buy";
         public string disabledReason = string.Empty;
@@ -569,8 +596,8 @@ namespace TokenForge.Client.Platform
         public string statusText = "Not connected";
         public string lockedReason = "Connect to unlock agent cosmetics.";
         public string actionTitle = "Connect agent";
-        public int tokenUsageTotal;
-        public int tokenUsageRecent;
+        public long tokenUsageTotal;
+        public long tokenUsageRecent;
         public int spendableCoins;
         public string currencyName = "Agent Coins";
         public string zodiacType = string.Empty;

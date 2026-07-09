@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -704,8 +705,8 @@ namespace TokenForge.Client.Tests
             Assert.IsTrue(result.IsSuccess, result.ErrorMessage);
             Assert.AreEqual(3, profile.TokenShop.CurrencyBalance);
             CollectionAssert.Contains(profile.TokenShop.PurchasedItemIds, "skin_white_cat");
-            CollectionAssert.Contains(profile.TokenShop.EquippedItemIds, "skin_white_cat");
-            Assert.AreEqual("white_cat", profile.DesktopCompanionSettings.VisualThemeId);
+            CollectionAssert.DoesNotContain(profile.TokenShop.EquippedItemIds, "skin_white_cat");
+            Assert.IsFalse(result.Value.Equipped);
         }
 
         [Test]
@@ -881,7 +882,7 @@ namespace TokenForge.Client.Tests
             var agentShop = RepositoryCompanionProfileService.GetAgentTokenShopState(saveData, "codex");
             Assert.AreEqual(8, agentShop.CurrencyBalance);
             CollectionAssert.Contains(agentShop.PurchasedItemIds, "agent_skin_codex_terminal");
-            CollectionAssert.Contains(agentShop.EquippedItemIds, "agent_skin_codex_terminal");
+            CollectionAssert.DoesNotContain(agentShop.EquippedItemIds, "agent_skin_codex_terminal");
         }
 
         [Test]
@@ -1027,6 +1028,27 @@ namespace TokenForge.Client.Tests
         }
 
         [Test]
+        public void TokenShopAgentCurrencyAccruesFromEstimatedAggregateWithoutSavedGrowth()
+        {
+            var saveData = SaveData.CreateDefault();
+            saveData.ProviderSettings.Add(new ProviderSettings
+            {
+                ProviderId = "Codex",
+                Selected = true,
+                Enabled = true,
+                Status = "connected",
+                EstimatedTotalTokenCount = 25_001,
+                UsageEvidenceState = "aggregateAvailable"
+            });
+
+            RepositoryCompanionProfileService.Normalize(saveData);
+
+            var shop = RepositoryCompanionProfileService.GetAgentTokenShopState(saveData, "codex");
+            Assert.AreEqual(2, shop.LifetimeTokenUsageScore);
+            Assert.AreEqual(2, shop.CurrencyBalance);
+        }
+
+        [Test]
         public void TokenShopRepositoryPurchaseDoesNotLeakIntoAiAgentOwnership()
         {
             var saveData = SaveData.CreateDefault();
@@ -1106,6 +1128,24 @@ namespace TokenForge.Client.Tests
             Assert.IsTrue(owned.IsSuccess, owned.ErrorMessage);
             CollectionAssert.Contains(profile.TokenShop.EquippedItemIds, "skin_white_cat");
             CollectionAssert.DoesNotContain(profile.TokenShop.EquippedItemIds, "skin_calico");
+        }
+
+        [Test]
+        public void WardrobeUnequipPersistsWithoutSpendingCoins()
+        {
+            var saveData = SaveData.CreateDefault();
+            var profile = RepositoryCompanionProfileService.SelectOrCreateProfile(saveData, CreateGitRepository("WardrobeUnequipRepo")).Value;
+            profile.TokenShop.CurrencyBalance = 12;
+            Assert.IsTrue(RepositoryCompanionProfileService.PurchaseTokenShopItem(saveData, "skin_white_cat").IsSuccess);
+            Assert.IsTrue(RepositoryCompanionProfileService.EquipTokenShopItem(saveData, ShopTargetType.RepositoryCompanion, string.Empty, "skin_white_cat", true).IsSuccess);
+            var before = profile.TokenShop.CurrencyBalance;
+
+            var unequip = RepositoryCompanionProfileService.UnequipTokenShopItem(saveData, ShopTargetType.RepositoryCompanion, string.Empty, "skin_white_cat", true);
+
+            Assert.IsTrue(unequip.IsSuccess, unequip.ErrorMessage);
+            Assert.AreEqual(before, profile.TokenShop.CurrencyBalance);
+            CollectionAssert.Contains(profile.TokenShop.PurchasedItemIds, "skin_white_cat");
+            CollectionAssert.DoesNotContain(profile.TokenShop.EquippedItemIds, "skin_white_cat");
         }
 
         [Test]
@@ -1234,6 +1274,130 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual(profile.RepositoryHash, dto.RepositoryHash);
             Assert.IsTrue(new SyncPayloadSanitizer().ValidatePayload(dto).IsSafe);
             Assert.IsTrue(new PrivacySanitizer().ValidateNoForbiddenFields(dto).IsSuccess);
+        }
+
+        [Test]
+        public void RepositoryCheckpoint_AccumulatesIncrementalRawSignalsAndIgnoresRecentTrendOverlap()
+        {
+            var saveData = SaveData.CreateDefault();
+            saveData.ConnectedProjects.Add(new ConnectedProject
+            {
+                Id = "repo-growth",
+                PathHash = "repo-growth",
+                ProjectPathHash = "repo-growth",
+                ApprovedAt = DateTimeOffset.UtcNow,
+                ConnectionSource = "userSelected"
+            });
+
+            RepositoryCompanionProfileService.ApplyRepositoryAnalysisCheckpoint(saveData, "repo-growth", new GitChangeSummary
+            {
+                AnalysisMode = "full-baseline",
+                AnalyzedStartCommit = "first",
+                AnalyzedEndCommit = "head-1",
+                LastAnalyzedCommit = "head-1",
+                TotalCommitsAnalyzed = 10,
+                ChangedFileCount = 12,
+                NumstatRowsAnalyzed = 12,
+                CodeFileSignalCount = 12,
+                GrowthFocusSignalCount = 8,
+                DebugCommitSignalCount = 2,
+                DesignFileSignalCount = 3,
+                SyncSignalCount = 1,
+                AnalysisIdempotencyKey = "baseline-1"
+            });
+            RepositoryCompanionProfileService.ApplyRepositoryAnalysisCheckpoint(saveData, "repo-growth", new GitChangeSummary
+            {
+                AnalysisMode = "incremental",
+                AnalyzedStartCommit = "head-1",
+                AnalyzedEndCommit = "head-2",
+                LastAnalyzedCommit = "head-2",
+                TotalCommitsAnalyzed = 12,
+                ChangedFileCount = 4,
+                NumstatRowsAnalyzed = 4,
+                CodeFileSignalCount = 4,
+                GrowthFocusSignalCount = 3,
+                DebugCommitSignalCount = 1,
+                DesignFileSignalCount = 2,
+                SyncSignalCount = 1,
+                AnalysisIdempotencyKey = "incremental-2"
+            });
+
+            var project = saveData.ConnectedProjects.Single(item => item.Id == "repo-growth");
+            Assert.AreEqual(16, project.GrowthCodeSignalCount);
+            Assert.AreEqual(11, project.GrowthFocusSignalCount);
+            Assert.AreEqual(16, project.FilesChangedAnalyzed);
+            Assert.AreEqual("head-2", project.LastAnalyzedCommit);
+            Assert.AreEqual(RepositoryCompanionProfileService.NormalizeGrowthSignalScore(16), project.GrowthCodeScore);
+
+            RepositoryCompanionProfileService.ApplyRepositoryAnalysisCheckpoint(saveData, "repo-growth", new GitChangeSummary
+            {
+                AnalysisMode = "incremental",
+                AnalyzedStartCommit = "head-1",
+                AnalyzedEndCommit = "head-2",
+                LastAnalyzedCommit = "head-2",
+                ChangedFileCount = 4,
+                CodeFileSignalCount = 4,
+                GrowthFocusSignalCount = 3,
+                AnalysisIdempotencyKey = "incremental-2"
+            });
+
+            Assert.AreEqual(16, project.GrowthCodeSignalCount, "Duplicate incremental checkpoint must not accumulate twice.");
+            Assert.AreEqual(16, project.FilesChangedAnalyzed, "Duplicate incremental file count must remain idempotent.");
+
+            var codeBeforeRecent = project.GrowthCodeSignalCount;
+            RepositoryCompanionProfileService.ApplyRepositoryAnalysisCheckpoint(saveData, "repo-growth", new GitChangeSummary
+            {
+                AnalysisMode = "recenttrend",
+                AnalyzedEndCommit = "head-3",
+                LastAnalyzedCommit = "head-3",
+                CodeFileSignalCount = 99,
+                GrowthFocusSignalCount = 99,
+                AnalysisIdempotencyKey = "recent-overlap"
+            });
+
+            Assert.AreEqual(codeBeforeRecent, project.GrowthCodeSignalCount);
+            Assert.AreEqual("head-2", project.LastAnalyzedCommit);
+            Assert.AreEqual("incremental-2", project.GrowthResultId);
+        }
+
+        [Test]
+        public void Normalize_MergesDuplicateAgentOwnershipWithoutDoubleCreditingWallet()
+        {
+            var saveData = SaveData.CreateDefault();
+            saveData.AiAgentShopStates = new List<AiAgentShopState>
+            {
+                new AiAgentShopState
+                {
+                    AgentId = "claude",
+                    TokenShop = new TokenShopState
+                    {
+                        CurrencyBalance = 7,
+                        LifetimeTokenUsageScore = 9,
+                        PurchasedItemIds = new List<string> { "agent_skin_mono_matrix" },
+                        EquippedItemIds = new List<string> { "agent_skin_mono_matrix" }
+                    }
+                },
+                new AiAgentShopState
+                {
+                    AgentId = "claudeCode",
+                    TokenShop = new TokenShopState
+                    {
+                        CurrencyBalance = 5,
+                        LifetimeTokenUsageScore = 8,
+                        PurchasedItemIds = new List<string> { "agent_accessory_focus_halo" },
+                        EquippedItemIds = new List<string> { "agent_accessory_focus_halo" }
+                    }
+                }
+            };
+
+            RepositoryCompanionProfileService.Normalize(saveData);
+
+            var state = saveData.AiAgentShopStates.Single(item => item.AgentId == "claudeCode");
+            CollectionAssert.AreEquivalent(
+                new[] { "agent_skin_mono_matrix", "agent_accessory_focus_halo" },
+                state.TokenShop.PurchasedItemIds);
+            Assert.AreEqual(7, state.TokenShop.CurrencyBalance);
+            Assert.AreEqual(9, state.TokenShop.LifetimeTokenUsageScore);
         }
 
         private static SaveData BuildLv4TokenForgeAliasSaveData(string canonicalHash, string legacyPathHash)

@@ -113,6 +113,16 @@ namespace TokenForge.Client.Git
                          ",sync:" + summary.SyncSignalCount +
                          " normalizedScores=" + summary.GrowthCodeScore + ":" + summary.GrowthFocusScore + ":" +
                          summary.GrowthDebugScore + ":" + summary.GrowthDesignScore + ":" + summary.GrowthSyncScore);
+            logger?.Info("INFO [RepositoryIdentityDiagnostic] repositoryId=" + summary.ProjectPathHash +
+                         " canonicalAbsolutePathUsed=true rawPathPersisted=false analysisId=" + summary.AnalysisIdempotencyKey);
+            logger?.Info("INFO [GitEvidenceDiagnostic] repositoryId=" + summary.ProjectPathHash +
+                         " commits=" + aggregate.CommitCount +
+                         " changedFiles=" + summary.ChangedFileCount +
+                         " addedLinesBucket=" + summary.AddedLineBucket +
+                         " deletedLinesBucket=" + summary.DeletedLineBucket +
+                         " debugSignals=" + summary.DebugCommitSignalCount +
+                         " designSignals=" + summary.DesignFileSignalCount +
+                         " syncSignals=" + summary.SyncSignalCount);
             var privacyValidation = privacySanitizer.ValidateSafeSession(new AgentWorkSession { GitChangeSummary = summary, SourceProvider = "GIT" });
             if (!privacyValidation.IsSuccess)
             {
@@ -139,7 +149,7 @@ namespace TokenForge.Client.Git
             aggregate.AnalyzedEndCommit = SafeCommit(headResult.Output);
             aggregate.LastAnalyzedCommit = aggregate.AnalyzedEndCommit;
 
-            var firstCommitHashResult = await RunRequiredAsync(canonicalRootPath, "rev-list --max-parents=0 HEAD", cancellationToken);
+            var firstCommitHashResult = await RunRequiredAsync(canonicalRootPath, "rev-list --max-parents=0 --all --reverse", cancellationToken);
             if (!firstCommitHashResult.IsSuccess)
             {
                 return firstCommitHashResult;
@@ -147,7 +157,7 @@ namespace TokenForge.Client.Git
 
             aggregate.FirstCommitHash = SafeCommit(firstCommitHashResult.Output);
 
-            var firstCommitResult = await RunRequiredAsync(canonicalRootPath, "log --all --reverse --format=%cI -n 1", cancellationToken);
+            var firstCommitResult = await RunRequiredAsync(canonicalRootPath, "show -s --format=%cI " + aggregate.FirstCommitHash, cancellationToken);
             if (!firstCommitResult.IsSuccess)
             {
                 return firstCommitResult;
@@ -199,21 +209,21 @@ namespace TokenForge.Client.Git
         {
             if (aggregate.AnalysisMode == GitAnalysisMode.FullBaseline)
             {
-                return $"log --all --numstat --format={CommitBoundary}";
+                return $"log --all --numstat --format=format:{CommitBoundary}";
             }
 
             if (aggregate.AnalysisMode == GitAnalysisMode.Incremental)
             {
-                return $"log {aggregate.AnalyzedStartCommit}..HEAD --numstat --format={CommitBoundary}";
+                return $"log {aggregate.AnalyzedStartCommit}..HEAD --numstat --format=format:{CommitBoundary}";
             }
 
             var windowDays = input.ClampedAnalysisWindowDays();
-            return $"log --since={windowDays}.days.ago --numstat --format={CommitBoundary} -n {maxCommits}";
+            return $"log --since={windowDays}.days.ago --numstat --format=format:{CommitBoundary} -n {maxCommits}";
         }
 
         private static string BuildCommitMetadataArguments(GitRepositoryAnalysisInput input, AggregateState aggregate, int maxCommits)
         {
-            var format = $"--format={CommitTimestampPrefix}%ct%n{CommitSubjectPrefix}%s";
+            var format = $"--format=format:{CommitTimestampPrefix}%ct%n{CommitSubjectPrefix}%s";
             if (aggregate.AnalysisMode == GitAnalysisMode.FullBaseline)
             {
                 return $"log --all {format}";
@@ -604,6 +614,7 @@ namespace TokenForge.Client.Git
                     DebugCommitSignalCount = DebugCommitSignalCount,
                     SyncSignalCount = SyncSignalCount,
                     FocusSessionCount = focusSessionCount,
+                    GrowthFocusSignalCount = focusRaw,
                     GrowthCodeScore = NormalizeGrowthScore(CodeFileSignalCount),
                     GrowthFocusScore = NormalizeGrowthScore(focusRaw),
                     GrowthDebugScore = NormalizeGrowthScore(DebugCommitSignalCount),

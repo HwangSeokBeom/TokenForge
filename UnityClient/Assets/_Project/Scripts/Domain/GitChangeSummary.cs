@@ -53,6 +53,7 @@ namespace TokenForge.Client.Domain
         public int DebugCommitSignalCount { get; set; }
         public int SyncSignalCount { get; set; }
         public int FocusSessionCount { get; set; }
+        public int GrowthFocusSignalCount { get; set; }
         public int GrowthCodeScore { get; set; }
         public int GrowthFocusScore { get; set; }
         public int GrowthDebugScore { get; set; }

@@ -46,6 +46,12 @@ namespace TokenForge.Client.Agents
         public CharacterStats DerivedStatDeltas { get; set; } = new CharacterStats();
         public int DerivedExpGained { get; set; }
         public string AnalyzerVersion { get; set; } = string.Empty;
+        public int EstimatedSessionCount { get; set; }
+        public int EstimatedInteractionCount { get; set; }
+        public long EstimatedInputTokenCount { get; set; }
+        public long EstimatedOutputTokenCount { get; set; }
+        public long EstimatedTotalTokenCount { get; set; }
+        public DateTimeOffset? LastActivityAtUtc { get; set; }
 
         public static AgentAnalysisReviewModel From(AgentWorkSession session, CharacterGrowthResult growthResult, bool saveEligible)
         {
@@ -69,7 +75,13 @@ namespace TokenForge.Client.Agents
                 SaveEligible = saveEligible,
                 DerivedStatDeltas = growthResult?.StatDeltas ?? new CharacterStats(),
                 DerivedExpGained = growthResult?.ExpGained ?? 0,
-                AnalyzerVersion = summary.AnalyzerVersion
+                AnalyzerVersion = summary.AnalyzerVersion,
+                EstimatedSessionCount = Math.Max(0, summary.EstimatedSessionCount),
+                EstimatedInteractionCount = Math.Max(0, summary.EstimatedInteractionCount),
+                EstimatedInputTokenCount = Math.Max(0, summary.EstimatedInputTokenCount),
+                EstimatedOutputTokenCount = Math.Max(0, summary.EstimatedOutputTokenCount),
+                EstimatedTotalTokenCount = Math.Max(0, summary.EstimatedTotalTokenCount),
+                LastActivityAtUtc = summary.LastActivityAtUtc
             };
         }
     }
@@ -78,6 +90,9 @@ namespace TokenForge.Client.Agents
     {
         public string Text { get; set; } = string.Empty;
         public DateTimeOffset? LastWriteTimeUtc { get; set; }
+        // Memory-only opaque key used to keep cumulative token counters from
+        // different log files separate. It never contains or persists a path.
+        public string SourceKey { get; set; } = string.Empty;
     }
 
     public sealed class AgentLogReadResult

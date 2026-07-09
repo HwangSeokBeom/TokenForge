@@ -196,7 +196,7 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual("2026-01-02T03:04:05Z", result.Value.FirstCommitAtUtc);
             Assert.AreEqual(42, result.Value.TotalCommitsAnalyzed);
             Assert.AreEqual("HEADSHA", result.Value.LastAnalyzedCommit);
-            Assert.IsTrue(runner.Commands.Contains("log --all --numstat --format=--TOKENFORGE-COMMIT--"));
+            Assert.IsTrue(runner.Commands.Contains("log --all --numstat --format=format:--TOKENFORGE-COMMIT--"));
             Assert.IsFalse(runner.Commands.Any(command => command.Contains("--since=7.days.ago")));
         }
 
@@ -220,7 +220,7 @@ namespace TokenForge.Client.Tests
             Assert.AreEqual("incremental", result.Value.AnalysisMode);
             Assert.AreEqual("BASESHA", result.Value.AnalyzedStartCommit);
             Assert.AreEqual(3, result.Value.IncrementalCommitCount);
-            Assert.IsTrue(runner.Commands.Contains("log BASESHA..HEAD --numstat --format=--TOKENFORGE-COMMIT--"));
+            Assert.IsTrue(runner.Commands.Contains("log BASESHA..HEAD --numstat --format=format:--TOKENFORGE-COMMIT--"));
             Assert.IsTrue(runner.Commands.Contains("rev-list --count BASESHA..HEAD"));
         }
 
@@ -498,20 +498,21 @@ namespace TokenForge.Client.Tests
                 {
                     ["rev-parse --is-inside-work-tree"] = GitCommandResult.Success("true\n"),
                     ["rev-parse HEAD"] = GitCommandResult.Success("HEADSHA\n"),
-                    ["log --all --reverse --format=%cI -n 1"] = GitCommandResult.Success("2026-01-02T03:04:05Z\n"),
+                    ["rev-list --max-parents=0 --all --reverse"] = GitCommandResult.Success("FIRSTSHA\n"),
+                    ["show -s --format=%cI FIRSTSHA"] = GitCommandResult.Success("2026-01-02T03:04:05Z\n"),
                     ["rev-list --all --count"] = GitCommandResult.Success("42\n"),
                     ["rev-list --count BASESHA..HEAD"] = GitCommandResult.Success("3\n"),
                     ["status --porcelain"] = GitCommandResult.Success(status),
                     ["diff --numstat"] = GitCommandResult.Success(diff),
                     ["diff --cached --numstat"] = GitCommandResult.Success(cachedDiff),
-                    ["log --all --numstat --format=--TOKENFORGE-COMMIT--"] = GitCommandResult.Success(log),
-                    ["log BASESHA..HEAD --numstat --format=--TOKENFORGE-COMMIT--"] = GitCommandResult.Success(log),
-                    ["log --since=7.days.ago --numstat --format=--TOKENFORGE-COMMIT-- -n 50"] = GitCommandResult.Success(log),
-                    ["log --since=30.days.ago --numstat --format=--TOKENFORGE-COMMIT-- -n 200"] = GitCommandResult.Success(log),
-                    ["log --all --format=--TOKENFORGE-TIMESTAMP--%ct%n--TOKENFORGE-SUBJECT--%s"] = GitCommandResult.Success("--TOKENFORGE-TIMESTAMP--1767225600\n--TOKENFORGE-SUBJECT--Fix auth sync crash in UI assets\n"),
-                    ["log BASESHA..HEAD --format=--TOKENFORGE-TIMESTAMP--%ct%n--TOKENFORGE-SUBJECT--%s"] = GitCommandResult.Success("--TOKENFORGE-TIMESTAMP--1767225600\n--TOKENFORGE-SUBJECT--Fix auth sync crash in UI assets\n"),
-                    ["log --since=7.days.ago --format=--TOKENFORGE-TIMESTAMP--%ct%n--TOKENFORGE-SUBJECT--%s -n 50"] = GitCommandResult.Success("--TOKENFORGE-TIMESTAMP--1767225600\n--TOKENFORGE-SUBJECT--Fix auth sync crash in UI assets\n"),
-                    ["log --since=30.days.ago --format=--TOKENFORGE-TIMESTAMP--%ct%n--TOKENFORGE-SUBJECT--%s -n 200"] = GitCommandResult.Success("--TOKENFORGE-TIMESTAMP--1767225600\n--TOKENFORGE-SUBJECT--Fix auth sync crash in UI assets\n")
+                    ["log --all --numstat --format=format:--TOKENFORGE-COMMIT--"] = GitCommandResult.Success(log),
+                    ["log BASESHA..HEAD --numstat --format=format:--TOKENFORGE-COMMIT--"] = GitCommandResult.Success(log),
+                    ["log --since=7.days.ago --numstat --format=format:--TOKENFORGE-COMMIT-- -n 50"] = GitCommandResult.Success(log),
+                    ["log --since=30.days.ago --numstat --format=format:--TOKENFORGE-COMMIT-- -n 200"] = GitCommandResult.Success(log),
+                    ["log --all --format=format:--TOKENFORGE-TIMESTAMP--%ct%n--TOKENFORGE-SUBJECT--%s"] = GitCommandResult.Success("--TOKENFORGE-TIMESTAMP--1767225600\n--TOKENFORGE-SUBJECT--Fix auth sync crash in UI assets\n"),
+                    ["log BASESHA..HEAD --format=format:--TOKENFORGE-TIMESTAMP--%ct%n--TOKENFORGE-SUBJECT--%s"] = GitCommandResult.Success("--TOKENFORGE-TIMESTAMP--1767225600\n--TOKENFORGE-SUBJECT--Fix auth sync crash in UI assets\n"),
+                    ["log --since=7.days.ago --format=format:--TOKENFORGE-TIMESTAMP--%ct%n--TOKENFORGE-SUBJECT--%s -n 50"] = GitCommandResult.Success("--TOKENFORGE-TIMESTAMP--1767225600\n--TOKENFORGE-SUBJECT--Fix auth sync crash in UI assets\n"),
+                    ["log --since=30.days.ago --format=format:--TOKENFORGE-TIMESTAMP--%ct%n--TOKENFORGE-SUBJECT--%s -n 200"] = GitCommandResult.Success("--TOKENFORGE-TIMESTAMP--1767225600\n--TOKENFORGE-SUBJECT--Fix auth sync crash in UI assets\n")
                 };
             }
         }

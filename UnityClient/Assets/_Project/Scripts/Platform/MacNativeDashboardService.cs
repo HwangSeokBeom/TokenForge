@@ -279,6 +279,9 @@ namespace TokenForge.Client.Platform
                 case "repository.setActive":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.SelectRepository, rawAction, value);
                     return true;
+                case "repository.viewGrowth":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.ViewRepositoryGrowth, rawAction, value);
+                    return true;
                 case "open_active_companion_dashboard":
                 case "select_active_companion_dashboard":
                 case "companion.openActiveDashboard":
@@ -337,6 +340,11 @@ namespace TokenForge.Client.Platform
                 case "analyze_agent":
                 case "agent.analyze":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.AnalyzeAgent, rawAction, value);
+                    return true;
+                case "analyzeAllAgents":
+                case "analyze_all_agents":
+                case "agent.analyzeAll":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.AnalyzeAllAgents, rawAction, value);
                     return true;
                 case "disconnectAgent":
                 case "disconnect_agent":
@@ -432,6 +440,10 @@ namespace TokenForge.Client.Platform
                 case "shop.equip":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.EquipTokenShopItem, rawAction, value);
                     return true;
+                case "unequip_token_shop_item":
+                case "shop.unequip":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.UnequipTokenShopItem, rawAction, value);
+                    return true;
                 case "shop.preview":
                 case "shop.zodiac":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.PreviewTokenShopItem, rawAction, value);
@@ -473,6 +485,10 @@ namespace TokenForge.Client.Platform
                     return true;
                 case "reset_local_state":
                     parsed = new NativeDashboardActionRequest(NativeDashboardAction.ResetLocalState, rawAction, value);
+                    return true;
+                case "debug.resetProviderUsage":
+                case "debug_reset_provider_usage":
+                    parsed = new NativeDashboardActionRequest(NativeDashboardAction.ResetProviderAggregates, rawAction, value);
                     return true;
                 case "toggleCompanionVisible":
                 case "toggle_companion_visible":

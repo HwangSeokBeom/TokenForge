@@ -150,7 +150,12 @@ namespace TokenForge.Client.UI
 
         public Task<Result> SelectLocalOnlyApprovedRepositoryPathAsync(string repositoryRootPath, CancellationToken cancellationToken = default)
         {
-            return SelectLocalOnlyApprovedRepositoryPathInternalAsync(repositoryRootPath, cancellationToken);
+            return SelectLocalOnlyApprovedRepositoryPathInternalAsync(repositoryRootPath, persistSelection: true, cancellationToken: cancellationToken);
+        }
+
+        public Task<Result> ActivatePersistedApprovedRepositoryPathAsync(string repositoryRootPath, CancellationToken cancellationToken = default)
+        {
+            return SelectLocalOnlyApprovedRepositoryPathInternalAsync(repositoryRootPath, persistSelection: false, cancellationToken: cancellationToken);
         }
 
         public Task<Result<GitAnalysisReviewModel>> AnalyzeAsync(CancellationToken cancellationToken = default)
@@ -178,10 +183,11 @@ namespace TokenForge.Client.UI
             var checkpointCommit = connection?.LastAnalyzedCommit ?? string.Empty;
             var missingCheckpoint = connection == null ||
                                     string.IsNullOrWhiteSpace(connection.FirstAnalyzedCommit) ||
-                                    string.IsNullOrWhiteSpace(checkpointCommit);
-            var analysisMode = requestedAnalysisMode ?? (missingCheckpoint
+                                    string.IsNullOrWhiteSpace(checkpointCommit) ||
+                                    !connection.GrowthSignalsInitialized;
+            var analysisMode = missingCheckpoint && requestedAnalysisMode != GitAnalysisMode.RecentTrend
                 ? GitAnalysisMode.FullBaseline
-                : GitAnalysisMode.Incremental);
+                : requestedAnalysisMode ?? GitAnalysisMode.Incremental;
             logger?.Info("INFO [GrowthSummary][RECOMPUTE] selectedRepoHash=" + selectedRepositoryHash +
                          " firstConnectedAt=" + (connection?.FirstConnectedAt?.UtcDateTime.ToString("O") ?? "none") +
                          " firstAnalyzedCommit=" + (connection?.FirstAnalyzedCommit ?? string.Empty) +
@@ -293,7 +299,7 @@ namespace TokenForge.Client.UI
                 .Where(growth => repositorySessionIds.Contains(growth.SessionId))
                 .ToList();
             RepositoryCompanionProfileService.ApplyApprovedGrowth(saveData, pendingSession, repositorySessions, repositoryGrowth);
-            ApplyRepositoryAnalysisCheckpoint(saveData, selectedRepositoryHash, pendingSession.GitChangeSummary);
+            RepositoryCompanionProfileService.ApplyRepositoryAnalysisCheckpoint(saveData, selectedRepositoryHash, pendingSession.GitChangeSummary);
             saveData.DailyProgress.ExpGainedToday += growthResult.ExpGained;
             saveData.DailyProgress.SessionsConfirmedToday += 1;
 
@@ -390,91 +396,10 @@ namespace TokenForge.Client.UI
                                             string.Equals(project.ProjectPathHash, repositoryHash, StringComparison.Ordinal)));
         }
 
-        private static void ApplyRepositoryAnalysisCheckpoint(SaveData saveData, string repositoryHash, GitChangeSummary summary)
-        {
-            var connection = FindConnectedProject(saveData, repositoryHash);
-            if (connection == null || summary == null)
-            {
-                return;
-            }
-
-            connection.LastAnalyzedAt = DateTimeOffset.UtcNow;
-            if (string.IsNullOrWhiteSpace(connection.FirstAnalyzedCommit))
-            {
-                connection.FirstAnalyzedCommit = summary.AnalyzedStartCommit ?? string.Empty;
-            }
-
-            connection.LastAnalyzedCommit = summary.LastAnalyzedCommit ?? string.Empty;
-            connection.CurrentHeadCommit = summary.AnalyzedEndCommit ?? summary.LastAnalyzedCommit ?? string.Empty;
-            connection.FirstCommitHash = summary.FirstCommitHash ?? string.Empty;
-            connection.FirstCommitAt = summary.FirstCommitAtUtc ?? string.Empty;
-            connection.TotalCommitCount = Math.Max(0, summary.TotalCommitsAnalyzed);
-            connection.FilesChangedAnalyzed = Math.Max(0, summary.ChangedFileCount);
-            connection.AnalyzedCommitRange = (summary.AnalyzedStartCommit ?? string.Empty) + ".." + (summary.AnalyzedEndCommit ?? string.Empty);
-            connection.LastAnalysisMode = summary.AnalysisMode ?? string.Empty;
-            connection.LastAnalysisScope = AnalysisScopeLabel(summary);
-            connection.GrowthCodeScore = Math.Max(0, summary.GrowthCodeScore);
-            connection.GrowthFocusScore = Math.Max(0, summary.GrowthFocusScore);
-            connection.GrowthDebugScore = Math.Max(0, summary.GrowthDebugScore);
-            connection.GrowthDesignScore = Math.Max(0, summary.GrowthDesignScore);
-            connection.GrowthSyncScore = Math.Max(0, summary.GrowthSyncScore);
-            connection.GrowthNumstatRowsAnalyzed = Math.Max(0, summary.NumstatRowsAnalyzed);
-            connection.GrowthScoringVersion = summary.GrowthScoringVersion ?? string.Empty;
-            connection.GrowthResultId = summary.AnalysisIdempotencyKey ?? string.Empty;
-            UnityEngine.Debug.Log("INFO [GrowthSummaryDiagnostic] persistedResultId=" + connection.GrowthResultId +
-                                  " persistedTimestamp=" + connection.LastAnalyzedAt?.UtcDateTime.ToString("O") +
-                                  " repositoryId=" + repositoryHash);
-            UnityEngine.Debug.Log("INFO [GrowthSummary][GIT_BASELINE] repositoryId=" + repositoryHash +
-                                  " firstConnectedAt=" + (connection.FirstConnectedAt?.UtcDateTime.ToString("O") ?? "none") +
-                                  " firstCommit=" + connection.FirstCommitHash +
-                                  " firstCommitDate=" + connection.FirstCommitAt +
-                                  " firstAnalyzedCommit=" + connection.FirstAnalyzedCommit +
-                                  " lastAnalyzedCommit=" + connection.LastAnalyzedCommit +
-                                  " currentHead=" + connection.CurrentHeadCommit +
-                                  " analysisMode=" + connection.LastAnalysisMode +
-                                  " totalCommitCount=" + connection.TotalCommitCount +
-                                  " filesChanged=" + connection.FilesChangedAnalyzed +
-                                  " analyzedRange=" + connection.AnalyzedCommitRange);
-        }
-
-        private static string AnalysisScopeLabel(GitChangeSummary summary)
-        {
-            if (summary == null)
-            {
-                return "Not analyzed";
-            }
-
-            var mode = NormalizedAnalysisMode(summary.AnalysisMode);
-            if (string.Equals(mode, "fullbaseline", StringComparison.OrdinalIgnoreCase))
-            {
-                var start = string.IsNullOrWhiteSpace(summary.FirstCommitAtUtc) ? "initial commit" : DateOnly(summary.FirstCommitAtUtc);
-                return "Full history · " + start + " → now";
-            }
-
-            if (string.Equals(mode, "incremental", StringComparison.OrdinalIgnoreCase))
-            {
-                return "Since last analysis · " + Math.Max(0, summary.IncrementalCommitCount) + " commits";
-            }
-
-            return "Recent range · " + Math.Max(1, summary.AnalysisWindowDays) + " days";
-        }
-
-        private static string DateOnly(string value)
-        {
-            return DateTimeOffset.TryParse(value, out var parsed)
-                ? parsed.UtcDateTime.ToString("yyyy-MM-dd")
-                : value;
-        }
-
-        private static string NormalizedAnalysisMode(string value)
-        {
-            return (value ?? string.Empty)
-                .Replace("-", string.Empty)
-                .Replace("_", string.Empty)
-                .Trim();
-        }
-
-        private async Task<Result> SelectLocalOnlyApprovedRepositoryPathInternalAsync(string repositoryRootPath, CancellationToken cancellationToken)
+        private async Task<Result> SelectLocalOnlyApprovedRepositoryPathInternalAsync(
+            string repositoryRootPath,
+            bool persistSelection,
+            CancellationToken cancellationToken)
         {
             logger?.Info("Git repository selection started");
             if (string.IsNullOrWhiteSpace(repositoryRootPath))
@@ -499,10 +424,18 @@ namespace TokenForge.Client.UI
                 return Fail("RepositoryFolderNotFound", "Repository folder was not found. Reconnect required.");
             }
 
-            var profileResult = await PersistSelectedRepositoryProfileAsync(canonicalRoot, cancellationToken).ConfigureAwait(false);
-            if (!profileResult.IsSuccess)
+            // Privacy boundary: never surface the raw folder name. The sanitizer returns the
+            // leaf name only when it is safe and falls back to a generic alias otherwise.
+            var safeAlias = RepositoryCompanionProfileService.SafeRepositoryAlias(canonicalRoot);
+            if (persistSelection)
             {
-                return Fail(profileResult.ErrorCode, profileResult.ErrorMessage);
+                var profileResult = await PersistSelectedRepositoryProfileAsync(canonicalRoot, cancellationToken).ConfigureAwait(false);
+                if (!profileResult.IsSuccess)
+                {
+                    return Fail(profileResult.ErrorCode, profileResult.ErrorMessage);
+                }
+
+                safeAlias = profileResult.Value.SafeRepositoryAlias;
             }
 
             selectedRepositoryRootPath = canonicalRoot;
@@ -510,7 +443,7 @@ namespace TokenForge.Client.UI
             pendingSession = null;
             State = GitAnalysisFlowState.Selected;
             ErrorCategory = string.Empty;
-            SelectionStatus = profileResult.Value.SafeRepositoryAlias + " selected";
+            SelectionStatus = (string.IsNullOrWhiteSpace(safeAlias) ? "Repository" : safeAlias) + " selected";
             UserMessage = "Repository selected. Run analysis to review safe aggregate data.";
             logger?.Info("Git repository selected=true");
             return Result.Success();

@@ -53,6 +53,14 @@ namespace TokenForge.Client.Domain
         public int GrowthDebugScore { get; set; }
         public int GrowthDesignScore { get; set; }
         public int GrowthSyncScore { get; set; }
+        // Persist the raw evidence counts so incremental analyses can extend the
+        // cumulative axes instead of replacing them with only the newest range.
+        public long GrowthCodeSignalCount { get; set; }
+        public long GrowthFocusSignalCount { get; set; }
+        public long GrowthDebugSignalCount { get; set; }
+        public long GrowthDesignSignalCount { get; set; }
+        public long GrowthSyncSignalCount { get; set; }
+        public bool GrowthSignalsInitialized { get; set; }
         public int GrowthNumstatRowsAnalyzed { get; set; }
         public string GrowthScoringVersion { get; set; } = string.Empty;
         public string GrowthResultId { get; set; } = string.Empty;
@@ -78,6 +86,14 @@ namespace TokenForge.Client.Domain
         public DateTimeOffset? LastScanAt { get; set; }
         public string ParserVersion { get; set; } = string.Empty;
         public int PollingIntervalSeconds { get; set; } = 300;
+        public int EstimatedSessionCount { get; set; }
+        public int EstimatedInteractionCount { get; set; }
+        public long EstimatedInputTokenCount { get; set; }
+        public long EstimatedOutputTokenCount { get; set; }
+        public long EstimatedTotalTokenCount { get; set; }
+        public DateTimeOffset? LastActivityAtUtc { get; set; }
+        public string RecentRepositoryHash { get; set; } = string.Empty;
+        public string UsageEvidenceState { get; set; } = "notAnalyzed";
     }
 
     [Serializable]
